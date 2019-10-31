@@ -1,0 +1,6 @@
+* OEM Related
+** Problems:
+We know several OEM will exists
++ [ ] So when you retrive a version do you retrive all OEM of
+  that version or only one or several of all ?
++ [ ] ...
