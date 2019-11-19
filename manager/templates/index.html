@@ -1,9 +1,8 @@
-<!doctype html>
 <html>
   <head>
     <!-- Bootstrap CSS -->
     {% load static %}
-    <link rel="stylesheet" href="{% static "lib/css/bootstrap.min.css" %}">
+    <link rel="stylesheet" href="{% static "lib/node_modules/bootstrap/dist/css/bootstrap.min.css" %}">
 
     <title>GPON Team Site</title>
   </head>
@@ -12,10 +11,10 @@
     <ul>
       <li><a href="http://gpon.git.com:8011">Gitlab</a></li>
       <li><a href="http://10.5.1.30:8010">Buildbot</a></li>
-      <li><a href="{% url 'manager:oemRegPage' %}">OEM Register</a></li>
+      <li><a href="{% url 'manager:verRegPage' %}">Version Manager</a></li>
     </ul>
 
     <!-- Javascript import via requireJS -->
-    <script data-main="{% static "main" %}", src="{% static "lib/require.js" %}"></script>
+    <script type="module" src="{% static "main.js" %}"></script>
   </body>
 </html>

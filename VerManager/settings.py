@@ -122,3 +122,6 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = (
     '/home/aydenlin/Projects/VerManager/manager/static/',
 )
+
+REQUIRE_BASE_URL = "./"
+REQUIRE_JS = "lib/require.js"

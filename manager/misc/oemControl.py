@@ -7,7 +7,7 @@ import os
 def oemRegister(oemIdent: str, oemFile: typing.TextIO) -> bool:
     oemPath = "/tmp/registeredOem/" + oemIdent
     # Is the oem already registered
-    if not os.access(oemPath, os.F_OK):
+    if os.access(oemPath, os.F_OK):
         return False
 
     # Register oem file
