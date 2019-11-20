@@ -38,5 +38,6 @@ class UnitTest(TestCase):
         self.assertIn("Failed to register Version V1 with revision XXXX",
                       response.content.decode())
 
+
 if __name__ == '__main__':
     unittest.main(warnings='ignore')

@@ -1,50 +1,74 @@
 import util from "./lib/util.js";
+import { ok, error } from "./lib/type.js";
 
 var NUM_OF_REVISION_CELL = 50;
+
+function RevInfos(sn, author, comment) {
+    this.sn = sn;
+    this.author = author;
+    this.comment = comment;
+}
 
 function verRegister_main() {
     // Get collection of revision infos
     var infos = revisionInfos(null, NUM_OF_REVISION_CELL);
-
     // Create a group of radio by revision infos
-    var radios = infos.map(function () {});
-
-    // Register register button event handler to register button
+    var radios = infos.map(radio_create);
 
     // Register scroll event handler to div
+    var div = document.getElementById('verList');
+    div.addEventListener('scroll', function() {
+        var runOut = this.scrollHeight - this.scrollTop === this.clientHeight;
 
-    var male_radio = radio_create("Resolve: #1 AAAAAAA", "12345678", "Root", true);
+        if (runOut) {
+            var bottomRev = this.lastChild.getAttribute('value');
+            fillRevList('verList', bottomRev, NUM_OF_REVISION_CELL);
+        }
+    });
 
-    var verList = document.getElementById("verList");
-    verList.appendChild(male_radio);
+    return ok;
+}
 
-    var submitBtn = document.getElementById("tryBtn");
-    console.log(submitBtn.getAttribute("value"));
-    submitBtn.onclick = function () {
-        var csrftoken = util.getCookie('csrftoken');
-
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState == 4)
-                alert("Done");
-        };
-
-        xhr.open("post", "verRegister/register", true);
-        xhr.setRequestHeader("X-CSRFToken", csrftoken);
-        xhr.send("123456");
-    };
+function fillRevList(listId, revBegin, numOfRevision) {
+    var infos = revisionInfos(revBegin, numOfRevision);
+    var radios = infos.map(radio_create);
+    // Append radios onto revision list which id is 'listId'
+    radios.map(function(radio) {
+        radioAppend(listId, radio);
+    });
 }
 
 /* Get Collection of revision infos over Http request
  * if there has enough revision infos on server then
  * this function will return 'numOfRevision' of revision
  * after 'beginRevision'
+ *
  * Caution: If beginRevision is Null then the node before
  *          the last revision will see as the first
  *          be returned */
-function revisionInfos(beginRevision, numOfRevision) {}
+function revisionInfos(beginRevision, numOfRevision) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('get', '...', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4) {
+            return revisionInfos.rawProcess(xhr.responseText);
+        }
+    };
+    xhr.send(null);
 
-function radio_create(comment, revision, author, checked) {
+    // fixme: complete this method after raw revision format is
+    //        determined.
+    revisionInfos.rawProcess = function(raw) {};
+}
+
+function radioAppend(element, radio) {
+    var list = getElementById('verList');
+    list.appendChild(radio);
+
+    return ok;
+}
+
+function radio_create(revInfos) {
     var div = document.createElement("div");
 
     var content = comment + ":" + revision + ":" + author;
