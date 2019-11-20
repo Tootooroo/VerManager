@@ -1,7 +1,8 @@
 import manager.apps
+
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.template import RequestContext
-from manager.misc.verControl import RevSync
 from .models import Revisions
 
 # Create your views here.

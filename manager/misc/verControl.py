@@ -4,8 +4,14 @@
 
 from threading import Thread
 from manager.models import Revisions
+from django.http import HttpRequest
 import queue
 import gitlab
+
+def revTransfer(rev):
+    revision = Revisions(sn=rev.id, author=rev.author_name, comment=rev.message)
+    revision.save()
+    return revision
 
 class RevSync(Thread):
 
@@ -18,7 +24,7 @@ class RevSync(Thread):
     def __init__(self):
        pass
 
-    def revDBInit(self) -> bool:
+    def revDBInit() -> bool:
         # fixme: repo url and token key must not a constant place these in
         #        configuration file
         gl = gitlab.Gitlab("http://gpon.git.com:8011", "4mU2joxotSkzTqLPhvgu");
@@ -33,8 +39,7 @@ class RevSync(Thread):
         Revisions.objects.all().delete()
 
         # Fill revisions just retrived into model
-        revTransfer = lambda rev: Revisions(sn=rev.id, author=rev.author_name, comment=rev.message).save()
-        map(revTransfer, revisions)
+        list(map(revTransfer, revisions))
 
         return True
 

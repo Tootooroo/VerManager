@@ -1,7 +1,17 @@
 from django.apps import AppConfig
 
-import manager.misc.verControl as Ver
-import manager.misc.oemControl
+initialized = False
 
 class ManagerConfig(AppConfig):
     name = 'manager'
+
+    def ready(self):
+        global initialized
+        if initialized == False:
+            initialized = True
+        else:
+            return None
+
+        from .misc.verControl import RevSync
+
+        RevSync.revDBInit()
