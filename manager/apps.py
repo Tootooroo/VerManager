@@ -12,6 +12,9 @@ class ManagerConfig(AppConfig):
         else:
             return None
 
+        # Signal registering via decorator
         from .misc.verControl import RevSync
 
-        RevSync.revDBInit()
+        # Start Syncner
+        rSyncner = RevSync()
+        rSyncner.start()

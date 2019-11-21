@@ -1,7 +1,9 @@
 import util from "./lib/util.js";
 import { ok, error } from "./lib/type.js";
 
-var NUM_OF_REVISION_CELL = 50;
+var NUM_OF_REVISION_CELL = 10;
+var revSeperator = "__<?>__";
+var revItemSeperator = "<:>";
 
 function RevInfos(sn, author, comment) {
     this.sn = sn;
@@ -10,10 +12,8 @@ function RevInfos(sn, author, comment) {
 }
 
 function verRegister_main() {
-    // Get collection of revision infos
-    var infos = revisionInfos(null, NUM_OF_REVISION_CELL);
-    // Create a group of radio by revision infos
-    var radios = infos.map(radio_create);
+    // Fill revisions into verList
+    fillRevList('verList', null, NUM_OF_REVISION_CELL);
 
     // Register scroll event handler to div
     var div = document.getElementById('verList');
@@ -29,15 +29,6 @@ function verRegister_main() {
     return ok;
 }
 
-function fillRevList(listId, revBegin, numOfRevision) {
-    var infos = revisionInfos(revBegin, numOfRevision);
-    var radios = infos.map(radio_create);
-    // Append radios onto revision list which id is 'listId'
-    radios.map(function(radio) {
-        radioAppend(listId, radio);
-    });
-}
-
 /* Get Collection of revision infos over Http request
  * if there has enough revision infos on server then
  * this function will return 'numOfRevision' of revision
@@ -46,19 +37,42 @@ function fillRevList(listId, revBegin, numOfRevision) {
  * Caution: If beginRevision is Null then the node before
  *          the last revision will see as the first
  *          be returned */
-function revisionInfos(beginRevision, numOfRevision) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('get', '...', true);
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState == 4) {
-            return revisionInfos.rawProcess(xhr.responseText);
-        }
-    };
-    xhr.send(null);
+function fillRevList(listId, beginRevision, numOfRevision) {
 
-    // fixme: complete this method after raw revision format is
-    //        determined.
-    revisionInfos.rawProcess = function(raw) {};
+    var csrftoken = util.getCookie('csrftoken');
+    var data = {
+        beginRev: beginRevision == null ? "null" : beginRevision,
+        numOfRev:numOfRevision.toString()
+    };
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('post', 'verRegister/infos', false);
+
+    // After revisions is retrived fill them into verList
+    xhr.onreadystatechange = function() {
+        var infos = rawRevsParse(xhr.responseText);
+        var radios = infos.map(radio_create);
+        radios.map(function(radio) {
+            radioAppend(listId, radio);
+        });
+    };
+
+    xhr.setRequestHeader('X-CSRFToken', csrftoken);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify(data));
+
+}
+
+/* Format of raw revisions: SN<:>AUTHOR<:>COMMENT__<?>__SN<:>...
+ * after parsed a list of Object RevInfos will be returned */
+function rawRevsParse(revisions) {
+    var revs = revisions.split(revSeperator);
+    revs = revs.map(function (rev) {
+        rev_ = rev.split(revItemSeperator);
+        return RevInfos(rev_[0], rev_[1], rev_[2]);
+    });
+
+    return revs;
 }
 
 function radioAppend(element, radio) {
@@ -87,5 +101,6 @@ function radio_create(revInfos) {
 
     return div;
 }
+
 
 verRegister_main();
