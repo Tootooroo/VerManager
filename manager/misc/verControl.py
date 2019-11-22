@@ -14,6 +14,8 @@ import gitlab
 from django.dispatch import receiver
 from django.db.backends.signals import connection_created
 
+revSyncner = None
+
 class RevSync(Thread):
 
     # This queue will fill by new revision that merged into
@@ -45,14 +47,13 @@ class RevSync(Thread):
         formatDate = m.group()
         return formatDate + offset
 
-    @receiver(connection_created)
-    def revDBInit(sender, **kwargs) -> bool:
+    def revDBInit(self) -> bool:
         # fixme: repo url and token key must not a constant place these in
         #        configuration file
         gl = gitlab.Gitlab("http://gpon.git.com:8011", "4mU2joxotSkzTqLPhvgu");
         gl.auth()
 
-        revisions = gl.projects.get(34).commits.list()
+        revisions = gl.projects.get(34).commits.list(all=True)
 
         # Remove old datas of revisions cause these data may out of date
         # repository may be rebased so that the structure of it is very
@@ -77,6 +78,14 @@ class RevSync(Thread):
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
     def run(self):
-        request = RevSync.revQueue.get(block=True, timeout=None)
-        rev = self.httpReq2Rev(request)
-        rev.save()
+        while True:
+            request = RevSync.revQueue.get(block=True, timeout=None)
+            rev = self.httpReq2Rev(request)
+            rev.save()
+
+@receiver(connection_created)
+def revSyncSpawn(sender, **kwargs):
+    revSyncner = RevSync()
+
+    revSyncner.revDBInit()
+    revSyncner.start()

@@ -14,7 +14,3 @@ class ManagerConfig(AppConfig):
 
         # Signal registering via decorator
         from .misc.verControl import RevSync
-
-        # Start Syncner
-        rSyncner = RevSync()
-        rSyncner.start()

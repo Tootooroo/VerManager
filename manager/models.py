@@ -12,7 +12,6 @@ class Revisions(models.Model):
         return "%s<:>%s<:>%s" % (self.sn, self.author, self.comment)
 
 class Versions(models.Model):
-    vsn = models.CharField(max_length=50)
+    vsn = models.CharField(max_length=50, primary_key=True)
     sn = models.CharField(max_length=30)
-    author = models.CharField(max_length=25)
     dateTime = models.DateTimeField(default=timezone.now)

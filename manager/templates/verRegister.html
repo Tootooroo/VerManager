@@ -10,13 +10,15 @@
   <body>
     <h1>Version Manager</h1>
 
+    <iframe width="0" height="0" border="0" name="dummyframe" id="dummyframe" style="display: none;"></iframe>
+
     <div class="container-fluid">
-      <form id="try" action="verRegister/register" method="post">
+      <form id="regForm" action="verRegister/register" method="post" target="dummyframe">
         {% csrf_token %}
         <p>Version: <input type="text" name="Version"></p>
-        <div id="verList" style=""></div>
-        <input type="submit" name="register" value="register">
+        <div id="verList" style="overflow: auto; height: 400px;"></div>
       </form>
+      <input id="registerBtn" type="submit" name="register" value="register">
     </div>
 
     <!-- Javascript import via requireJS -->
