@@ -9,6 +9,8 @@ from functools import reduce
 from django.shortcuts import render
 from django.template import RequestContext
 
+from .misc.verControl import RevSync
+
 # Models
 from .models import Revisions, Versions
 
@@ -40,8 +42,9 @@ def register(request):
 
 def newRev(request):
     RevSync.revNewPush(request)
-    return HttpResponse("")
+    return HttpResponse()
 
+# request: {Version: 'ver_name'}
 def generation(request):
     pass
 
