@@ -90,21 +90,68 @@ class UnitTest(TestCase):
     def test_letter(self):
         from manager.misc.letter import Letter
 
+        header = {"key":"value"}
         content = {"key":"value"}
-        l = Letter(Letter.NewTask, content)
+        l = Letter(Letter.NewTask, header, content)
 
         self.assertEqual(Letter.NewTask, l.type_)
         self.assertEqual(content, l.content)
-        self.assertEqual('%s{"type":"new", "content":{\'key\': \'value\'}}' % 42, l.toString())
         self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
+        self.assertEqual('value', l.getContent('key'))
+        self.assertEqual('value', l.getHeader('key'))
 
         # Json to letter
-        l1 = Letter.json2Letter('{"type":"new", "content":{"key":"value"}}')
+        l1 = Letter.json2Letter('{"type":"new", "header":{"key":"value"},"content":{"key":"value"}}')
         self.assertEqual(Letter.NewTask, l1.type_)
         self.assertEqual(content, l1.content)
-        self.assertEqual('%s{"type":"new", "content":{\'key\': \'value\'}}' % 42, l.toString())
         self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
         self.assertEqual('value', l1.getContent('key'))
+        self.assertEqual('value', l1.getHeader('key'))
+
+    def test_worker(self):
+        import socket
+        from threading import Thread
+
+        from manager.misc.worker import Worker
+
+        class Server(Thread):
+            def __init__(self):
+                Thread.__init__(self)
+
+            def run(self):
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.bind(('localhost', 8011))
+                sock.listen(1)
+
+                (clientsock, address) = sock.accept()
+                w = Worker(clientsock)
+
+                w.do({'id':'123'}, {'test_worker':'success'})
+
+        class Client(Thread):
+            def __init__(self):
+                Thread.__init__(self)
+
+            def run(self):
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect(('localhost', 8011))
+
+                content = b'14{"type":"notify", "header":"v", "content":{"MAX":"2", "PROC":"0"}}'
+                sock.send(content)
+
+                chunk = sock.recv(100)
+
+
+        s_thread = Server()
+        s_thread.start()
+
+        c_thread = Client()
+        c_thread.start()
+
+        s_thread.join()
+        c_thread.join()
+
+
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')

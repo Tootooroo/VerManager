@@ -127,5 +127,5 @@ def revSyncSpawn(sender, **kwargs):
 
         revSyncner.revDBInit()
         revSyncner.start()
-    except:
+    except Exception:
         pass
