@@ -249,7 +249,10 @@ class EventListener(Thread):
     def run(self):
 
         while True:
-            readyEntries = self.entries.poll()
+            # Polling every 10 seconds due to polling
+            # may not affect to new worker which be
+            # added after poll() is called
+            readyEntries = self.entries.poll(10000)
 
             # Read message from socket and then transfer
             # this message into letter. Then hand the
