@@ -110,13 +110,22 @@ class UnitTest(TestCase):
 
     def test_worker(self):
         import socket
+        import json
         from threading import Thread
 
-        from manager.misc.worker import Worker
+        from manager.misc.worker import Worker, EventListener
+
+        listener = EventListener()
+        listener.start()
+
+        test = self
 
         class Server(Thread):
             def __init__(self):
                 Thread.__init__(self)
+
+            def testEvent(eventListener, letter):
+                print(letter)
 
             def run(self):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -126,7 +135,14 @@ class UnitTest(TestCase):
                 (clientsock, address) = sock.accept()
                 w = Worker(clientsock)
 
-                w.do({'id':'123'}, {'test_worker':'success'})
+                test.assertEqual('test', w.ident)
+                test.assertEqual(2, w.max)
+                test.assertEqual(0, w.processing)
+
+                listener.registerEvent('test_event', Server.testEvent)
+                listener.addWorker(w)
+
+                w.do({'tid':'1'}, {'sn':'123', 'vsn':'123'})
 
         class Client(Thread):
             def __init__(self):
@@ -136,11 +152,24 @@ class UnitTest(TestCase):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect(('localhost', 8011))
 
-                content = b'14{"type":"notify", "header":"v", "content":{"MAX":"2", "PROC":"0"}}'
+                content = b'14{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
                 sock.send(content)
 
                 chunk = sock.recv(100)
+                content = json.loads(chunk.decode()[2:])
 
+                ident = content['header']['ident']
+                tid = content['header']['tid']
+                sn = content['content']['sn']
+                vsn = content['content']['vsn']
+
+                test.assertEqual('test', ident)
+                test.assertEqual('1', tid)
+                test.assertEqual('123', sn)
+                test.assertEqual('123', vsn)
+
+                response = b'12{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"ret":"0"}}'
+                sock.send(response)
 
         s_thread = Server()
         s_thread.start()
@@ -150,6 +179,7 @@ class UnitTest(TestCase):
 
         s_thread.join()
         c_thread.join()
+        listener.join()
 
 
 

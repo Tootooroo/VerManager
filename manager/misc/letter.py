@@ -56,7 +56,10 @@ class Letter:
     # Generate a json string
     def toString(self) -> typing.AnyStr:
         # length of content after length
-        letter = Letter.format % (self.type_, str(self.header), str(self.content))
+        letter = Letter.format % (self.type_,
+                                  str(self.header).replace("'", "\""),
+                                  str(self.content).replace("'", "\""))
+
         letter = str(len(letter)) + letter
         return letter
 
@@ -83,4 +86,4 @@ class Letter:
     def propNotify_PROC(self) -> int:
         return int(self.content['PROC'])
     def propNotify_IDENT(self) -> typing.AnyStr:
-        return self.header['id']
+        return self.header['ident']

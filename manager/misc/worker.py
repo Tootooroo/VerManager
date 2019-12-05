@@ -8,7 +8,7 @@ import typing
 import select
 
 from functools import reduce
-from threading import Thread
+from threading import Thread, Lock
 
 from manager.misc.letter import Letter
 from manager.misc.type import *
@@ -87,6 +87,7 @@ class Worker(socket.socket):
         self.processing = 0
         self.inProcTask = TaskGroup()
         self.ident = None
+        self.lock = Lock()
 
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
@@ -99,7 +100,7 @@ class Worker(socket.socket):
         else:
             raise Exception
 
-    def ident(self):
+    def getIdent(self):
         return self.ident
 
     def isFree(self) -> bool:
@@ -116,14 +117,17 @@ class Worker(socket.socket):
             raise Exception
 
         # Task assign
+        header['ident'] = self.ident
         do_letter = Letter(Letter.NewTask, header, content)
         self.__send(do_letter)
 
         # Register task into task group
-        ident = do_letter.getHeader('id')
+        ident = do_letter.getHeader('ident')
         task = Task(ident)
         task.stateChange(Task.STATE_IN_PROC)
-        self.inProcTask.newTask(task)
+
+        with self.lock:
+            self.inProcTask.newTask(task)
 
     # Provide ability to cancel task in queue or
     # processed task
@@ -137,8 +141,9 @@ class Worker(socket.socket):
         MAX_LEN = Letter.MAX_LEN
 
         content = sock.recv(Letter.MAX_LEN)
+        print(content)
         if content == b'':
-            raise Exception
+            return None
 
         content_decoded = content.decode()
         end = content_decoded.find('{')
@@ -150,13 +155,13 @@ class Worker(socket.socket):
         while received < MAX_LEN:
             chunk = sock.recv(MAX_LEN - received)
             if chunk == b'':
-                raise Exception
+                return None
             received += len(chunk)
             content += chunk
 
         return Letter.json2Letter(content.decode())
 
-    def sending(sock):
+    def sending(sock, l):
         jBytes = l.toString().encode()
         totalSent = 0
         length = len(jBytes)
@@ -168,10 +173,10 @@ class Worker(socket.socket):
             totalSent += sent
 
     def __recv(self):
-        Worker.receving(self.sock)
+        return Worker.receving(self.sock)
 
     def __send(self, l):
-        Worker.sending(self.sock)
+        return Worker.sending(self.sock, l)
 
 
 class EventListener(Thread):
@@ -198,7 +203,7 @@ class EventListener(Thread):
         del self.handlers [eventType]
 
     def addWorker(self, worker):
-        ident = worker.ident()
+        ident = worker.getIdent()
         isNotExists = list(filter(lambda w: w.ident() == ident, self.workers)) == []
 
         if isNotExists:
@@ -249,11 +254,12 @@ class EventListener(Thread):
             # Read message from socket and then transfer
             # this message into letter. Then hand the
             # letter to acceptor
-            for sock, event in readyEntries:
-                chunk = Worker.receving(sock)
-                letter = Letter.json2Letter(chunk.decode())
+            for fd, event in readyEntries:
+                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+                letter = Worker.receving(sock)
 
-                self.Acceptor(letter)
+                if letter != None:
+                    self.Acceptor(letter)
 
 # Handlers definitions
 
