@@ -7,6 +7,7 @@ from manager.views import index, verRegPage
 
 from manager.misc.verControl import RevSync
 
+import time
 import unittest
 
 # Create your tests here.
@@ -125,7 +126,7 @@ class UnitTest(TestCase):
                 Thread.__init__(self)
 
             def testEvent(eventListener, letter):
-                print(letter)
+                print(letter.toString())
 
             def run(self):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -168,11 +169,13 @@ class UnitTest(TestCase):
                 test.assertEqual('123', sn)
                 test.assertEqual('123', vsn)
 
-                response = b'12{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"ret":"0"}}'
+                response = b'12{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"state":"2"}}'
                 sock.send(response)
 
         s_thread = Server()
         s_thread.start()
+
+        time.sleep(1)
 
         c_thread = Client()
         c_thread.start()

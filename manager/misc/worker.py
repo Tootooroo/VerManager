@@ -109,8 +109,9 @@ class Worker(socket.socket):
     def isAbleToAccept(self) -> bool:
         return self.processing < self.max
 
-    def searchTask(self, tid):
-        pss
+    def searchTask(self, tid: int):
+        with self.lock:
+            return self.inProcTask.search(tid)
 
     def do(self, header: typing.Dict, content: typing.Dict) -> None:
         if not self.isAbleToAccept():
@@ -141,9 +142,9 @@ class Worker(socket.socket):
         MAX_LEN = Letter.MAX_LEN
 
         content = sock.recv(Letter.MAX_LEN)
-        print(content)
+
         if content == b'':
-            return None
+            raise Exception
 
         content_decoded = content.decode()
         end = content_decoded.find('{')
@@ -155,7 +156,7 @@ class Worker(socket.socket):
         while received < MAX_LEN:
             chunk = sock.recv(MAX_LEN - received)
             if chunk == b'':
-                return None
+                raise Exception
             received += len(chunk)
             content += chunk
 
@@ -210,7 +211,7 @@ class EventListener(Thread):
             self.workers.append(worker)
             # Register socket into entries
             sock = worker.sock
-            self.entries.register(sock, select.POLLIN)
+            self.entries.register(sock.fileno(), select.POLLIN)
             return Ok
 
         return Error
@@ -259,7 +260,12 @@ class EventListener(Thread):
             # letter to acceptor
             for fd, event in readyEntries:
                 sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                letter = Worker.receving(sock)
+
+                try:
+                    letter = Worker.receving(sock)
+                except:
+                    self.entries.unregister(fd)
+                    continue
 
                 if letter != None:
                     self.Acceptor(letter)
@@ -268,10 +274,12 @@ class EventListener(Thread):
 
 # Handler to process response of NewTask request
 def responseHandler(eventListener, letter):
+    # Should verify the letter's format
+
     ident = letter.getHeader('id')
     taskId = letter.getHeader('tId')
 
-    state = letter.getContent('state')
+    state = int(letter.getContent('state'))
 
     worker = eventListener.getWorker(ident)
     task = worker.searchTask(taskId)
