@@ -19,8 +19,9 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id):
+    def __init__(self, id, **content):
         self.taskId = id
+        self.content = content
         self.state = Task.STATE_PREPARE
 
         # This field will be set by EventListener while
@@ -62,7 +63,10 @@ class TaskGroup:
         self.__numOfTasks += 1
 
     def remove(self, id):
-        del self.__dict_tasks [id]
+        if id in self.__dict_tasks:
+            del self.__dict_tasks [id]
+            return Ok
+        return Error
 
     def finidhed(self, id):
         task = self.__dict_tasks[id]
@@ -81,6 +85,9 @@ class TaskGroup:
 
 class Worker(socket.socket):
 
+    STATE_ONLINE = 0
+    STATE_OFFLINE = 1
+
     def __init__(self, sock):
         self.sock = sock
         self.max = 0
@@ -88,6 +95,7 @@ class Worker(socket.socket):
         self.inProcTask = TaskGroup()
         self.ident = None
         self.lock = Lock()
+        self.state = Worker.STATE_OFFLINE
 
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
@@ -97,11 +105,18 @@ class Worker(socket.socket):
             self.max = l.propNotify_MAX()
             self.processing = l.propNotify_PROC()
             self.ident = l.propNotify_IDENT()
+            self.state = Worker.STATE_ONLINE
         else:
             raise Exception
 
     def getIdent(self):
         return self.ident
+
+    def isOnline(self):
+        return self.state == Worker.STATE_ONLINE
+
+    def isOffline(self):
+        return self.state == Worker.STATE_OFFLINE
 
     def isFree(self) -> bool:
         return self.processing == 0
@@ -109,9 +124,13 @@ class Worker(socket.socket):
     def isAbleToAccept(self) -> bool:
         return self.processing < self.max
 
-    def searchTask(self, tid: int):
+    def searchTask(self, tid: typing.AnyStr):
         with self.lock:
             return self.inProcTask.search(tid)
+
+    def removeTask(self, tid: typing.AnyStr):
+        with self.lock:
+            return self.inProcTask.remove(tid)
 
     def do(self, header: typing.Dict, content: typing.Dict) -> None:
         if not self.isAbleToAccept():
