@@ -6,10 +6,12 @@
 import socket
 import typing
 import select
+from datetime import datetime, timedelta
 
 from functools import reduce
 from threading import Thread, Lock
 
+from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
 from manager.misc.type import *
 
@@ -19,7 +21,7 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id, **content):
+    def __init__(self, id: typing.AnyStr, **content):
         self.taskId = id
         self.content = content
         self.state = Task.STATE_PREPARE
@@ -39,7 +41,7 @@ class Task:
         self.state = state
 
     def setData(self, data):
-        pass
+        self.data = data
 
     def isProc(self):
         return self.state == Task.STATE_IN_PROC
@@ -69,24 +71,28 @@ class TaskGroup:
         return Error
 
     def finidhed(self, id):
-        task = self.__dict_tasks[id]
+        task = self.search(id)
         task.stateChange(Task.STATE_FINISHED)
 
         return Ok
 
     def failure(self, id):
-        task = self.__dict_tasks[id]
+        task = self.search(id)
         task.stateChange(Task.STATE_FAILURE)
 
         return Ok
 
     def search(self, id):
+        if not id in self.__dict_tasks:
+            return None
+
         return self.__dict_tasks[id]
 
 class Worker(socket.socket):
 
     STATE_ONLINE = 0
-    STATE_OFFLINE = 1
+    STATE_WAITING = 1
+    STATE_OFFLINE = 2
 
     def __init__(self, sock):
         self.sock = sock
@@ -94,8 +100,26 @@ class Worker(socket.socket):
         self.processing = 0
         self.inProcTask = TaskGroup()
         self.ident = None
+
+        # TaskGroup is not a thread safe object
+        # lock should protect TaskGroup and processing
         self.lock = Lock()
+
+        # Before a PropertyNotify letter is report
+        # from worker we see a worker as an offline
+        # worker
         self.state = Worker.STATE_OFFLINE
+
+        # Counters
+        # 1.wait_counter: ther number of seconds that a worker stay in STATE_WAITING
+        # 2.offline_counter: the number of seconds that a worker stay in STATE_OFFLINE
+        # 3.online_counter: the number of seconds that a worker stay in STATE_ONLINE
+        # 4.clock: Record the time while state of Worker is changed and counter 1 to 3
+        #          is calculated via clock. Clock is not accessable by user directly.
+        self.wait_counter = 0
+        self.offline_counter = 0
+        self.online_counter = 0
+        self.__clock = None
 
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
@@ -106,14 +130,46 @@ class Worker(socket.socket):
             self.processing = l.propNotify_PROC()
             self.ident = l.propNotify_IDENT()
             self.state = Worker.STATE_ONLINE
+            self.__clock = datetime.utcnow()
         else:
             raise Exception
+
+    def waitCounter(self):
+        return self.wait_counter
+
+    def offlineCounter(self):
+        return self.offline_counter
+
+    def onlineCounter(self):
+        return self.online_counter
+
+    def counterSync(self):
+        delta = datetime.utcnow() - self.__clock
+
+        if self.state == Worker.STATE_OFFLINE:
+            self.offline_counter = delta.seconds
+        elif self.state == Worker.STATE_ONLINE:
+            self.online_counter = delta.seconds
+        elif self.state == Worker.STATE_WAITING:
+            self.wait_counter = delta.seconds
+
+        return None
+
+    def getState(self):
+        return self.state
+
+    def setState(self, s):
+        self.state = s
+        return None
 
     def getIdent(self):
         return self.ident
 
     def isOnline(self):
         return self.state == Worker.STATE_ONLINE
+
+    def isWaiting(self):
+        return self.state == Worker.STATE_WAITING
 
     def isOffline(self):
         return self.state == Worker.STATE_OFFLINE
@@ -130,7 +186,11 @@ class Worker(socket.socket):
 
     def removeTask(self, tid: typing.AnyStr):
         with self.lock:
+            self.processing -= 1
             return self.inProcTask.remove(tid)
+
+    def numOfTaskProc(self):
+        return self.processing
 
     def do(self, header: typing.Dict, content: typing.Dict) -> None:
         if not self.isAbleToAccept():
@@ -147,6 +207,7 @@ class Worker(socket.socket):
         task.stateChange(Task.STATE_IN_PROC)
 
         with self.lock:
+            self.processing += 1
             self.inProcTask.newTask(task)
 
     # Provide ability to cancel task in queue or
@@ -201,11 +262,10 @@ class Worker(socket.socket):
 
 class EventListener(Thread):
 
-    def __init__(self):
+    def __init__(self, workerRoom):
         Thread.__init__(self)
         self.entries = select.poll()
-        # Worker in workers should be unique
-        self.workers = []
+        self.workers = workerRoom
         self.numOfEntries = 0
         # Handler in handlers should be unique
         self.handlers = {}
@@ -224,10 +284,10 @@ class EventListener(Thread):
 
     def addWorker(self, worker):
         ident = worker.getIdent()
-        isNotExists = list(filter(lambda w: w.ident() == ident, self.workers)) == []
+        isNotExists = self.workers.isExists(ident)
 
         if isNotExists:
-            self.workers.append(worker)
+            self.workers.addWorker(worker)
             # Register socket into entries
             sock = worker.sock
             self.entries.register(sock.fileno(), select.POLLIN)
@@ -237,24 +297,19 @@ class EventListener(Thread):
 
     def removeWorker(self, ident):
         sock = None
-
-        def f(w):
-            w.ident() == ident
-            sock = w.sock
-
-        isExists = list(filter(f, self.workers)) != []
+        isExists = self.workers.isExists(ident)
 
         if isExists:
             # Unregister the socket from poll object
             self.entries.unregister(sock)
             # remove worker
-            self.workers.remove(index)
+            self.workers.removeWorker(ident)
             return Ok
 
         return Error
 
     def getWorker(self, ident):
-        pass
+        return self.workers.getWorker(ident)
 
     def Acceptor(self, letter):
         # Check letter's type

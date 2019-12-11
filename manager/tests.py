@@ -126,7 +126,8 @@ class UnitTest(TestCase):
                 Thread.__init__(self)
 
             def testEvent(eventListener, letter):
-                print(letter.toString())
+                test.assertEqual('test_event', letter.typeOfLetter())
+                exit(0)
 
             def run(self):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -144,6 +145,14 @@ class UnitTest(TestCase):
                 listener.addWorker(w)
 
                 w.do({'tid':'1'}, {'sn':'123', 'vsn':'123'})
+
+                time.sleep(3)
+
+                w.counterSync()
+                test.assertTrue(w.onlineCounter() == 3)
+                test.assertTrue(w.offlineCounter() == 0)
+                test.assertTrue(w.waitCounter() == 0)
+
 
         class Client(Thread):
             def __init__(self):
@@ -183,8 +192,6 @@ class UnitTest(TestCase):
         s_thread.join()
         c_thread.join()
         listener.join()
-
-
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')
