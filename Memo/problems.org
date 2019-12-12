@@ -7,8 +7,10 @@
 
 + 如何在Master上确定Worker上正在工作的任务数量 ?
 
-+ 如何确保Worker在EventListener以及Dispatcher上的一致性 ?
+  A: 数量必须真实放映Worker上实际正在处理的Task
 
++ 如何确保Worker在EventListener以及Dispatcher上的一致性 ?
+kjk
   A: 创建一个WorkerRoom用来存放所有连接到Master的Worker，并且让EventListener和Dispatcher共享
   同一个WorkerRoom，WorkerRoom提供的接口必须是线程安全的.
 
@@ -19,3 +21,5 @@
   必须在EventListener和dispatcher上保持一致
 
 + 当Browser在任务完成前关闭如何处理 ?
+
++ 生成结果存放在哪 ?

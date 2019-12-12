@@ -6,6 +6,8 @@ from selenium import webdriver
 from manager.views import index, verRegPage
 
 from manager.misc.verControl import RevSync
+from manager.misc.workerRoom import WorkerRoom
+from manager.misc.letter import Letter
 
 import time
 import unittest
@@ -91,23 +93,54 @@ class UnitTest(TestCase):
     def test_letter(self):
         from manager.misc.letter import Letter
 
+        def letterTest(l):
+            self.assertEqual(Letter.NewTask, l.type_)
+            self.assertEqual(content, l.content)
+            self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
+            self.assertEqual('value', l.getContent('key'))
+            self.assertEqual('value', l.getHeader('key'))
+
         header = {"key":"value"}
         content = {"key":"value"}
         l = Letter(Letter.NewTask, header, content)
 
-        self.assertEqual(Letter.NewTask, l.type_)
-        self.assertEqual(content, l.content)
-        self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
-        self.assertEqual('value', l.getContent('key'))
-        self.assertEqual('value', l.getHeader('key'))
+        letterTest(l)
+
 
         # Json to letter
         l1 = Letter.json2Letter('{"type":"new", "header":{"key":"value"},"content":{"key":"value"}}')
-        self.assertEqual(Letter.NewTask, l1.type_)
-        self.assertEqual(content, l1.content)
-        self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
-        self.assertEqual('value', l1.getContent('key'))
-        self.assertEqual('value', l1.getHeader('key'))
+        letterTest(l1)
+
+        # Letter parse
+        letterInBytes = l.toBytesWithLength()
+        l_parsed = Letter.parse(letterInBytes)
+        letterTest(l)
+
+        # Parse Binary type
+        tid = b"".join([str(x).encode() for x in range(64)])[0:64]
+        letterInBytes = (1).to_bytes(2, "big") \
+                        + (4).to_bytes(4, "big") \
+                        + tid \
+                        + (123123).to_bytes(4, "big")
+        l_parsed = Letter.parse(letterInBytes)
+
+        self.assertEqual(tid.decode(), l_parsed.getHeader('tid'))
+        self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('content'))
+
+        # letterBytesRemain check
+        streamComplete = (14).to_bytes(2, "big") + b'{"type":"new"}'
+        streamIncomplete = (14).to_bytes(2, "big") + b'{"type":"new"'
+
+        self.assertEqual(0, Letter.letterBytesRemain(streamComplete))
+        self.assertEqual(1, Letter.letterBytesRemain(streamIncomplete))
+
+        letterInBytes_incomplete = (1).to_bytes(2, "big") \
+                                + (4).to_bytes(4, "big") \
+                                + tid \
+                                + (123123).to_bytes(3, "big")
+
+        self.assertEqual(0, Letter.letterBytesRemain(letterInBytes))
+        self.assertEqual(1, Letter.letterBytesRemain(letterInBytes_incomplete))
 
     def test_worker(self):
         import socket
@@ -116,7 +149,7 @@ class UnitTest(TestCase):
 
         from manager.misc.worker import Worker, EventListener
 
-        listener = EventListener()
+        listener = EventListener(WorkerRoom())
         listener.start()
 
         test = self
@@ -140,11 +173,11 @@ class UnitTest(TestCase):
                 test.assertEqual('test', w.ident)
                 test.assertEqual(2, w.max)
                 test.assertEqual(0, w.processing)
-
                 listener.registerEvent('test_event', Server.testEvent)
                 listener.addWorker(w)
+                test.assertTrue(listener.getWorker("test") != None)
 
-                w.do({'tid':'1'}, {'sn':'123', 'vsn':'123'})
+                w.do(Letter(Letter.NewTask, {'tid':'1'}, {'sn':'123', 'vsn':'123'}))
 
                 time.sleep(3)
 
@@ -152,7 +185,6 @@ class UnitTest(TestCase):
                 test.assertTrue(w.onlineCounter() == 3)
                 test.assertTrue(w.offlineCounter() == 0)
                 test.assertTrue(w.waitCounter() == 0)
-
 
         class Client(Thread):
             def __init__(self):
@@ -162,7 +194,8 @@ class UnitTest(TestCase):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect(('localhost', 8011))
 
-                content = b'14{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
+                content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
+                content = len(content).to_bytes(2, "big") + content
                 sock.send(content)
 
                 chunk = sock.recv(100)
@@ -173,12 +206,14 @@ class UnitTest(TestCase):
                 sn = content['content']['sn']
                 vsn = content['content']['vsn']
 
+                test.assertEqual(Letter.NewTask, content['type'])
                 test.assertEqual('test', ident)
                 test.assertEqual('1', tid)
                 test.assertEqual('123', sn)
                 test.assertEqual('123', vsn)
 
-                response = b'12{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"state":"2"}}'
+                response = b'{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"state":"2"}}'
+                response = len(content).to_bytes(2, "big") + response
                 sock.send(response)
 
         s_thread = Server()
@@ -188,6 +223,7 @@ class UnitTest(TestCase):
 
         c_thread = Client()
         c_thread.start()
+
 
         s_thread.join()
         c_thread.join()

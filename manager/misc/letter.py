@@ -33,6 +33,17 @@ class Letter:
     # content : '{"MAX":"...", "PROC":"..."}'
     PropertyNotify = 'notify'
 
+    # Format of binary letter in a stream
+    # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | TaskId (64Bytes) :: String | Content |
+    # Format of BinaryFile letter
+    # Type    : 'binary'
+    # header  : '{"tid":"..."}
+    # content : "{"content":b"..."}"
+    BinaryFile = 'binary'
+
+    BINARY_HEADER_LEN = 70
+    BINARY_MIN_HEADER_LEN = 6
+
     MAX_LEN = 512
 
     format = '{"type":"%s", "header":%s, "content":%s}'
@@ -60,8 +71,17 @@ class Letter:
                                   str(self.header).replace("'", "\""),
                                   str(self.content).replace("'", "\""))
 
-        letter = str(len(letter)) + letter
         return letter
+
+    def toJson(self):
+        jsonStr = self.toString()
+        return json.loads(jsonStr)
+
+    def toBytesWithLength(self):
+        str = self.toString()
+        bStr = str.encode()
+
+        return len(bStr).to_bytes(2, "big") + bStr
 
     def json2Letter(s: typing.AnyStr):
         dict_ = None
@@ -77,8 +97,51 @@ class Letter:
     def getHeader(self, key: typing.AnyStr) -> typing.AnyStr:
         return self.header[key]
 
+    def addToHeader(self, key: typing.AnyStr, value: typing.AnyStr) -> None:
+        self.header[key] = value
+
+    def addToContent(self, key: typing.AnyStr, value: typing.AnyStr) -> None:
+        self.content[key] = value
+
     def getContent(self, key: typing.AnyStr) -> typing.AnyStr:
         return self.content[key]
+
+    # If a letter is received completely return 0 otherwise return the remaining bytes
+    def letterBytesRemain(s: typing.ByteString) -> int:
+        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
+        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
+            return Letter.MAX_LEN
+
+        if int.from_bytes(s[:2], "big") == 1:
+            length = int.from_bytes(s[2:6], "big")
+            return length - (len(s) - Letter.BINARY_HEADER_LEN)
+        else:
+            length = int.from_bytes(s[:2], "big")
+            return length - (len(s) - 2)
+
+    def parse(s : typing.ByteString):
+        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
+        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
+            return None
+
+        # To check that is BinaryFile type or another
+        if int.from_bytes(s[:2], "big") == 1:
+            return Letter.__parse_binary(s)
+        else:
+            return Letter.__parse(s)
+
+    def __parse_binary(s):
+       tid = s[6:70].decode().replace(" ", "")
+       content = s[70:]
+
+       return Letter(Letter.BinaryFile, {"tid":tid}, {"content":content})
+
+    def __parse(s):
+        letter = s[2:].decode()
+        dict_ = json.loads(letter)
+
+        return Letter(dict_['type'], dict_['header'], dict_['content'])
+
 
     # PropertyNotify letter interface
     def propNotify_MAX(self) -> int:

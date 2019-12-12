@@ -13,7 +13,7 @@ from threading import Thread, Lock
 
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
-from manager.misc.type import *
+from manager.misc.type import Ok, Error
 
 class Task:
     STATE_PREPARE = 0
@@ -192,17 +192,16 @@ class Worker(socket.socket):
     def numOfTaskProc(self):
         return self.processing
 
-    def do(self, header: typing.Dict, content: typing.Dict) -> None:
+    def do(self, letter) -> None:
         if not self.isAbleToAccept():
             raise Exception
 
         # Task assign
-        header['ident'] = self.ident
-        do_letter = Letter(Letter.NewTask, header, content)
-        self.__send(do_letter)
+        letter.addToHeader('ident', self.ident)
+        self.__send(letter)
 
         # Register task into task group
-        ident = do_letter.getHeader('ident')
+        ident = letter.getHeader('ident')
         task = Task(ident)
         task.stateChange(Task.STATE_IN_PROC)
 
@@ -216,34 +215,21 @@ class Worker(socket.socket):
     def cancel(self, id: typing.AnyStr):
         pass
 
+    # fixme: should support binary letter
     def receving(sock):
-        content = None
-        received = 0
-        MAX_LEN = Letter.MAX_LEN
+        content = ""
+        remain = Letter.MAX_LEN
 
-        content = sock.recv(Letter.MAX_LEN)
-
-        if content == b'':
-            raise Exception
-
-        content_decoded = content.decode()
-        end = content_decoded.find('{')
-        MAX_LEN = int(content_decoded[:end])
-
-        # length of length field should be substract
-        received = len(content) - end
-
-        while received < MAX_LEN:
-            chunk = sock.recv(MAX_LEN - received)
-            if chunk == b'':
+        while remain > 0:
+            content = sock.recv(remain)
+            if content == b'':
                 raise Exception
-            received += len(chunk)
-            content += chunk
+            remain = Letter.letterBytesRemain(content)
 
-        return Letter.json2Letter(content.decode())
+        return Letter.parse(content)
 
     def sending(sock, l):
-        jBytes = l.toString().encode()
+        jBytes = l.toBytesWithLength()
         totalSent = 0
         length = len(jBytes)
 
@@ -284,7 +270,7 @@ class EventListener(Thread):
 
     def addWorker(self, worker):
         ident = worker.getIdent()
-        isNotExists = self.workers.isExists(ident)
+        isNotExists = not self.workers.isExists(ident)
 
         if isNotExists:
             self.workers.addWorker(worker)
@@ -361,7 +347,8 @@ def responseHandler(eventListener, letter):
     if Task.isValidState(state):
         task.stateChange(state)
 
-        # In finished state data field of Task should be
-        # set correctly.
+        # When Task move into STATE_FINISHED
+        # should open a thread to receive generated
+        # file.
         if state == Task.STATE_FINISHED:
             pass

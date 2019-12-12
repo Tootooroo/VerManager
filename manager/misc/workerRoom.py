@@ -3,6 +3,7 @@
 # Maintain connection with workers
 
 from threading import Lock
+from manager.misc.type import *
 
 class WorkerRoom:
 
