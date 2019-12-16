@@ -116,15 +116,27 @@ class Worker(socket.socket):
         # 3.online_counter: the number of seconds that a worker stay in STATE_ONLINE
         # 4.clock: Record the time while state of Worker is changed and counter 1 to 3
         #          is calculated via clock. Clock is not accessable by user directly.
-        self.wait_counter = 0
-        self.offline_counter = 0
-        self.online_counter = 0
+        #
+        # counters[STATE_ONLINE] : online_counter
+        # counters[STATE_WAITING] : wait_counter
+        # counters[STATE_OFFLINE] : offline_counter
+        self.counters = [0, 0, 0]
         self.__clock = None
+
+        # Prevent permanent blocking from waiting for PropertyNotify from worker
+        self.sock.settimeout(10)
 
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
         # must a PropertyNotify type
-        l = self.__recv()
+        try:
+            l = self.__recv()
+        except:
+            return None
+        finally:
+            # After PropertyNotify is received reset timeout value to default
+            self.sock.settimeout(None)
+
         if Letter.typeOfLetter(l) == Letter.PropertyNotify:
             self.max = l.propNotify_MAX()
             self.processing = l.propNotify_PROC()
@@ -135,25 +147,17 @@ class Worker(socket.socket):
             raise Exception
 
     def waitCounter(self):
-        return self.wait_counter
+        return self.counters[Worker.STATE_WAITING]
 
     def offlineCounter(self):
-        return self.offline_counter
+        return self.counters[Worker.STATE_OFFLINE]
 
     def onlineCounter(self):
-        return self.online_counter
+        return self.online_counter[Worker.STATE_ONLINE]
 
     def counterSync(self):
         delta = datetime.utcnow() - self.__clock
-
-        if self.state == Worker.STATE_OFFLINE:
-            self.offline_counter = delta.seconds
-        elif self.state == Worker.STATE_ONLINE:
-            self.online_counter = delta.seconds
-        elif self.state == Worker.STATE_WAITING:
-            self.wait_counter = delta.seconds
-
-        return None
+        self.counters[self.state] = delta.seconds
 
     def getState(self):
         return self.state
@@ -201,8 +205,7 @@ class Worker(socket.socket):
         self.__send(letter)
 
         # Register task into task group
-        ident = letter.getHeader('ident')
-        task = Task(ident)
+        task = Task(self.ident)
         task.stateChange(Task.STATE_IN_PROC)
 
         with self.lock:
@@ -216,12 +219,12 @@ class Worker(socket.socket):
         pass
 
     # fixme: should support binary letter
-    def receving(sock):
+    def receving(sock, timeout = None):
         content = ""
         remain = Letter.MAX_LEN
 
         while remain > 0:
-            content = sock.recv(remain)
+            content = sock.recv(remain, timeout)
             if content == b'':
                 raise Exception
             remain = Letter.letterBytesRemain(content)
@@ -239,7 +242,7 @@ class Worker(socket.socket):
                 raise Exception
             totalSent += sent
 
-    def __recv(self):
+    def __recv(self, timeout = None):
         return Worker.receving(self.sock)
 
     def __send(self, l):

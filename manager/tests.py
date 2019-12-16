@@ -11,8 +11,29 @@ from manager.misc.letter import Letter
 
 import time
 import unittest
+from threading import Thread
 
 # Create your tests here.
+
+class Server(Thread, TestCase):
+
+    def __init__(self, action):
+        Thread.__init__(self)
+        self.action = action
+
+    def run(self):
+        self.action()
+
+
+class Client(Thread, TestCase):
+
+    def __init__(self, action, args):
+        Thread.__init__(self)
+        self.action = action
+        self.args = args
+
+    def run(self):
+        self.action(self.args)
 
 class FunctionalTest(TestCase):
 
@@ -149,7 +170,7 @@ class UnitTest(TestCase):
 
         from manager.misc.worker import Worker, EventListener
 
-        listener = EventListener(WorkerRoom())
+        listener = EventListener(WorkerRoom('localhost', 8013))
         listener.start()
 
         test = self
@@ -228,6 +249,49 @@ class UnitTest(TestCase):
         s_thread.join()
         c_thread.join()
         listener.join()
+
+    def test_WorkerRoom(self):
+
+        def serverAction():
+            workerRoom = WorkerRoom('localhost', 8013)
+
+            workerRoom.start()
+
+            time.sleep(5)
+
+            self.assertTrue(workerRoom.isExists('A'))
+            self.assertTrue(workerRoom.isExists('B'))
+            self.assertTrue(workerRoom.isExists('C'))
+
+            self.assertTrue(workerRoom.numOfWorkers() == 3)
+
+        s = Server(serverAction)
+        s.start()
+
+        def clientAction(ident):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(('localhost', 8012))
+
+            content = b'{"type":"notify", "header":{"ident":"' + ident.encode() + \
+                      b'"}, "content":{"MAX":"2", "PROC":"0"}'
+
+            content = len(content).to_bytes(2, "big") + content
+            sock.send(content)
+
+            time.sleep(60)
+
+        c1 = Client(clientAction, 'A')
+        c2 = Client(clientAction, 'B')
+        c3 = Client(clientAction, 'C')
+
+        c1.start()
+        c2.start()
+        c3.start()
+
+        s.join()
+
+
+
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')

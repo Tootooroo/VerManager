@@ -11,17 +11,13 @@ from manager.misc.type import *
 
 class Dispatcher(Thread):
 
-    def __init__(self, sock, workerRoom):
+    def __init__(self, workerRoom):
         Thread.__init__(self)
 
         # A queue contain a collection of tasks
         self.taskWait = []
         # An Event to indicate that there is some task in taskWait queue
         self.taskEvent = Event()
-
-        # Master socket used to waiting for worker
-        # request messages
-        self.sock = sock
 
         # For query purposes
         # { taskId : Task }
