@@ -4,8 +4,10 @@
 
 from threading import Lock
 from manager.misc.type import *
+from manager.misc.worker import Worker
 
 from threading import Thread
+import socket
 
 class WorkerRoom(Thread):
 
@@ -23,7 +25,7 @@ class WorkerRoom(Thread):
 
         # Collection of method to be run after a worker is accept
         # by WorkerRoom
-        # Propotype of a hook is f(lastAcceptedWorker)
+        # Every entry in hooks is a pair such that (f:func, args:List)
         self.hooks = []
 
         self.__host = host
@@ -43,7 +45,7 @@ class WorkerRoom(Thread):
                 continue
 
             self.addWorker(acceptedWorker)
-            list(map(lambda hook: hook(acceptedWorker), self.hooks))
+            list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
 
     def hookRegister(self, hook):
         self.hooks.append(hook)
@@ -77,7 +79,7 @@ class WorkerRoom(Thread):
         else:
             return False
 
-    def numOfWorkers(self):
+    def getNumOfWorkers(self):
         return self.numOfWorkers
 
     def removeWorker(self, ident):

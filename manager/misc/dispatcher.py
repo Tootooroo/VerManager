@@ -36,11 +36,14 @@ class Dispatcher(Thread):
     # return True if task is assign successful otherwise return False
     def __dispatch(self, task):
 
+        if task.id() in self.__tasks:
+            return True
+
         # Method to get an online worker which
         # with lowest overhead of all online workerd
         def viaOverhead(workers):
-            # Filter out workers which is not in online status
-            f_oneline_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccpt()
+            # Filter out workers which is not in online status or not able to accept
+            f_oneline_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccept()
             onlineWorkers = list(filter(lambda w: f_online_acceptable, workers))
             if onlineWorkers == []:
                 return None

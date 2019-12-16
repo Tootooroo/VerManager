@@ -8,14 +8,16 @@ from manager.views import index, verRegPage
 from manager.misc.verControl import RevSync
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
+from manager.misc.eventListener import EventListener
 
 import time
 import unittest
+import socket
 from threading import Thread
 
 # Create your tests here.
 
-class Server(Thread, TestCase):
+class Server(Thread):
 
     def __init__(self, action):
         Thread.__init__(self)
@@ -25,7 +27,7 @@ class Server(Thread, TestCase):
         self.action()
 
 
-class Client(Thread, TestCase):
+class Client(Thread):
 
     def __init__(self, action, args):
         Thread.__init__(self)
@@ -168,7 +170,8 @@ class UnitTest(TestCase):
         import json
         from threading import Thread
 
-        from manager.misc.worker import Worker, EventListener
+        from manager.misc.worker import Worker
+        from manager.misc.eventListener import EventListener
 
         listener = EventListener(WorkerRoom('localhost', 8013))
         listener.start()
@@ -250,10 +253,18 @@ class UnitTest(TestCase):
         c_thread.join()
         listener.join()
 
-    def test_WorkerRoom(self):
+    def test_WorkerRoom_EventListener(self):
+        import json
+
+        def register(worker, args):
+            el = args[0]
+            el.fdRegister(worker)
 
         def serverAction():
-            workerRoom = WorkerRoom('localhost', 8013)
+            workerRoom = WorkerRoom('localhost', 8012)
+            el = EventListener(workerRoom)
+
+            workerRoom.hookRegister((register, [el]))
 
             workerRoom.start()
 
@@ -263,20 +274,24 @@ class UnitTest(TestCase):
             self.assertTrue(workerRoom.isExists('B'))
             self.assertTrue(workerRoom.isExists('C'))
 
-            self.assertTrue(workerRoom.numOfWorkers() == 3)
+            self.assertTrue(workerRoom.getNumOfWorkers() == 3)
 
         s = Server(serverAction)
         s.start()
+
+        time.sleep(2)
 
         def clientAction(ident):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(('localhost', 8012))
 
             content = b'{"type":"notify", "header":{"ident":"' + ident.encode() + \
-                      b'"}, "content":{"MAX":"2", "PROC":"0"}'
+                      b'"}, "content":{"MAX":"2", "PROC":"0"}}'
 
             content = len(content).to_bytes(2, "big") + content
             sock.send(content)
+
+            chunk = sock.recv(100)
 
             time.sleep(60)
 
@@ -289,8 +304,6 @@ class UnitTest(TestCase):
         c3.start()
 
         s.join()
-
-
 
 
 if __name__ == '__main__':

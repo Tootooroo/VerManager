@@ -123,7 +123,6 @@ class Letter:
         # Need at least BINARY_MIN_HEADER_LEN bytes to parse
         if len(s) < Letter.BINARY_MIN_HEADER_LEN:
             return None
-
         # To check that is BinaryFile type or another
         if int.from_bytes(s[:2], "big") == 1:
             return Letter.__parse_binary(s)

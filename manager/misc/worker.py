@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from functools import reduce
 from threading import Thread, Lock
 
-from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
 from manager.misc.type import Ok, Error
 
@@ -129,13 +128,10 @@ class Worker(socket.socket):
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
         # must a PropertyNotify type
-        try:
-            l = self.__recv()
-        except:
-            return None
-        finally:
-            # After PropertyNotify is received reset timeout value to default
-            self.sock.settimeout(None)
+        l = self.__recv()
+
+        # After PropertyNotify is received reset timeout value to default
+        self.sock.settimeout(None)
 
         if Letter.typeOfLetter(l) == Letter.PropertyNotify:
             self.max = l.propNotify_MAX()
@@ -153,7 +149,7 @@ class Worker(socket.socket):
         return self.counters[Worker.STATE_OFFLINE]
 
     def onlineCounter(self):
-        return self.online_counter[Worker.STATE_ONLINE]
+        return self.counters[Worker.STATE_ONLINE]
 
     def counterSync(self):
         delta = datetime.utcnow() - self.__clock
@@ -219,14 +215,16 @@ class Worker(socket.socket):
         pass
 
     # fixme: should support binary letter
-    def receving(sock, timeout = None):
-        content = ""
+    def receving(sock):
+        content = b''
         remain = Letter.MAX_LEN
 
         while remain > 0:
-            content = sock.recv(remain, timeout)
-            if content == b'':
+            chunk = sock.recv(remain)
+            if chunk == b'':
                 raise Exception
+
+            content += chunk
             remain = Letter.letterBytesRemain(content)
 
         return Letter.parse(content)
@@ -242,116 +240,8 @@ class Worker(socket.socket):
                 raise Exception
             totalSent += sent
 
-    def __recv(self, timeout = None):
+    def __recv(self):
         return Worker.receving(self.sock)
 
     def __send(self, l):
         return Worker.sending(self.sock, l)
-
-
-class EventListener(Thread):
-
-    def __init__(self, workerRoom):
-        Thread.__init__(self)
-        self.entries = select.poll()
-        self.workers = workerRoom
-        self.numOfEntries = 0
-        # Handler in handlers should be unique
-        self.handlers = {}
-
-    def registerEvent(self, eventType, handler):
-        if eventType in self.handlers:
-            return None
-
-        self.handlers[eventType] = handler
-
-    def unregisterEvent(self, eventType):
-        if not eventType in self.handlers:
-            return None
-
-        del self.handlers [eventType]
-
-    def addWorker(self, worker):
-        ident = worker.getIdent()
-        isNotExists = not self.workers.isExists(ident)
-
-        if isNotExists:
-            self.workers.addWorker(worker)
-            # Register socket into entries
-            sock = worker.sock
-            self.entries.register(sock.fileno(), select.POLLIN)
-            return Ok
-
-        return Error
-
-    def removeWorker(self, ident):
-        sock = None
-        isExists = self.workers.isExists(ident)
-
-        if isExists:
-            # Unregister the socket from poll object
-            self.entries.unregister(sock)
-            # remove worker
-            self.workers.removeWorker(ident)
-            return Ok
-
-        return Error
-
-    def getWorker(self, ident):
-        return self.workers.getWorker(ident)
-
-    def Acceptor(self, letter):
-        # Check letter's type
-        event = letter.type_
-
-        if event == Letter.NewTask or event == Letter.TaskCancel:
-            return None
-
-        handler = self.handlers[event]
-        handler(self, letter)
-
-    def run(self):
-
-        while True:
-            # Polling every 10 seconds due to polling
-            # may not affect to new worker which be
-            # added after poll() is called
-            readyEntries = self.entries.poll(10000)
-
-            # Read message from socket and then transfer
-            # this message into letter. Then hand the
-            # letter to acceptor
-            for fd, event in readyEntries:
-                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-
-                try:
-                    letter = Worker.receving(sock)
-                except:
-                    self.entries.unregister(fd)
-                    continue
-
-                if letter != None:
-                    self.Acceptor(letter)
-
-# Handlers definitions
-
-# Handler to process response of NewTask request
-def responseHandler(eventListener, letter):
-    # Should verify the letter's format
-
-    ident = letter.getHeader('id')
-    taskId = letter.getHeader('tId')
-
-    state = int(letter.getContent('state'))
-
-    worker = eventListener.getWorker(ident)
-    task = worker.searchTask(taskId)
-
-    if Task.isValidState(state):
-        task.stateChange(state)
-
-        # When Task move into STATE_FINISHED
-        # should open a thread to receive generated
-        # file.
-        if state == Task.STATE_FINISHED:
-            pass
