@@ -308,9 +308,33 @@ class UnitTest(TestCase):
     def test_integration(self):
         from worker.server import Server
 
-        s = Server(("localhost", 8015))
-        print("server start")
+        def register(worker, args):
+            el = args[0]
+            el.fdRegister(worker)
+
+        def serverAction():
+            workerRoom = WorkerRoom('localhost', 8015)
+            el = EventListener(workerRoom)
+            dispatcher = Dispatcher(workerRoom)
+
+            workerRoom.hookRegister((register, [el]))
+
+            workerRoom.start()
+            el.start()
+            dispatcher.start()
+
+        def clientAction():
+            s = Server(("localhost", 8015))
+            print("server start")
+            s.start()
+
+
+        s = Server(serverAction)
+        c = Client(clientAction)
+
         s.start()
+        time.sleep(1)
+        c.start()
 
 
 
