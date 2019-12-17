@@ -305,6 +305,16 @@ class UnitTest(TestCase):
 
         s.join()
 
+    def test_integration(self):
+        from worker.server import Server
+
+        s = Server(("localhost", 8015))
+        print("server start")
+        s.start()
+
+
+
+
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')
