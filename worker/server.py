@@ -16,6 +16,7 @@ else:
 from multiprocessing import Pool, Queue
 from threading import Thread, Condition
 
+WORKER_NAME = "WORKER_EXAMPLE"
 REPO_URL = "git@gpon.git.com:gpon/olt.git"
 PROJECT_NAME = "olt"
 
@@ -107,14 +108,16 @@ class Server(Thread):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect(address)
 
-        self.q = Queue(self.__numOfProcess * 4)
+        self.q = Queue(self.__numOfProcess * 256)
 
     def run(self):
         self.init()
 
     def init(self):
+        global WORKER_NAME
+
         propLetter = Letter(Letter.PropertyNotify,\
-                            {"ident":"worker_example"},\
+                            {"ident":WORKER_NAME},\
                             {"MAX":str(os.cpu_count()), "PROC":"0"})
         self.__send(propLetter)
 
