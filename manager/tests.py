@@ -310,7 +310,8 @@ class UnitTest(TestCase):
         time.sleep(10)
 
     def test_integration(self):
-        from worker.server import Server
+        from worker.server import Server, RESPONSE_TO_SERVER_DAEMON, TASK_DEAL_DAEMON
+        from manager.misc.eventListener import responseHandler, binaryHandler
 
         def register(worker, args):
             el = args[0]
@@ -321,6 +322,9 @@ class UnitTest(TestCase):
             el = EventListener(workerRoom)
             dispatcher = Dispatcher(workerRoom)
 
+            el.registerEvent(Letter.Response, responseHandler)
+            el.registerEvent(Letter.BinaryFile, binaryHandler)
+
             workerRoom.hookRegister((register, [el]))
 
             workerRoom.start()
@@ -329,7 +333,7 @@ class UnitTest(TestCase):
 
             time.sleep(2)
 
-            task = Task('1', {"sn":"123", "vsn":"abc"})
+            task = Task("abc", {"sn":"123", "vsn":"abc"})
             dispatcher.dispatch(task)
 
             time.sleep(10)
@@ -338,11 +342,16 @@ class UnitTest(TestCase):
 
         def clientAction(arg):
             s = Server("localhost", 8017)
-            print("server start")
-            s.start()
+            s.init()
 
-            s.join()
-            time.sleep(10)
+            t1 = TASK_DEAL_DAEMON(s)
+            t2 = RESPONSE_TO_SERVER_DAEMON(s)
+
+            t1.start()
+            t2.start()
+
+            t1.join()
+            t2.join()
 
         s = ServerT(serverAction)
         c = ClientT(clientAction, None)

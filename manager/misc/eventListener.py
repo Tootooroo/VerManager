@@ -2,7 +2,7 @@ import socket
 import select
 from threading import Thread
 
-from manager.misc.worker import Worker
+from manager.misc.worker import Worker, Task
 from manager.misc.type import *
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
@@ -97,6 +97,7 @@ class EventListener(Thread):
 
                 try:
                     letter = Worker.receving(sock)
+                    print(letter.typeOfLetter())
                 except:
                     self.entries.unregister(fd)
                     continue
@@ -109,9 +110,10 @@ class EventListener(Thread):
 # Handler to process response of NewTask request
 def responseHandler(eventListener, letter):
     # Should verify the letter's format
+    print(letter.toString())
 
-    ident = letter.getHeader('id')
-    taskId = letter.getHeader('tId')
+    ident = letter.getHeader('ident')
+    taskId = letter.getHeader('tid')
 
     state = int(letter.getContent('state'))
 
@@ -131,10 +133,13 @@ def binaryHandler(eventListener, letter):
     fdSet = eventListener.taskResultFdSet
     tid = letter.getHeader('tid')
 
+    print("Binary Received")
+
     # This is the first binary letter of the task correspond to the
     # received tid just open a file and store the relation into fdSet
     if not tid in fdSet:
-        pass
+        newFd = open("./data/" + tid, "wb")
+        fdSet[tid] = newFd
 
     fd = fdSet[tid]
     content = letter.getContent('content')

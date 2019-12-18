@@ -38,7 +38,7 @@ class Letter:
     # Format of BinaryFile letter
     # Type    : 'binary'
     # header  : '{"tid":"..."}
-    # content : "{"content":b"..."}"
+    # content : "{"bytes":b"..."}"
     BinaryFile = 'binary'
 
     BINARY_HEADER_LEN = 70
@@ -82,6 +82,20 @@ class Letter:
         bStr = str.encode()
 
         return len(bStr).to_bytes(2, "big") + bStr
+
+    def binaryPack(self):
+        if self.typeOfLetter() != Letter.BinaryFile:
+            return None
+
+        tid = self.getHeader("tid")
+        content = self.getContent("bytes")
+
+        tid_field = b"".join([" ".encode() for x in range(64 - len(tid))]) + tid.encode()
+        packet = (1).to_bytes(2, "big")\
+                 + (len(content)).to_bytes(4, "big")\
+                 + tid_field\
+                 + content
+        return packet
 
     def json2Letter(s: typing.AnyStr):
         dict_ = None
@@ -132,6 +146,7 @@ class Letter:
     def __parse_binary(s):
        tid = s[6:70].decode().replace(" ", "")
        content = s[70:]
+       prints(s)
 
        return Letter(Letter.BinaryFile, {"tid":tid}, {"content":content})
 

@@ -53,7 +53,7 @@ class Task:
         return self.state == Task.STATE_FINISHED
 
     def isValidState(s):
-        return s >= STATE_PREPARE and s <= STATE_FAILURE
+        return s >= Task.STATE_PREPARE and s <= Task.STATE_FAILURE
 
 class TaskGroup:
     def __init__(self):

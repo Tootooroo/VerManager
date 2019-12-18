@@ -17,8 +17,8 @@ from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
 
 WORKER_NAME = "WORKER_EXAMPLE"
-REPO_URL = "git@gpon.git.com:gpon/olt.git"
-PROJECT_NAME = "olt"
+REPO_URL = "git@gpon.git.com:root/daemon.git"
+PROJECT_NAME = "daemon"
 
 class RESPONSE_TO_SERVER_DAEMON(Thread):
 
@@ -35,15 +35,7 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
         cond.acquire()
 
         while True:
-            while not server.isResponseInQ():
-                print("wait")
-                cond.wait(1000)
-            print("received response")
             server.transfer_step()
-
-def do_test(args):
-    print(args)
-    return 2
 
 class TASK_DEAL_DAEMON(Thread):
 
@@ -71,70 +63,60 @@ class TASK_DEAL_DAEMON(Thread):
                 continue
 
             self.numOfTasksInProc += 1
-            res = self.pool.apply_async(do_test, (l, server))
+            res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l))
 
             # STATE_IN_PROC
             letter = Letter(Letter.Response, \
-                            {"ident":WORKER_NAME}, {"state":"1"})
+                            {"ident":WORKER_NAME, "tid":l.getContent('vsn')},\
+                            {"state":"1"})
+
             server.transfer(letter)
 
-    def do_test(args):
-        global WORKER_NAME
-        print(args)
-
-        #revision = l.getContent('sn')
-        #vsn = l.getContent('vsn')
-
-        #finidhedLetter = Letter(Letter.Response, {"ident":WORKER_NAME,"tid":vsn},\
-        #                        {"state":"2"})
-        #server.transfer(finishedLetter)
+            res.get()
 
     # Processing the assigned task and send back the result to server
-    def __do(args):
-        global REPO_URL, PROJECT_NAME
+    def job(*args):
+        global REPO_URL, PROJECT_NAME, WORKER_NAME
 
-        l = args[0]
-        server = args[1]
+        server = args[0]
+        letter = args[1]
 
-        revision = l.getContent('sn')
-        vsn = l.getContent('vsn')
+        revision = letter.getContent('sn')
+        vsn = letter.getContent('vsn')
 
         # Processing
         ret = subprocess.run(["git", "clone", "-b", "master", REPO_URL])
         try:
             ret.check_returncode()
         except subprocess.CalledProcessError:
-            letter = Letter(Letter.Response, {"ident":"..."}, {"state":"3"})
+            letter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn},\
+                            {"state":"3"})
             server.transfer(letter)
+            return None
 
         os.chdir(PROJECT_NAME)
         ret = subprocess.run(["git", "checkout", "-f", revision])
         ret = subprocess.run(["make"])
 
         # Send back to server
-        with line in open("./try", 'rb'):
-            binaryLetter = Letter(Letter.BinaryFile, {"tid":vsn}, {"content":line})
-            server.transfer(binaryLetter)
+        with open("./try", 'rb') as file:
+            for line in file:
+                binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
+                server.transfer(binaryLetter)
 
         # Response to server to notify that the task is finished
-        finishedLeter = Letter(Letter.Response, {"ident":"...", "tid":vsn}, {"state":"2"})
+        finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
         server.transfer(finishedLetter)
 
 
 
-class Server(Thread):
+class Server:
 
     def __init__(self, host, port):
-        Thread.__init__(self)
-
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
 
-        self.__manager = Manager()
-        self.q = self.__manager.Queue(os.cpu_count() * 256)
-
-    def run(self):
-        self.init()
+        self.q = Manager().Queue(os.cpu_count() * 256)
 
     def init(self):
         global WORKER_NAME
@@ -143,15 +125,6 @@ class Server(Thread):
                             {"ident":WORKER_NAME},\
                             {"MAX":str(os.cpu_count()), "PROC":"0"})
         self.__send(propLetter)
-
-        t1 = TASK_DEAL_DAEMON(self)
-        t2 = RESPONSE_TO_SERVER_DAEMON(self)
-
-        t1.start()
-        t2.start()
-
-        t1.join()
-        t2.join()
 
     def waitLetter(self):
         return self.__recv()
@@ -172,7 +145,13 @@ class Server(Thread):
         return not self.q.empty()
 
     def __send(self, l):
-        return Server.__sending(self.sock, l)
+        if l.typeOfLetter() == Letter.BinaryFile:
+            return Server.__sending_bytes(self.sock, l.binaryPack())
+        else:
+            return Server.__sending(self.sock, l)
+
+    def __send_bytes(self, b):
+        return Server.__sending_bytes(self.sock, b)
 
     def __recv(self):
         return Server.__receving(self.sock)
@@ -193,11 +172,14 @@ class Server(Thread):
 
     def __sending(sock, l):
         jBytes = l.toBytesWithLength()
+        Server.__sending_bytes(sock, jBytes)
+
+    def __sending_bytes(sock, bytesBuffer):
         totalSent = 0
-        length = len(jBytes)
+        length = len(bytesBuffer)
 
         while totalSent < length:
-            sent = sock.send(jBytes[totalSent:])
+            sent = sock.send(bytesBuffer[totalSent:])
             if sent == 0:
                 raise Exception
             totalSent += sent
