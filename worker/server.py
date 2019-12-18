@@ -13,7 +13,7 @@ if __name__ == '__main__':
 else:
     from manager.misc.letter import Letter
 
-from multiprocessing import Pool, Queue
+from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
 
 WORKER_NAME = "WORKER_EXAMPLE"
@@ -35,8 +35,15 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
         cond.acquire()
 
         while True:
-            cond.wait_for(self.server.isResponseInQ())
+            while not server.isResponseInQ():
+                print("wait")
+                cond.wait(1000)
+            print("received response")
             server.transfer_step()
+
+def do_test(args):
+    print(args)
+    return 2
 
 class TASK_DEAL_DAEMON(Thread):
 
@@ -49,23 +56,38 @@ class TASK_DEAL_DAEMON(Thread):
         self.pool = Pool(os.cpu_count() * 2)
 
     def run(self):
+        global WORKER_NAME
         server = self.server
 
         while True:
             l = server.waitLetter()
+            print("Received letter:" + l.toString())
 
             if not self.numOfTasksInProc < self.max:
                 # Worker is unable to accept task
                 # just response failure to server
-                letter = Letter(Letter.Response, {"ident":"..."}, {"state":"3"})
+                letter = Letter(Letter.Response, {"ident":WORKER_NAME}, {"state":"3"})
                 server.transfer(letter)
+                continue
 
             self.numOfTasksInProc += 1
-            self.pool.apply_async(self.__do, (l,))
+            res = self.pool.apply_async(do_test, (l, server))
 
             # STATE_IN_PROC
-            letter = Letter(Letter.Response, {"ident":"..."}, {"state":"1"})
+            letter = Letter(Letter.Response, \
+                            {"ident":WORKER_NAME}, {"state":"1"})
             server.transfer(letter)
+
+    def do_test(args):
+        global WORKER_NAME
+        print(args)
+
+        #revision = l.getContent('sn')
+        #vsn = l.getContent('vsn')
+
+        #finidhedLetter = Letter(Letter.Response, {"ident":WORKER_NAME,"tid":vsn},\
+        #                        {"state":"2"})
+        #server.transfer(finishedLetter)
 
     # Processing the assigned task and send back the result to server
     def __do(args):
@@ -102,13 +124,14 @@ class TASK_DEAL_DAEMON(Thread):
 
 class Server(Thread):
 
-    def __init__(self, address):
+    def __init__(self, host, port):
         Thread.__init__(self)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect(address)
+        self.sock.connect((host, port))
 
-        self.q = Queue(self.__numOfProcess * 256)
+        self.__manager = Manager()
+        self.q = self.__manager.Queue(os.cpu_count() * 256)
 
     def run(self):
         self.init()
@@ -121,8 +144,14 @@ class Server(Thread):
                             {"MAX":str(os.cpu_count()), "PROC":"0"})
         self.__send(propLetter)
 
-        TASK_DEAL_DAEMON(self).start()
-        RESPONSE_TO_SERVER_DAEMON(self).start()
+        t1 = TASK_DEAL_DAEMON(self)
+        t2 = RESPONSE_TO_SERVER_DAEMON(self)
+
+        t1.start()
+        t2.start()
+
+        t1.join()
+        t2.join()
 
     def waitLetter(self):
         return self.__recv()
@@ -154,7 +183,7 @@ class Server(Thread):
 
         while remain > 0:
             chunk = sock.recv(remain)
-            if chun == b'':
+            if chunk == b'':
                 raise Exception
 
             content += chunk

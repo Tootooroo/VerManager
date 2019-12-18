@@ -4,6 +4,7 @@
 # load-balance, queue supported
 
 import typing
+from functools import reduce
 
 from threading import Thread, Lock, Event
 from manager.misc.worker import Task, Worker
@@ -43,14 +44,14 @@ class Dispatcher(Thread):
         # with lowest overhead of all online workerd
         def viaOverhead(workers):
             # Filter out workers which is not in online status or not able to accept
-            f_oneline_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccept()
+            f_online_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccept()
             onlineWorkers = list(filter(lambda w: f_online_acceptable, workers))
             if onlineWorkers == []:
                 return None
 
             # Find out the worker with lowest overhead on a collection of online acceptable workers
             f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
-            theWorker = list(reduce(f, onlineWorkers))
+            theWorker = reduce(f, onlineWorkers)
 
             return theWorker
 

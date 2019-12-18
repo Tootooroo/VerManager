@@ -9,6 +9,9 @@ from manager.misc.verControl import RevSync
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
 from manager.misc.eventListener import EventListener
+from manager.misc.worker import Task
+
+from manager.misc.dispatcher import Dispatcher
 
 import time
 import unittest
@@ -17,7 +20,7 @@ from threading import Thread
 
 # Create your tests here.
 
-class Server(Thread):
+class ServerT(Thread):
 
     def __init__(self, action):
         Thread.__init__(self)
@@ -27,7 +30,7 @@ class Server(Thread):
         self.action()
 
 
-class Client(Thread):
+class ClientT(Thread):
 
     def __init__(self, action, args):
         Thread.__init__(self)
@@ -201,7 +204,8 @@ class UnitTest(TestCase):
                 listener.addWorker(w)
                 test.assertTrue(listener.getWorker("test") != None)
 
-                w.do(Letter(Letter.NewTask, {'tid':'1'}, {'sn':'123', 'vsn':'123'}))
+                task = Task('1', {"sn":"123", "vsn":"123"})
+                w.do(task)
 
                 time.sleep(3)
 
@@ -276,7 +280,7 @@ class UnitTest(TestCase):
 
             self.assertTrue(workerRoom.getNumOfWorkers() == 3)
 
-        s = Server(serverAction)
+        s = ServerT(serverAction)
         s.start()
 
         time.sleep(2)
@@ -295,15 +299,15 @@ class UnitTest(TestCase):
 
             time.sleep(60)
 
-        c1 = Client(clientAction, 'A')
-        c2 = Client(clientAction, 'B')
-        c3 = Client(clientAction, 'C')
+        c1 = ClientT(clientAction, 'A')
+        c2 = ClientT(clientAction, 'B')
+        c3 = ClientT(clientAction, 'C')
 
         c1.start()
         c2.start()
         c3.start()
 
-        s.join()
+        time.sleep(10)
 
     def test_integration(self):
         from worker.server import Server
@@ -313,7 +317,7 @@ class UnitTest(TestCase):
             el.fdRegister(worker)
 
         def serverAction():
-            workerRoom = WorkerRoom('localhost', 8015)
+            workerRoom = WorkerRoom('localhost', 8017)
             el = EventListener(workerRoom)
             dispatcher = Dispatcher(workerRoom)
 
@@ -323,19 +327,32 @@ class UnitTest(TestCase):
             el.start()
             dispatcher.start()
 
-        def clientAction():
-            s = Server(("localhost", 8015))
+            time.sleep(2)
+
+            task = Task('1', {"sn":"123", "vsn":"abc"})
+            dispatcher.dispatch(task)
+
+            time.sleep(10)
+
+            dispatcher.join()
+
+        def clientAction(arg):
+            s = Server("localhost", 8017)
             print("server start")
             s.start()
 
+            s.join()
+            time.sleep(10)
 
-        s = Server(serverAction)
-        c = Client(clientAction)
+        s = ServerT(serverAction)
+        c = ClientT(clientAction, None)
 
         s.start()
         time.sleep(1)
         c.start()
 
+        s.join()
+        c.join()
 
 
 

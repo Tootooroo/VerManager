@@ -119,6 +119,7 @@ def responseHandler(eventListener, letter):
     task = worker.searchTask(taskId)
 
     if Task.isValidState(state):
+        print(ident + " change to state " + str(state))
         task.stateChange(state)
 
         # Do some operation after finished such as close file description

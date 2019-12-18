@@ -20,8 +20,9 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id: typing.AnyStr, **content):
+    def __init__(self, id: typing.AnyStr, content):
         self.taskId = id
+
         self.content = content
         self.state = Task.STATE_PREPARE
 
@@ -192,16 +193,16 @@ class Worker(socket.socket):
     def numOfTaskProc(self):
         return self.processing
 
-    def do(self, letter) -> None:
+    def do(self, task) -> None:
         if not self.isAbleToAccept():
             raise Exception
 
         # Task assign
-        letter.addToHeader('ident', self.ident)
+        letter = Letter(Letter.NewTask, {"ident":self.ident, "tid":task.id()}, \
+                        task.content)
         self.__send(letter)
 
         # Register task into task group
-        task = Task(self.ident)
         task.stateChange(Task.STATE_IN_PROC)
 
         with self.lock:

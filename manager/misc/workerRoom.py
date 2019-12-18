@@ -58,7 +58,7 @@ class WorkerRoom(Thread):
             return self.__workers[ident]
 
     # Type of condRtn is condRtn([worker1, worker2, worker3, ...])
-    def gerWorkerWithCond(self, condRtn):
+    def getWorkerWithCond(self, condRtn):
         with self.lock:
             workerList = list(self.__workers.values())
             return condRtn(workerList)

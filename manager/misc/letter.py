@@ -49,8 +49,8 @@ class Letter:
     format = '{"type":"%s", "header":%s, "content":%s}'
 
     def __init__(self, type_: typing.AnyStr,
-                 header: typing.Dict,
-                 content: typing.Dict) -> None:
+                 header: typing.Dict = {},
+                 content: typing.Dict = {}) -> None:
 
         # Type of letter:
         # (1) NewTask
