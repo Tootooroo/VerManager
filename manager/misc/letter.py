@@ -146,7 +146,6 @@ class Letter:
     def __parse_binary(s):
        tid = s[6:70].decode().replace(" ", "")
        content = s[70:]
-       prints(s)
 
        return Letter(Letter.BinaryFile, {"tid":tid}, {"content":content})
 

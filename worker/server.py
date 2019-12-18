@@ -5,6 +5,7 @@ import subprocess
 import zipfile
 import os
 import socket
+import time
 
 if __name__ == '__main__':
     import sys
@@ -103,6 +104,7 @@ class TASK_DEAL_DAEMON(Thread):
             for line in file:
                 binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
                 server.transfer(binaryLetter)
+                time.sleep(0.05)
 
         # Response to server to notify that the task is finished
         finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})

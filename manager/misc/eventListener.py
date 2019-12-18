@@ -97,7 +97,6 @@ class EventListener(Thread):
 
                 try:
                     letter = Worker.receving(sock)
-                    print(letter.typeOfLetter())
                 except:
                     self.entries.unregister(fd)
                     continue
