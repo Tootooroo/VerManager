@@ -65,14 +65,6 @@ class TASK_DEAL_DAEMON(Thread):
 
             self.numOfTasksInProc += 1
             res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l))
-
-            # STATE_IN_PROC
-            letter = Letter(Letter.Response, \
-                            {"ident":WORKER_NAME, "tid":l.getContent('vsn')},\
-                            {"state":"1"})
-
-            server.transfer(letter)
-
             res.get()
 
     # Processing the assigned task and send back the result to server
@@ -81,6 +73,12 @@ class TASK_DEAL_DAEMON(Thread):
 
         server = args[0]
         letter = args[1]
+
+        # Notify to server the worker is in processing
+        letterInProc = Letter(Letter.Response, \
+                        {"ident":WORKER_NAME, "tid":letter.getContent('vsn')},\
+                        {"state":"1"})
+        server.transfer(letterInProc)
 
         revision = letter.getContent('sn')
         vsn = letter.getContent('vsn')
@@ -187,3 +185,16 @@ class Server:
             totalSent += sent
 
         return None
+
+if __name__ == '__main__':
+    s = Server("127.0.0.1", 8024)
+    s.init()
+
+    t1 = TASK_DEAL_DAEMON(s)
+    t2 = RESPONSE_TO_SERVER_DAEMON(s)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()

@@ -46,6 +46,7 @@ class Dispatcher(Thread):
             # Filter out workers which is not in online status or not able to accept
             f_online_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccept()
             onlineWorkers = list(filter(lambda w: f_online_acceptable, workers))
+
             if onlineWorkers == []:
                 return None
 
@@ -62,13 +63,14 @@ class Dispatcher(Thread):
 
         if theWorker != None:
             theWorker.do(task)
+            print("push " + task.id() + "into tasks")
             self.__tasks[task.id()] = task
             return True
 
         return False
 
     def dispatch(self, task):
-        if not self.__dispatch(task):
+        if self.__dispatch(task) == None:
             self.taskWait.insert(0, task)
             self.taskEvent.set()
             return False
@@ -117,10 +119,10 @@ class Dispatcher(Thread):
         if not taskId in self.__tasks:
             return Error
 
-        task = self.tasks[taskId]
+        task = self.__tasks[taskId]
         return state(task)
 
-    def isTaskFProc(self, taskId):
+    def isTaskInProc(self, taskId):
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)
 
     def isTaskFailure(self, taskId):

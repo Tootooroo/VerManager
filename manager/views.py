@@ -1,6 +1,7 @@
 import manager.apps
 
 import json
+import time
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
@@ -10,6 +11,12 @@ from django.shortcuts import render
 from django.template import RequestContext
 
 from .misc.verControl import RevSync
+from .misc.dispatcher import Dispatcher
+from .misc.worker import Task
+
+from .misc.components import Components
+
+from .misc.type import *
 
 # Models
 from .models import Revisions, Versions
@@ -20,6 +27,9 @@ def index(request):
 
 def verRegPage(request):
     return render(request, 'verRegister.html')
+
+def verGenPage(request):
+    return render(request, 'verGeneration.html')
 
 def register(request):
     try:
@@ -46,7 +56,40 @@ def newRev(request):
 
 # request: {Version: 'ver_name'}
 def generation(request):
-    pass
+    import os
+
+    dispatcher = Components.dispatcher
+
+    try:
+        verIdent = request.POST['Version']
+        version = Versions.objects.get(pk=verIdent)
+
+        if version == None:
+            return HttpResponseBadRequest()
+
+        task = Task(verIdent, {"sn":version.sn, "vsn":verIdent})
+
+        if dispatcher.dispatch(task) == False:
+            return HttpResponseBadRequest()
+
+    except:
+        return HttpResponseBadRequest()
+
+    return HttpResponse()
+
+def isGenerationDone(request):
+    dispatcher = Components.dispatcher
+
+    verIdent = request.POST['Version']
+
+    ret = dispatcher.isTaskFailure(verIdent)
+    if ret == True or ret == Error:
+        return HttpResponseBadRequest(verIdent)
+
+    if dispatcher.isTaskFinished(verIdent):
+        return HttpResponse("http://www.baidu.com")
+    elif dispatcher.isTaskInProc(verIdent):
+        return HttpResponseNotModified()
 
 def revisionRetrive(request):
     beginRev = None

@@ -9,6 +9,8 @@ from manager.misc.worker import Worker
 from threading import Thread
 import socket
 
+from manager.misc.components import Components
+
 class WorkerRoom(Thread):
 
     def __init__(self, host, port):
@@ -43,6 +45,9 @@ class WorkerRoom(Thread):
 
             if acceptedWorker == None:
                 continue
+
+
+            print("New worker Arrived:" + acceptedWorker.getIdent())
 
             self.addWorker(acceptedWorker)
             list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))

@@ -54,7 +54,7 @@ class RevSync(Thread):
         return formatDate + offset
 
     def revDBInit(self) -> bool:
-        revisions = self.gitlabRef.projects.get(34).commits.list(all=True)
+        revisions = self.gitlabRef.projects.get(101).commits.list(all=True)
 
         # Remove old datas of revisions cause these data may out of date
         # repository may be rebased so that the structure of it is very
@@ -120,7 +120,7 @@ class RevSync(Thread):
                             dateTime = date_time_)
             rev.save()
 
-#@receiver(connection_created)
+@receiver(connection_created)
 def revSyncSpawn(sender, **kwargs):
     try :
         revSyncner = RevSync()

@@ -104,6 +104,11 @@ class EventListener(Thread):
                 if letter != None:
                     self.Acceptor(letter)
 
+# Hooks
+def workerRegister(worker, args):
+    eventListener = args[0]
+    eventListener.fdRegister(worker)
+
 # Handlers definitions
 
 # Handler to process response of NewTask request

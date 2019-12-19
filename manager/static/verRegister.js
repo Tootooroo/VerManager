@@ -76,7 +76,7 @@ function fillRevList(listId, beginRevision, numOfRevision) {
     var csrftoken = util.getCookie('csrftoken');
     var data = {
         beginRev: beginRevision == null ? "null" : beginRevision,
-        numOfRev:numOfRevision.toString()
+        numOfRev: numOfRevision.toString()
     };
 
     var xhr = new XMLHttpRequest();
