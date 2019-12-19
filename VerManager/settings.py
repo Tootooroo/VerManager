@@ -125,6 +125,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
     '/home/aydenlin/Projects/VerManager/manager/static/',
+    '/home/aydenlin/Projects/VerManager/data'
 )
 
 REQUIRE_BASE_URL = "./"

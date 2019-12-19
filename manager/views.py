@@ -87,7 +87,7 @@ def isGenerationDone(request):
         return HttpResponseBadRequest(verIdent)
 
     if dispatcher.isTaskFinished(verIdent):
-        return HttpResponse("http://www.baidu.com")
+        return HttpResponse("http://127.0.0.1:8000/static/" + verIdent)
     elif dispatcher.isTaskInProc(verIdent):
         return HttpResponseNotModified()
 
