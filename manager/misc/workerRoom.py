@@ -33,27 +33,46 @@ class WorkerRoom(Thread):
         self.__host = host
         self.__port = port
 
+        self.sock = None
+
     def run(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((self.__host, self.__port))
-        sock.listen(5)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.bind((self.__host, self.__port))
+        self.sock.listen(5)
+
+        # Cause not only accept a new worker in a loop also
+        # to do another works, such as discover an disconnected
+        # worker and remove it
+        self.sock.settimeout(1)
 
         while True:
-            (workersocket, address) = sock.accept()
+            self.waitWorker()
+
+    def waitWorker(self):
+        try:
+            (workersocket, address) = self.sock.accept()
 
             acceptedWorker = Worker(workersocket)
 
             if acceptedWorker == None:
-                continue
-
+                return None
 
             print("New worker Arrived:" + acceptedWorker.getIdent())
 
             self.addWorker(acceptedWorker)
             list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
 
+        except:
+            return None
+
     def hookRegister(self, hook):
         self.hooks.append(hook)
+
+    def markDisconnected(self, ident):
+        pass
+
+    def getWorkerViaFd(self, fd):
+        pass
 
     def getWorker(self, ident):
         with self.lock:

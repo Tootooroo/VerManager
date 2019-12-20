@@ -1,0 +1,20 @@
+MASTER_ADDRESS:
+  host: "127.0.0.1"
+  port: 8024
+
+WORKER_NAME: WORKER_EXAMPLE
+
+REPO_URL: git@gpon.git.com:root/daemon.git
+
+PROJECT_NAME:  daemon
+
+QUEUE_SIZE: 1024
+
+MAX_TASK_CAN_PROC: 4
+
+PROCESS_POOL_SIZE: 4
+
+RESULT_PATH: ....
+
+BUILDING_CMDS:
+  - make

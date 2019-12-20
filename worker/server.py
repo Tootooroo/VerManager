@@ -1,29 +1,33 @@
 # server.py
+# Usage: python server.py <configPath>
 
-
+import sys
 import subprocess
 import zipfile
 import os
 import socket
 import time
 
+from threading import Lock
+
 if __name__ == '__main__':
     import sys
     sys.path.append("../manager/misc")
+
     from letter import Letter
+    from info import Info
+    from type import *
 else:
     from manager.misc.letter import Letter
+    from worker.info import Info
+    from manager.misc.type import *
 
 from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
 
-WORKER_NAME = "WORKER_EXAMPLE"
-REPO_URL = "git@gpon.git.com:root/daemon.git"
-PROJECT_NAME = "daemon"
-
 class RESPONSE_TO_SERVER_DAEMON(Thread):
 
-    def __init__(self, server):
+    def __init__(self, server, info):
         Thread.__init__(self)
 
         self.cond = Condition()
@@ -40,16 +44,17 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
 
 class TASK_DEAL_DAEMON(Thread):
 
-    def __init__(self, server):
+    def __init__(self, server, info):
         Thread.__init__(self)
 
         self.server = server
-        self.max = os.cpu_count()
+        self.max = info.getConfig('MAX_TASK_CAN_PROC')
         self.numOfTasksInProc = 0
-        self.pool = Pool(os.cpu_count() * 2)
+        self.pool = Pool(info.getConfig('PROCESS_POOL_SIZE'))
+        self.info = info
 
     def run(self):
-        global WORKER_NAME
+        WORKER_NAME = self.info.getConfig('WORKER_NAME')
         server = self.server
 
         while True:
@@ -69,7 +74,11 @@ class TASK_DEAL_DAEMON(Thread):
 
     # Processing the assigned task and send back the result to server
     def job(*args):
-        global REPO_URL, PROJECT_NAME, WORKER_NAME
+        REPO_URL = self.info.getConfig('REPO_URL')
+        PROJECT_NAME = self.info.getConfig('PROJECT_NAME')
+        WORKER_NAME = self.info.getConfig('WORKER_NAME')
+        BUILDING_CMDS = self.info.getConfig('BUILDING_CMDS')
+        RESULT_PATH = self.info.getConfig('RESULT_PATH')
 
         server = args[0]
         letter = args[1]
@@ -84,50 +93,94 @@ class TASK_DEAL_DAEMON(Thread):
         vsn = letter.getContent('vsn')
 
         # Processing
-        ret = subprocess.run(["git", "clone", "-b", "master", REPO_URL])
         try:
+            # Fetch
+            ret = subprocess.run(["git", "clone", "-b", "master", REPO_URL])
             ret.check_returncode()
+
+            os.chdir(PROJECT_NAME)
+
+            # Revision checkout
+            ret = subprocess.run(["git", "checkout", "-f", revision])
+            ret.check_returncode()
+
+            # Building
+            for cmd in BUILDING_CMDS:
+                ret = subprocess.run([cmd])
+                ret.check_returncode()
+
+            # Send back to server
+            with open(RESULT_PATH, 'rb') as file:
+                for line in file:
+                    binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
+                    server.transfer(binaryLetter)
+                    time.sleep(0.05)
+
+            # Response to server to notify that the task is finished
+            finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
+            server.transfer(finishedLetter)
+
+            os.chdir("..")
+            ret = subprocess.run(["rm", "-rf", PROJECT_NAME])
+
         except subprocess.CalledProcessError:
             letter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn},\
                             {"state":"3"})
             server.transfer(letter)
             return None
 
-        os.chdir(PROJECT_NAME)
-        ret = subprocess.run(["git", "checkout", "-f", revision])
-        ret = subprocess.run(["make"])
-
-        # Send back to server
-        with open("./try", 'rb') as file:
-            for line in file:
-                binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
-                server.transfer(binaryLetter)
-                time.sleep(0.05)
-
-        # Response to server to notify that the task is finished
-        finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
-        server.transfer(finishedLetter)
-
-
 
 class Server:
 
-    def __init__(self, host, port):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+    STATE_CONNECTED = 0
+    STATE_CONNECTING = 1
+    STATE_DISCONNECTED = 2
 
-        self.q = Manager().Queue(os.cpu_count() * 256)
+    def __init__(self, info):
+        self.info = info
+        self.__state = STATE_DISCONNECTED
+
+        # Recover flag is a sign which indicate that
+        # whether recover method is in processing
+        # the purpose of this flag is prevent race
+        # to recover the connection to the server
+        self.__recoverLock = Lock()
+
+        self.q = Manager().Queue(queueSize)
+        queueSize = info.getConfig('QUEUE_SIZE')
 
     def init(self):
-        global WORKER_NAME
+        WORKER_NAME = self.info.getConfig('WORKER_NAME')
+        MAX_TASK_CAN_PROC = self.info.getConfig('MAX_TASK_CAN_PROC')
+        host = self.info.getConfig('MASTER_ADDRESS', 'host')
+        port = self.info.getConfig('MASTER_ADDRESS', 'port')
+
+        try:
+            self.sock = socket.socket(socket.AF_NET, socket.SOCK_STREAM)
+            self.sock.connect((host, port))
+        except:
+            return Error
+
+        self.__state = Server.STATE_CONNECTING
 
         propLetter = Letter(Letter.PropertyNotify,\
                             {"ident":WORKER_NAME},\
-                            {"MAX":str(os.cpu_count()), "PROC":"0"})
-        self.__send(propLetter)
+                            {"MAX":str(MAX_TASK_CAN_PROC), "PROC":"0"})
+        if self.__send(propLetter) == Error:
+            self.__state = Server.STATE_DISCONNECTED
+            return Error
+
+        self.__state = Server.STATE_CONNECTED
+        return Ok
 
     def waitLetter(self):
-        return self.__recv()
+        letter = None
+
+        while letter == None:
+            letter = self.__recv()
+            self.reconnect()
+
+        return letter
 
     # Transfer a letter to server
     # calling of this method will not transfer
@@ -139,22 +192,60 @@ class Server:
         self.q.put(l)
 
     def transfer_step(self):
-        self.__send(self.q.get())
+        response = self.q.get()
+
+        while self.__send(response) == Error:
+            self.reconnect()
+
+    def reconnect(self):
+        # Wait until recovering in another thread is exited
+        self.__recoverLock.acquire()
+
+        if self.__state != Server.STATE_DISCONNECTED:
+            self.__recoverLock.release()
+            return Error
+
+        host = self.info.getConfig('MASTER_ADDRESS', 'host')
+        port = self.info.getConfig('MASTER_ADDRESS', 'port')
+
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect(host, port)
+        except:
+            self.__recoverLock.release()
+            return Error
+
+        self.__state = Server.STATE_CONNECTED
+
+        self.__recoverLock.release()
+
+        return Ok
 
     def isResponseInQ(self):
         return not self.q.empty()
 
     def __send(self, l):
-        if l.typeOfLetter() == Letter.BinaryFile:
-            return Server.__sending_bytes(self.sock, l.binaryPack())
-        else:
-            return Server.__sending(self.sock, l)
+        try:
+            if l.typeOfLetter() == Letter.BinaryFile:
+                Server.__sending_bytes(self.sock, l.binaryPack())
+            else:
+                Server.__sending(self.sock, l)
+            return Ok
+        except:
+            return Error
 
     def __send_bytes(self, b):
-        return Server.__sending_bytes(self.sock, b)
+        try:
+            Server.__sending_bytes(self.sock, b)
+            return Ok
+        except:
+            return Error
 
     def __recv(self):
-        return Server.__receving(self.sock)
+        try:
+            return Server.__receving(self.sock)
+        except:
+            return None
 
     def __receving(sock):
         content = b''
@@ -172,7 +263,7 @@ class Server:
 
     def __sending(sock, l):
         jBytes = l.toBytesWithLength()
-        Server.__sending_bytes(sock, jBytes)
+        return Server.__sending_bytes(sock, jBytes)
 
     def __sending_bytes(sock, bytesBuffer):
         totalSent = 0
@@ -187,11 +278,15 @@ class Server:
         return None
 
 if __name__ == '__main__':
-    s = Server("127.0.0.1", 8024)
+    configPath = sys.argv[1]
+
+    info = Info(configPath)
+
+    s = Server(info)
     s.init()
 
-    t1 = TASK_DEAL_DAEMON(s)
-    t2 = RESPONSE_TO_SERVER_DAEMON(s)
+    t1 = TASK_DEAL_DAEMON(s, info)
+    t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
 
     t1.start()
     t2.start()

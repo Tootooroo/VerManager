@@ -98,6 +98,7 @@ class EventListener(Thread):
                 try:
                     letter = Worker.receving(sock)
                 except:
+                    self.workers.removeWorkerViaFd(fd)
                     self.entries.unregister(fd)
                     continue
 
