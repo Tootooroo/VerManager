@@ -24,6 +24,9 @@ class WorkerMaintainer(Thread):
 
 class WorkerRoom(Thread):
 
+    WAITING_INTERVAL = 300
+    CLEAN_INTERVAL = 10
+
     EVENT_CONNECTED = 0
     EVENT_DISCONNECTED = 1
     EVENT_WAITING = 2
@@ -93,10 +96,24 @@ class WorkerRoom(Thread):
 
             (eventType, ident) = self.__eventQueue.get(timeout=1)
 
+            worker = self.getWorker(ident)
+            if eventType == WorkerRoom.EVENT_DISCONNECTED:
+                # Update worker's counter
+                worker.setState(Worker.STATE_WAITING)
+                worker.counterSync()
+                worker_waiting.append(worker)
 
+                list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks))
+
+    # Update workers's counter and deal with workers
+    # thoses out of date
     def __waiting_worker_processing(self, workers):
-        pass
+        if len(workers) == 0:
+            return None
 
+
+    def __waiting_worker_update(worker):
+        pass
 
     def hookRegister(self, hook):
         self.hooks.append(hook)
