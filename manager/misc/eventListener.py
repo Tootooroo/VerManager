@@ -98,7 +98,10 @@ class EventListener(Thread):
                 try:
                     letter = Worker.receving(sock)
                 except:
-                    self.workers.removeWorkerViaFd(fd)
+                    # Notify workerRoom an worker is disconnected
+                    worker = self.workers.getWorkerViaFd(fd)
+                    self.workers.mnotifyEvent(workerRoom.EVENT_DISCONNECTED, worker.getIdent())
+
                     self.entries.unregister(fd)
                     continue
 

@@ -7,11 +7,26 @@ from manager.misc.type import *
 from manager.misc.worker import Worker
 
 from threading import Thread
+from queue import Queue
 import socket
 
 from manager.misc.components import Components
 
+class WorkerMaintainer(Thread):
+
+    def __init__(self, workerRoom):
+        Thread.__init__(self)
+        self.workerRoom = workerRoom
+
+    def run(self):
+        while True:
+            self.workerRoom.maintain()
+
 class WorkerRoom(Thread):
+
+    EVENT_CONNECTED = 0
+    EVENT_DISCONNECTED = 1
+    EVENT_WAITING = 2
 
     def __init__(self, host, port):
         Thread.__init__(self)
@@ -25,10 +40,15 @@ class WorkerRoom(Thread):
         self.__workers = {}
         self.numOfWorkers = 0
 
+        self.__eventQueue = Queue(256)
+
         # Collection of method to be run after a worker is accept
         # by WorkerRoom
         # Every entry in hooks is a pair such that (f:func, args:List)
         self.hooks = []
+
+        self.waitingStateHooks = []
+        self.disconnStateHooks = []
 
         self.__host = host
         self.__port = port
@@ -40,16 +60,11 @@ class WorkerRoom(Thread):
         self.sock.bind((self.__host, self.__port))
         self.sock.listen(5)
 
-        # Cause not only accept a new worker in a loop also
-        # to do another works, such as discover an disconnected
-        # worker and remove it
-        self.sock.settimeout(1)
+        # Spawn a thread which respond to worker maintain
+        maintainer = WorkerMaintainer(self)
+        maintainer.start()
 
         while True:
-            self.waitWorker()
-
-    def waitWorker(self):
-        try:
             (workersocket, address) = self.sock.accept()
 
             acceptedWorker = Worker(workersocket)
@@ -62,14 +77,38 @@ class WorkerRoom(Thread):
             self.addWorker(acceptedWorker)
             list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
 
-        except:
-            return None
+
+    # While eventlistener notify that a worker is disconnected
+    # just change it's state into waiting wait <waiting_interval>
+    # minutes if the workers is still disconnected then change
+    # it's state into disconnected and wait several seconds
+    # and remove from WorkerRoom
+    #
+    # Caution: Calling of hooks is necessary while a worker's state is changed
+    def maintain(self):
+        worker_waiting = []
+
+        while True:
+            self.__waiting_worker_processing(worker_waiting)
+
+            (eventType, ident) = self.__eventQueue.get(timeout=1)
+
+
+    def __waiting_worker_processing(self, workers):
+        pass
+
 
     def hookRegister(self, hook):
         self.hooks.append(hook)
 
-    def markDisconnected(self, ident):
-        pass
+    def waitingHookRegister(self, hook):
+        self.hooks.append(hook)
+
+    def disconnHookRegister(self, hook):
+        self.hooks.append(hook)
+
+    def notifyEvent(self, eventType, ident):
+        self.__eventQueue.put((eventType, ident))
 
     def getWorkerViaFd(self, fd):
         pass
