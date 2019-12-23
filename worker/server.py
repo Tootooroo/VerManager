@@ -40,7 +40,12 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
         cond.acquire()
 
         while True:
-            server.transfer_step()
+            ret = server.transfer_step()
+
+            while ret == Error:
+                # Waiting for <TASK_DEAL_DAEMON> reconnecting
+                time.sleep(5)
+                continue
 
 class TASK_DEAL_DAEMON(Thread):
 
@@ -59,6 +64,11 @@ class TASK_DEAL_DAEMON(Thread):
 
         while True:
             l = server.waitLetter()
+
+            if l == None:
+                server.reconnectUntil(5)
+                continue
+
             print("Received letter:" + l.toString())
 
             if not self.numOfTasksInProc < self.max:
@@ -69,19 +79,22 @@ class TASK_DEAL_DAEMON(Thread):
                 continue
 
             self.numOfTasksInProc += 1
-            res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l))
+            res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l, self.info))
             res.get()
 
     # Processing the assigned task and send back the result to server
     def job(*args):
-        REPO_URL = self.info.getConfig('REPO_URL')
-        PROJECT_NAME = self.info.getConfig('PROJECT_NAME')
-        WORKER_NAME = self.info.getConfig('WORKER_NAME')
-        BUILDING_CMDS = self.info.getConfig('BUILDING_CMDS')
-        RESULT_PATH = self.info.getConfig('RESULT_PATH')
-
         server = args[0]
         letter = args[1]
+        info = args[2]
+
+        REPO_URL = info.getConfig('REPO_URL')
+        PROJECT_NAME = info.getConfig('PROJECT_NAME')
+        WORKER_NAME = info.getConfig('WORKER_NAME')
+        BUILDING_CMDS = info.getConfig('BUILDING_CMDS')
+        RESULT_PATH = info.getConfig('RESULT_PATH')
+
+        print(REPO_URL)
 
         # Notify to server the worker is in processing
         letterInProc = Letter(Letter.Response, \
@@ -138,29 +151,16 @@ class Server:
 
     def __init__(self, info):
         self.info = info
-        self.__state = STATE_DISCONNECTED
+        self.__state = Server.STATE_DISCONNECTED
 
-        # Recover flag is a sign which indicate that
-        # whether recover method is in processing
-        # the purpose of this flag is prevent race
-        # to recover the connection to the server
-        self.__recoverLock = Lock()
-
-        self.q = Manager().Queue(queueSize)
         queueSize = info.getConfig('QUEUE_SIZE')
+        self.q = Manager().Queue(queueSize)
 
     def init(self):
         WORKER_NAME = self.info.getConfig('WORKER_NAME')
         MAX_TASK_CAN_PROC = self.info.getConfig('MAX_TASK_CAN_PROC')
-        host = self.info.getConfig('MASTER_ADDRESS', 'host')
-        port = self.info.getConfig('MASTER_ADDRESS', 'port')
 
-        try:
-            self.sock = socket.socket(socket.AF_NET, socket.SOCK_STREAM)
-            self.sock.connect((host, port))
-        except:
-            return Error
-
+        self.connect()
         self.__state = Server.STATE_CONNECTING
 
         propLetter = Letter(Letter.PropertyNotify,\
@@ -173,14 +173,18 @@ class Server:
         self.__state = Server.STATE_CONNECTED
         return Ok
 
+    def connect(self):
+        host = self.info.getConfig('MASTER_ADDRESS', 'host')
+        port = self.info.getConfig('MASTER_ADDRESS', 'port')
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((host, port))
+
+    def disconnect(self):
+        self.sock.close()
+
     def waitLetter(self):
-        letter = None
-
-        while letter == None:
-            letter = self.__recv()
-            self.reconnect()
-
-        return letter
+        return self.__recv()
 
     # Transfer a letter to server
     # calling of this method will not transfer
@@ -193,16 +197,20 @@ class Server:
 
     def transfer_step(self):
         response = self.q.get()
+        return self.__send(response)
 
-        while self.__send(response) == Error:
-            self.reconnect()
+    def reconnectUntil(self, timeout = None):
+        ret = Error
+
+        while ret == Error:
+            ret = self.reconnect()
+            time.sleep(timeout)
+
+        return ret
+
 
     def reconnect(self):
-        # Wait until recovering in another thread is exited
-        self.__recoverLock.acquire()
-
         if self.__state != Server.STATE_DISCONNECTED:
-            self.__recoverLock.release()
             return Error
 
         host = self.info.getConfig('MASTER_ADDRESS', 'host')
@@ -212,12 +220,9 @@ class Server:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect(host, port)
         except:
-            self.__recoverLock.release()
             return Error
 
         self.__state = Server.STATE_CONNECTED
-
-        self.__recoverLock.release()
 
         return Ok
 

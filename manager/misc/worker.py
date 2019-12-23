@@ -156,11 +156,15 @@ class Worker(socket.socket):
         delta = datetime.utcnow() - self.__clock
         self.counters[self.state] = delta.seconds
 
+    def counterReset(self):
+        self.counters = list(map(lambda x: 0, self.counters))
+
     def getState(self):
         return self.state
 
     def setState(self, s):
         self.state = s
+        self.__clock = datetime.utcnow()
         return None
 
     def getIdent(self):

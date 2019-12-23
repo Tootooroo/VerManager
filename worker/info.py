@@ -7,7 +7,9 @@ from yaml import load, SafeLoader
 class Info:
 
     def __init__(self, cfgPath):
-        self.__config = load(cfgPath, Loader=SafeLoader)
+        with open(cfgPath, "r") as f:
+            self.__config = load(f, Loader=SafeLoader)
+
 
     def getConfig(self, *cfgKeys):
         cfgValue = self.__config
@@ -18,7 +20,10 @@ class Info:
         except KeyError:
             return None
 
-        return configValue
+        return cfgValue
+
+    def getConfigs(self):
+        return self.__config
 
     def validityChecking(self):
         condition = 'WORKER_NAME' in self.__config and\

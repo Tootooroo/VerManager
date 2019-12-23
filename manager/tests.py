@@ -312,13 +312,14 @@ class UnitTest(TestCase):
     def test_integration(self):
         from worker.server import Server, RESPONSE_TO_SERVER_DAEMON, TASK_DEAL_DAEMON
         from manager.misc.eventListener import responseHandler, binaryHandler
+        from worker.info import Info
 
         def register(worker, args):
             el = args[0]
             el.fdRegister(worker)
 
         def serverAction():
-            workerRoom = WorkerRoom('localhost', 8017)
+            workerRoom = WorkerRoom('127.0.0.1', 8024)
             el = EventListener(workerRoom)
             dispatcher = Dispatcher(workerRoom)
 
@@ -333,7 +334,7 @@ class UnitTest(TestCase):
 
             time.sleep(2)
 
-            task = Task("abc", {"sn":"123", "vsn":"abc"})
+            task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
             dispatcher.dispatch(task)
 
             time.sleep(10)
@@ -341,17 +342,26 @@ class UnitTest(TestCase):
             dispatcher.join()
 
         def clientAction(arg):
-            s = Server("localhost", 8017)
-            s.init()
+            info = Info("worker/config.yaml")
+            print(info.getConfigs())
 
-            t1 = TASK_DEAL_DAEMON(s)
-            t2 = RESPONSE_TO_SERVER_DAEMON(s)
+            s = Server(info)
+            self.assertTrue(s.init() == 0)
+
+
+            t1 = TASK_DEAL_DAEMON(s, info)
+            t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
 
             t1.start()
             t2.start()
 
+            time.sleep(10)
+
+            print("Worker disconnect")
+
             t1.join()
             t2.join()
+
 
         s = ServerT(serverAction)
         c = ClientT(clientAction, None)

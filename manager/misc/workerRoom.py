@@ -7,7 +7,7 @@ from manager.misc.type import *
 from manager.misc.worker import Worker
 
 from threading import Thread
-from queue import Queue
+from queue import Queue, Empty
 import socket
 
 from manager.misc.components import Components
@@ -25,7 +25,6 @@ class WorkerMaintainer(Thread):
 class WorkerRoom(Thread):
 
     WAITING_INTERVAL = 300
-    CLEAN_INTERVAL = 10
 
     EVENT_CONNECTED = 0
     EVENT_DISCONNECTED = 1
@@ -41,6 +40,7 @@ class WorkerRoom(Thread):
 
         # Chooise map is for quickly searching purpose
         self.__workers = {}
+        self.__workers_waiting = {}
         self.numOfWorkers = 0
 
         self.__eventQueue = Queue(256)
@@ -89,19 +89,26 @@ class WorkerRoom(Thread):
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
     def maintain(self):
-        worker_waiting = []
 
         while True:
-            self.__waiting_worker_processing(worker_waiting)
+            self.__waiting_worker_processing(self.__workers_waiting)
 
-            (eventType, ident) = self.__eventQueue.get(timeout=1)
+            try:
+                (eventType, ident) = self.__eventQueue.get(timeout=1)
+            except Empty:
+                continue
 
             worker = self.getWorker(ident)
+            print("Worker " + worker.getIdent() + " is disconnected...Waiting")
+
             if eventType == WorkerRoom.EVENT_DISCONNECTED:
                 # Update worker's counter
                 worker.setState(Worker.STATE_WAITING)
+
+                worker.counterReset()
                 worker.counterSync()
-                worker_waiting.append(worker)
+
+                self.__worker_waiting.append(worker)
 
                 list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks))
 
@@ -110,6 +117,14 @@ class WorkerRoom(Thread):
     def __waiting_worker_processing(self, workers):
         if len(workers) == 0:
             return None
+
+        outOfTime = list(filter(lambda w: w.waitCounter() > 300, workers))
+
+        for worker in outOfTime:
+            worker.setState(Worker.STATE_OFFLINE)
+            list(map(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks))
+
+        list(map(lambda w: self.removeWorker(w.getIdent()), outOfTime))
 
 
     def __waiting_worker_update(worker):
@@ -128,7 +143,13 @@ class WorkerRoom(Thread):
         self.__eventQueue.put((eventType, ident))
 
     def getWorkerViaFd(self, fd):
-        pass
+        workers = list(self.__workers.values())
+        theWorker = list(filter(lambda w: w.sock.fileno() == fd, workers))
+
+        if len(theWorker) == 0:
+            return None
+
+        return theWorker[0]
 
     def getWorker(self, ident):
         with self.lock:
