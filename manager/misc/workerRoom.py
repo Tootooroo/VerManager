@@ -38,6 +38,9 @@ class WorkerRoom(Thread):
         # Note: This lock will not protect access to a worker object
         self.lock = Lock()
 
+        # Lock to protect __workers_waiting
+        self.lock_wait = Lock()
+
         # Chooise map is for quickly searching purpose
         self.__workers = {}
         self.__workers_waiting = {}
@@ -77,8 +80,19 @@ class WorkerRoom(Thread):
 
             print("New worker Arrived:" + acceptedWorker.getIdent())
 
-            self.addWorker(acceptedWorker)
-            list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
+            # Is a worker with the same ident registed
+            ident = acceptedWorker.getIdent()
+            with self.lock_wait:
+
+                # A new worker
+                if ident in self.__workers:
+                    continue
+
+                if ident in self.__workers_waiting:
+                    del self.__workers_waiting [ident]
+
+                self.addWorker(acceptedWorker)
+                list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
 
 
     # While eventlistener notify that a worker is disconnected
@@ -99,26 +113,34 @@ class WorkerRoom(Thread):
                 continue
 
             worker = self.getWorker(ident)
-            print("Worker " + worker.getIdent() + " is disconnected...Waiting")
+
+            ident = worker.getIdent()
 
             if eventType == WorkerRoom.EVENT_DISCONNECTED:
+                print("Worker " + ident + " is disconnected...Waiting")
+
                 # Update worker's counter
                 worker.setState(Worker.STATE_WAITING)
 
                 worker.counterReset()
                 worker.counterSync()
 
-                self.__worker_waiting.append(worker)
+                self.removeWorker(ident)
+
+                with self.lock_wait:
+                    self.__workers_waiting[ident] = worker
 
                 list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks))
 
     # Update workers's counter and deal with workers
     # thoses out of date
     def __waiting_worker_processing(self, workers):
+        workers_list = list(workers.values())
+
         if len(workers) == 0:
             return None
 
-        outOfTime = list(filter(lambda w: w.waitCounter() > 300, workers))
+        outOfTime = list(filter(lambda w: w.waitCounter() > 300, workers_list))
 
         for worker in outOfTime:
             worker.setState(Worker.STATE_OFFLINE)

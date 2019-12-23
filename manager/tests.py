@@ -348,6 +348,11 @@ class UnitTest(TestCase):
             s = Server(info)
             self.assertTrue(s.init() == 0)
 
+            s.disconnect()
+
+            time.sleep(1)
+
+            s.connect()
 
             t1 = TASK_DEAL_DAEMON(s, info)
             t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
