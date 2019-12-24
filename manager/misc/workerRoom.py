@@ -4,7 +4,7 @@
 
 from threading import Lock
 from manager.misc.type import *
-from manager.misc.worker import Worker
+from manager.misc.worker import Worker, WorkerInitFailed
 
 from threading import Thread
 from queue import Queue, Empty
@@ -38,8 +38,8 @@ class WorkerRoom(Thread):
         # Note: This lock will not protect access to a worker object
         self.lock = Lock()
 
-        # Lock to protect __workers_waiting
-        self.lock_wait = Lock()
+        # Lock to prevent race between Waiting thread and maintain thread
+        self.syncLock = Lock()
 
         # Chooise map is for quickly searching purpose
         self.__workers = {}
@@ -73,7 +73,17 @@ class WorkerRoom(Thread):
         while True:
             (workersocket, address) = self.sock.accept()
 
-            acceptedWorker = Worker(workersocket)
+            workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+
+            try:
+                acceptedWorker = Worker(workersocket)
+            except WorkerInitFailed:
+                print("Worker init failed")
+                workersocket.shutdown(socket.SHUT_RDWR)
+                continue
 
             if acceptedWorker == None:
                 return None
@@ -82,17 +92,33 @@ class WorkerRoom(Thread):
 
             # Is a worker with the same ident registed
             ident = acceptedWorker.getIdent()
-            with self.lock_wait:
 
-                # A new worker
-                if ident in self.__workers:
-                    continue
+            # A new worker
+            if ident in self.__workers:
+                continue
 
-                if ident in self.__workers_waiting:
-                    del self.__workers_waiting [ident]
+            self.syncLock.acquire()
 
-                self.addWorker(acceptedWorker)
-                list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
+            if ident in self.__workers_waiting:
+                # fixme: socket of workerInWait is broken need to
+                # change to acceptedWorker
+                workerInWait = self.__workers_waiting[ident]
+
+                workerInWait.sockSet(acceptedWorker.sockGet())
+
+                self.addWorker(workerInWait)
+                del self.__workers_waiting [ident]
+
+                list(map(lambda hook: hook[0](workerInWait, hook[1]), self.hooks))
+
+                self.syncLock.release()
+
+                continue
+
+            self.syncLock.release()
+
+            self.addWorker(acceptedWorker)
+            list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks))
 
 
     # While eventlistener notify that a worker is disconnected
@@ -113,7 +139,6 @@ class WorkerRoom(Thread):
                 continue
 
             worker = self.getWorker(ident)
-
             ident = worker.getIdent()
 
             if eventType == WorkerRoom.EVENT_DISCONNECTED:
@@ -127,7 +152,7 @@ class WorkerRoom(Thread):
 
                 self.removeWorker(ident)
 
-                with self.lock_wait:
+                with self.syncLock:
                     self.__workers_waiting[ident] = worker
 
                 list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks))

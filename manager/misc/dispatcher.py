@@ -64,7 +64,7 @@ class Dispatcher(Thread):
         if theWorker != None:
             # fixme: do() may failed
             theWorker.do(task)
-            print("push " + task.id() + "into tasks")
+            print("push " + task.id() + " into tasks")
             self.__tasks[task.id()] = task
             return True
 

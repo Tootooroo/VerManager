@@ -7,6 +7,8 @@ from manager.misc.type import *
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.letter import Letter
 
+import traceback
+
 class EventListener(Thread):
 
     def __init__(self, workerRoom):
@@ -51,6 +53,7 @@ class EventListener(Thread):
             # Register socket into entries
             sock = worker.sock
             self.entries.register(sock.fileno(), select.POLLIN)
+            self.entries.register(sock.fileno(), select.POLLERR)
             return Ok
 
         return Error
@@ -98,8 +101,6 @@ class EventListener(Thread):
                 try:
                     letter = Worker.receving(sock)
                 except:
-                    print("A worker is disconnected")
-
                     # Notify workerRoom an worker is disconnected
                     worker = self.workers.getWorkerViaFd(fd)
                     self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, worker.getIdent())

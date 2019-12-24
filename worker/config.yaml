@@ -4,7 +4,7 @@ MASTER_ADDRESS:
 
 WORKER_NAME: WORKER_EXAMPLE
 
-REPO_URL: git@gpon.git.com:root/daemon.git
+REPO_URL: git@gpon.git.com:gpon/olt.git
 
 PROJECT_NAME:  daemon
 
@@ -14,7 +14,11 @@ MAX_TASK_CAN_PROC: 4
 
 PROCESS_POOL_SIZE: 4
 
-RESULT_PATH: ./try
+RESULT_PATH: ./BSP/config/image/image
 
 BUILDING_CMDS:
-  - make
+  - ./GBN/src/gcom_gpon_build_boot.bat 1
+  - ./GBN/src/gcom_gpon_build_boot.bat 2
+  - ./GBN/src/gcom_gpon_build_boot.bat 5
+  - ./GBN/src/gcom_gpon_build_boot.bat 6
+  - ./BSP/config/image/link_image_gl89.bat

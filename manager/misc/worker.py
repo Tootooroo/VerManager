@@ -88,6 +88,9 @@ class TaskGroup:
 
         return self.__dict_tasks[id]
 
+class WorkerInitFailed(Exception):
+    pass
+
 class Worker(socket.socket):
 
     STATE_ONLINE = 0
@@ -129,7 +132,10 @@ class Worker(socket.socket):
         # Worker is created while a connection is created between
         # worker and server. The first letter from worker to server
         # must a PropertyNotify type
-        l = self.__recv()
+        try:
+            l = self.__recv()
+        except socket.timeout:
+            raise WorkerInitFailed()
 
         # After PropertyNotify is received reset timeout value to default
         self.sock.settimeout(None)
@@ -142,6 +148,12 @@ class Worker(socket.socket):
             self.__clock = datetime.utcnow()
         else:
             raise Exception
+
+    def sockSet(self, sock):
+        self.sock = sock
+
+    def sockGet(self):
+        return self.sock
 
     def waitCounter(self):
         return self.counters[Worker.STATE_WAITING]

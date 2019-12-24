@@ -17,6 +17,7 @@ import time
 import unittest
 import socket
 from threading import Thread
+from multiprocessing import Process
 
 # Create your tests here.
 
@@ -337,22 +338,15 @@ class UnitTest(TestCase):
             task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
             dispatcher.dispatch(task)
 
-            time.sleep(10)
-
             dispatcher.join()
 
-        def clientAction(arg):
+        def clientAction():
             info = Info("worker/config.yaml")
             print(info.getConfigs())
 
             s = Server(info)
             self.assertTrue(s.init() == 0)
 
-            s.disconnect()
-
-            time.sleep(1)
-
-            s.connect()
 
             t1 = TASK_DEAL_DAEMON(s, info)
             t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
@@ -361,15 +355,15 @@ class UnitTest(TestCase):
             t2.start()
 
             time.sleep(10)
-
-            print("Worker disconnect")
+            print("disconnect")
+            s.disconnect()
 
             t1.join()
             t2.join()
 
 
-        s = ServerT(serverAction)
-        c = ClientT(clientAction, None)
+        s = Process(target=serverAction)
+        c = Process(target=clientAction)
 
         s.start()
         time.sleep(1)

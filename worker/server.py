@@ -151,27 +151,13 @@ class Server:
 
     def __init__(self, info):
         self.info = info
-        self.__state = Server.STATE_DISCONNECTED
 
         queueSize = info.getConfig('QUEUE_SIZE')
         self.q = Manager().Queue(queueSize)
 
     def init(self):
-        WORKER_NAME = self.info.getConfig('WORKER_NAME')
-        MAX_TASK_CAN_PROC = self.info.getConfig('MAX_TASK_CAN_PROC')
+        return self.connect()
 
-        self.connect()
-        self.__state = Server.STATE_CONNECTING
-
-        propLetter = Letter(Letter.PropertyNotify,\
-                            {"ident":WORKER_NAME},\
-                            {"MAX":str(MAX_TASK_CAN_PROC), "PROC":"0"})
-        if self.__send(propLetter) == Error:
-            self.__state = Server.STATE_DISCONNECTED
-            return Error
-
-        self.__state = Server.STATE_CONNECTED
-        return Ok
 
     def connect(self):
         host = self.info.getConfig('MASTER_ADDRESS', 'host')
@@ -180,8 +166,21 @@ class Server:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
 
+        WORKER_NAME = self.info.getConfig('WORKER_NAME')
+        MAX_TASK_CAN_PROC = self.info.getConfig('MAX_TASK_CAN_PROC')
+
+
+        propLetter = Letter(Letter.PropertyNotify,\
+                            {"ident":WORKER_NAME},\
+                            {"MAX":str(MAX_TASK_CAN_PROC), "PROC":"0"})
+        if self.__send(propLetter) == Error:
+            return Error
+
+        return Ok
+
+
     def disconnect(self):
-        self.sock.close()
+        self.sock.shutdown(socket.SHUT_RDWR)
 
     def waitLetter(self):
         return self.__recv()
@@ -203,6 +202,7 @@ class Server:
         ret = Error
 
         while ret == Error:
+            print("reconnect")
             ret = self.reconnect()
             time.sleep(timeout)
 
@@ -210,21 +210,7 @@ class Server:
 
 
     def reconnect(self):
-        if self.__state != Server.STATE_DISCONNECTED:
-            return Error
-
-        host = self.info.getConfig('MASTER_ADDRESS', 'host')
-        port = self.info.getConfig('MASTER_ADDRESS', 'port')
-
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect(host, port)
-        except:
-            return Error
-
-        self.__state = Server.STATE_CONNECTED
-
-        return Ok
+        return self.connect()
 
     def isResponseInQ(self):
         return not self.q.empty()
