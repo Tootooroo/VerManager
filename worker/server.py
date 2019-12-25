@@ -112,15 +112,15 @@ class TASK_DEAL_DAEMON(Thread):
         # Processing
         try:
             # Fetch
-            ret = os.popen(["git clone -b master " + REPO_URL])
+            ret = os.system("git clone -b master " + REPO_URL)
 
             os.chdir(PROJECT_NAME)
 
             # Revision checkout
-            ret = os.popen(["git checkout -f " + revision])
+            ret = os.system("git checkout -f " + revision)
 
             # Building
-            ret = os.popen(BUILDING_CMDS)
+            ret = os.system(BUILDING_CMDS)
 
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
