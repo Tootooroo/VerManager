@@ -144,8 +144,6 @@ def binaryHandler(eventListener, letter):
     fdSet = eventListener.taskResultFdSet
     tid = letter.getHeader('tid')
 
-    print("Binary Received")
-
     # This is the first binary letter of the task correspond to the
     # received tid just open a file and store the relation into fdSet
     if not tid in fdSet:

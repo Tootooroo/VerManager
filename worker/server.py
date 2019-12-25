@@ -94,7 +94,7 @@ class TASK_DEAL_DAEMON(Thread):
         RESULT_PATH = info.getConfig('RESULT_PATH')
 
         if platform.system() == 'Windows':
-            REPO_URL = REPO_URL.replace("/", "\\")
+            RESULT_PATH = RESULT_PATH.replace("/", "\\")
             BUILDING_CMDS = "&&".join(list(map(lambda cmd: cmd.replace("/", "\\"), BUILDING_CMDS)))
         else:
             # Linux platfor
@@ -127,7 +127,7 @@ class TASK_DEAL_DAEMON(Thread):
                 for line in file:
                     binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
                     server.transfer(binaryLetter)
-                    time.sleep(0.05)
+                    time.sleep(0.01)
 
             # Response to server to notify that the task is finished
             finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
