@@ -17,8 +17,11 @@ PROCESS_POOL_SIZE: 4
 RESULT_PATH: ./BSP/config/image/image
 
 BUILDING_CMDS:
-  - ./GBN/src/gcom_gpon_build_boot.bat 1
-  - ./GBN/src/gcom_gpon_build_boot.bat 2
-  - ./GBN/src/gcom_gpon_build_boot.bat 5
-  - ./GBN/src/gcom_gpon_build_boot.bat 6
-  - ./BSP/config/image/link_image_gl89.bat
+  - cd GBN/src
+  - ./gcom_gpon_build_boot.bat 1
+  - ./gcom_gpon_build_boot.bat 2
+  - ./gcom_gpon_build_boot.bat 5
+  - ./gcom_gpon_build_boot.bat 6
+  - cd BSP/config/image
+  - link_image_gl89.bat
+  - cd ../..

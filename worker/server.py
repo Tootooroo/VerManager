@@ -117,10 +117,11 @@ class TASK_DEAL_DAEMON(Thread):
             ret.check_returncode()
 
             # Building
-            cmds = ";".join(BUILDING_CMDS)
-            if platform.system() == 'Windows':
-                cmd = cmd.replace("/", "\\")
-            os.popen(cmds)
+            for cmd in BUILDING_CMDS:
+                if platform.system() == 'Windows':
+                    cmd = cmd.replace("/", "\\")
+                ret = os.popen(cmd)
+                ret.check_returncode()
 
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
