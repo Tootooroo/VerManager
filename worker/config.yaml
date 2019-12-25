@@ -22,6 +22,9 @@ BUILDING_CMDS:
   - ./gcom_gpon_build_boot.bat 2
   - ./gcom_gpon_build_boot.bat 5
   - ./gcom_gpon_build_boot.bat 6
-  - cd BSP/config/image
+  - cd ../..
+  - cd BSP/config/image/link
+  - link_hybrid_gl5610.bat
   - link_image_gl89.bat
-  - cd ../../..
+  - rar a -k -r -s -ibck pack pack
+  - cd ../../../..
