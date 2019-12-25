@@ -8,6 +8,7 @@ import time
 import platform
 
 from threading import Lock
+import traceback
 
 if __name__ == '__main__':
     import sys
@@ -137,6 +138,7 @@ class TASK_DEAL_DAEMON(Thread):
             # ret = os.system("rm", "-rf", PROJECT_NAME)
 
         except:
+            traceback.print_exc()
             letter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn},\
                             {"state":"3"})
             server.transfer(letter)
