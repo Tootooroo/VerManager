@@ -93,7 +93,12 @@ class TASK_DEAL_DAEMON(Thread):
         BUILDING_CMDS = info.getConfig('BUILDING_CMDS')
         RESULT_PATH = info.getConfig('RESULT_PATH')
 
-        print(REPO_URL)
+        if platform.system() == 'Windows':
+            REPO_URL = REPO_URL.replace("/", "\\")
+            BUILDING_CMDS = "&&".join(list(map(lambda cmd: cmd.replace("/", "\\"), BUILDING_CMDS)))
+        else:
+            # Linux platfor
+            BUILDING_CMDS = ";".join(BUILDING_CMDS)
 
         # Notify to server the worker is in processing
         letterInProc = Letter(Letter.Response, \
@@ -115,12 +120,7 @@ class TASK_DEAL_DAEMON(Thread):
             ret = os.popen(["git checkout -f " + revision])
 
             # Building
-            if platform.system() == 'Windows':
-                cmds = "&&".join(BUILDING_CMDS)
-                cmds = cmds.replace("/", "\\")
-            else:
-                cmds = ";".join(BUILDING_CMDS)
-            ret = os.popen(cmd)
+            ret = os.popen(BUILDING_CMDS)
 
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
@@ -134,9 +134,9 @@ class TASK_DEAL_DAEMON(Thread):
             server.transfer(finishedLetter)
 
             os.chdir("..")
-            ret = subprocess.run(["rm", "-rf", PROJECT_NAME])
+            # ret = os.system(["rm", "-rf", PROJECT_NAME])
 
-        except subprocess.CalledProcessError:
+        except:
             letter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn},\
                             {"state":"3"})
             server.transfer(letter)

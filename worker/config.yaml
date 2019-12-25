@@ -24,4 +24,4 @@ BUILDING_CMDS:
   - ./gcom_gpon_build_boot.bat 6
   - cd BSP/config/image
   - link_image_gl89.bat
-  - cd ../..
+  - cd ../../..
