@@ -234,7 +234,7 @@ class Worker(socket.socket):
     # fixme: should support binary letter
     def receving(sock):
         content = b''
-        remain = Letter.MAX_LEN
+        remain = Letter.BINARY_HEADER_LEN
 
         while remain > 0:
             chunk = sock.recv(remain)

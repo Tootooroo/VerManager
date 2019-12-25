@@ -134,7 +134,7 @@ class TASK_DEAL_DAEMON(Thread):
             finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
             server.transfer(finishedLetter)
 
-            os.chdir("..")
+            # os.chdir("..")
             # ret = os.system("rm", "-rf", PROJECT_NAME)
 
         except:
@@ -143,7 +143,6 @@ class TASK_DEAL_DAEMON(Thread):
                             {"state":"3"})
             server.transfer(letter)
             return None
-
 
 class Server:
 

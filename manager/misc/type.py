@@ -1,2 +1,2 @@
 Ok = 0
-Error = 1
+Error = 2

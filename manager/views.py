@@ -83,13 +83,19 @@ def isGenerationDone(request):
     verIdent = request.POST['Version']
 
     ret = dispatcher.isTaskFailure(verIdent)
-    if ret == True or ret == Error:
-        return HttpResponseBadRequest(verIdent)
+
+    if ret == Error:
+        return HttpResponseNotModified()
+    elif ret == True:
+        return HttpResponseBadRequest()
 
     if dispatcher.isTaskFinished(verIdent):
         return HttpResponse("http://127.0.0.1:8000/static/" + verIdent)
     elif dispatcher.isTaskInProc(verIdent):
         return HttpResponseNotModified()
+
+    # Task is failure or the task is not exists
+    return HttpResponseBadRequest()
 
 def revisionRetrive(request):
     beginRev = None

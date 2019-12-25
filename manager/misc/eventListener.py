@@ -101,6 +101,7 @@ class EventListener(Thread):
                 try:
                     letter = Worker.receving(sock)
                 except:
+                    traceback.print_exc()
                     # Notify workerRoom an worker is disconnected
                     worker = self.workers.getWorkerViaFd(fd)
                     self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, worker.getIdent())
@@ -138,7 +139,9 @@ def responseHandler(eventListener, letter):
         # Do some operation after finished such as close file description
         # of received binary
         if state == Task.STATE_FINISHED:
-            pass
+            fdSet = eventListener.taskResultFdSet
+            fdSet[taskId].close()
+            del fdSet [taskId]
 
 def binaryHandler(eventListener, letter):
     fdSet = eventListener.taskResultFdSet
@@ -152,4 +155,5 @@ def binaryHandler(eventListener, letter):
 
     fd = fdSet[tid]
     content = letter.getContent('content')
+
     fd.write(content)
