@@ -108,20 +108,19 @@ class TASK_DEAL_DAEMON(Thread):
         try:
             # Fetch
             ret = os.popen(["git clone -b master " + REPO_URL])
-            ret.check_returncode()
 
             os.chdir(PROJECT_NAME)
 
             # Revision checkout
             ret = os.popen(["git checkout -f " + revision])
-            ret.check_returncode()
 
             # Building
-            for cmd in BUILDING_CMDS:
-                if platform.system() == 'Windows':
-                    cmd = cmd.replace("/", "\\")
-                ret = os.popen(cmd)
-                ret.check_returncode()
+            if platform.system() == 'Windows':
+                cmds = "&&".join(BUILDING_CMDS)
+                cmds = cmds.replace("/", "\\")
+            else:
+                cmds = ";".join(BUILDING_CMDS)
+            ret = os.popen(cmd)
 
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
