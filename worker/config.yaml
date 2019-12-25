@@ -6,7 +6,7 @@ WORKER_NAME: WORKER_EXAMPLE
 
 REPO_URL: git@gpon.git.com:gpon/olt.git
 
-PROJECT_NAME:  daemon
+PROJECT_NAME:  olt
 
 QUEUE_SIZE: 1024
 

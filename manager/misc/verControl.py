@@ -120,7 +120,7 @@ class RevSync(Thread):
                             dateTime = date_time_)
             rev.save()
 
-#@receiver(connection_created)
+@receiver(connection_created)
 def revSyncSpawn(sender, **kwargs):
     try :
         revSyncner = RevSync()

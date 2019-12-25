@@ -2,11 +2,10 @@
 # Usage: python server.py <configPath>
 
 import sys
-import subprocess
-import zipfile
 import os
 import socket
 import time
+import platform
 
 from threading import Lock
 
@@ -108,19 +107,20 @@ class TASK_DEAL_DAEMON(Thread):
         # Processing
         try:
             # Fetch
-            ret = subprocess.run(["git", "clone", "-b", "master", REPO_URL])
+            ret = os.popen(["git clone -b master " + REPO_URL])
             ret.check_returncode()
 
             os.chdir(PROJECT_NAME)
 
             # Revision checkout
-            ret = subprocess.run(["git", "checkout", "-f", revision])
+            ret = os.popen(["git checkout -f " + revision])
             ret.check_returncode()
 
             # Building
-            for cmd in BUILDING_CMDS:
-                ret = subprocess.run([cmd])
-                ret.check_returncode()
+            cmds = ";".join(BUILDING_CMDS)
+            if platform.system() == 'Windows':
+                cmd = cmd.replace("/", "\\")
+            os.popen(cmds)
 
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
