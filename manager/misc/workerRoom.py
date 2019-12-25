@@ -81,7 +81,6 @@ class WorkerRoom(Thread):
             try:
                 acceptedWorker = Worker(workersocket)
             except WorkerInitFailed:
-                print("Worker init failed")
                 workersocket.shutdown(socket.SHUT_RDWR)
                 continue
 
@@ -90,11 +89,9 @@ class WorkerRoom(Thread):
 
             print("New worker Arrived:" + acceptedWorker.getIdent())
 
-            # Is a worker with the same ident registed
             ident = acceptedWorker.getIdent()
 
-            # A new worker
-            if ident in self.__workers:
+            if self.isExists(ident):
                 continue
 
             self.syncLock.acquire()
@@ -146,8 +143,6 @@ class WorkerRoom(Thread):
 
                 # Update worker's counter
                 worker.setState(Worker.STATE_WAITING)
-
-                worker.counterReset()
                 worker.counterSync()
 
                 self.removeWorker(ident)
