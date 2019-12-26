@@ -3,26 +3,29 @@
 # Responsbility to version generation works dispatch,
 # load-balance, queue supported
 
-import typing
+from typing import *
 from functools import reduce
 
 from threading import Thread, Lock, Event
-from manager.misc.worker import Task, Worker
-from manager.misc.type import *
+from manager.misc.worker import Worker
+from manager.misc.basic.type import *
+from manager.misc.task import TaskState, Task
+from manager.misc.basic.type import *
 
 class Dispatcher(Thread):
 
-    def __init__(self, workerRoom):
+    def __init__(self, workerRoom) -> None:
         Thread.__init__(self)
 
         # A queue contain a collection of tasks
-        self.taskWait = []
+        self.taskWait = [] # type: List[Task]
+
         # An Event to indicate that there is some task in taskWait queue
         self.taskEvent = Event()
 
         # For query purposes
         # { taskId : Task }
-        self.__tasks = {}
+        self.__tasks = {} # type: Dict[str, Task]
 
         self.__workers = workerRoom
 
@@ -35,7 +38,7 @@ class Dispatcher(Thread):
     # all by overhead of workers
     #
     # return True if task is assign successful otherwise return False
-    def __dispatch(self, task):
+    def __dispatch(self, task: Task) -> Optional[bool]:
 
         if task.id() in self.__tasks:
             return True
@@ -70,7 +73,7 @@ class Dispatcher(Thread):
 
         return False
 
-    def dispatch(self, task):
+    def dispatch(self, task: Task) -> bool:
         if self.__dispatch(task) == None:
             self.taskWait.insert(0, task)
             self.taskEvent.set()
@@ -78,7 +81,7 @@ class Dispatcher(Thread):
         return True
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
-    def run(self):
+    def run(self) -> None:
         self.taskEvent.wait()
 
         task = self.taskWait.pop()
@@ -91,13 +94,13 @@ class Dispatcher(Thread):
 
     # Cancel a task identified by taskId
     # and taskId is unique
-    def cancel(self, taskId):
+    def cancel(self, taskId: str) -> None:
         pass
 
     # Use to get result of task
     # after the call of this method task will be
     # remove from __tasks
-    def retrive(self, taskId):
+    def retrive(self, taskId: str) -> Optional[str]:
         if not taskId in self.__tasks:
             return None
 
@@ -109,31 +112,31 @@ class Dispatcher(Thread):
 
         return task.data
 
-    def taskState(self, taskId):
-        if not taskId in self.__tasks:
-            return Error
-
-        task = self.tasks[taskId]
-        return task.taskState()
-
-    def __isTask(self, taskId, state):
+    def taskState(self, taskId: str) -> int:
         if not taskId in self.__tasks:
             return Error
 
         task = self.__tasks[taskId]
+        return task.taskState()
+
+    def __isTask(self, taskId: str, state: Callable) -> bool:
+        if not taskId in self.__tasks:
+            return False
+
+        task = self.__tasks[taskId]
         return state(task)
 
-    def isTaskInProc(self, taskId):
+    def isTaskInProc(self, taskId: str) -> bool:
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)
 
-    def isTaskFailure(self, taskId):
+    def isTaskFailure(self, taskId: str) -> bool:
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FAILURE)
 
-    def isTaskFinished(self, taskId):
+    def isTaskFinished(self, taskId: str) -> bool:
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
 
-    def addWorkers(self, w):
+    def addWorkers(self, w: Worker) -> State:
         return self.__workers.addWorker(w)
 
-    def removeWorkers(self, ident):
+    def removeWorkers(self, ident: str) -> State:
         return self.__workers.removeWorker(ident)

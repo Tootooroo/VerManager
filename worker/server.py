@@ -6,34 +6,27 @@ import os
 import socket
 import time
 import platform
+import typing
 
 from threading import Lock
 import traceback
 
-if __name__ == '__main__':
-    import sys
-    sys.path.append("../manager/misc")
-
-    from letter import Letter
-    from info import Info
-    from type import *
-else:
-    from manager.misc.letter import Letter
-    from worker.info import Info
-    from manager.misc.type import *
+from letter import Letter
+from info import Info
+from type import *
 
 from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
 
 class RESPONSE_TO_SERVER_DAEMON(Thread):
 
-    def __init__(self, server, info):
+    def __init__(self, server, info) -> None:
         Thread.__init__(self)
 
         self.cond = Condition()
         self.server = server
 
-    def run(self):
+    def run(self) -> None:
         cond = self.cond
         server = self.server
 
@@ -49,7 +42,7 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
 
 class TASK_DEAL_DAEMON(Thread):
 
-    def __init__(self, server, info):
+    def __init__(self, server, info) -> None:
         Thread.__init__(self)
 
         self.server = server
@@ -58,7 +51,7 @@ class TASK_DEAL_DAEMON(Thread):
         self.pool = Pool(info.getConfig('PROCESS_POOL_SIZE'))
         self.info = info
 
-    def run(self):
+    def run(self) -> None:
         WORKER_NAME = self.info.getConfig('WORKER_NAME')
         server = self.server
 
@@ -83,10 +76,8 @@ class TASK_DEAL_DAEMON(Thread):
             res.get()
 
     # Processing the assigned task and send back the result to server
-    def job(*args):
-        server = args[0]
-        letter = args[1]
-        info = args[2]
+    @staticmethod
+    def job(server: Server, letter: typing.Any, info: Info) -> None:
 
         REPO_URL = info.getConfig('REPO_URL')
         PROJECT_NAME = info.getConfig('PROJECT_NAME')
@@ -208,7 +199,6 @@ class Server:
             time.sleep(timeout)
 
         return ret
-
 
     def reconnect(self):
         return self.connect()

@@ -3,9 +3,9 @@ import select
 from threading import Thread
 
 from manager.misc.worker import Worker, Task
-from manager.misc.type import *
+from manager.misc.basic.type import *
 from manager.misc.workerRoom import WorkerRoom
-from manager.misc.letter import Letter
+from manager.misc.basic.letter import Letter
 
 import traceback
 

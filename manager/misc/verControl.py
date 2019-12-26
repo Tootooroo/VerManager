@@ -23,7 +23,7 @@ class RevSync(Thread):
     # repository after RevSync started and RevSync will
     # put such revision into model so the revision database
     # will remain updated
-    revQueue = queue.Queue(maxsize=10)
+    revQueue = queue.Queue(maxsize=10) # type: queue.Queue
 
 
     def __init__(self):
@@ -43,11 +43,12 @@ class RevSync(Thread):
         return revision
 
     # format of offset if "+08:00"
-    def timeFormat(timeStr: typing.AnyStr, offset: typing.AnyStr) -> typing.AnyStr:
+    @staticmethod
+    def timeFormat(timeStr: str, offset: str) -> str:
         pattern = "([0-9]*-[0-9]*-[0-9]*T[0-9]*:[0-9]*:[0-9]*)"
 
         m = re.search(pattern, timeStr)
-        if m == None:
+        if m is None:
             return ""
 
         formatDate = m.group()

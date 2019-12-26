@@ -5,7 +5,7 @@ from django.apps import AppConfig
 from manager.misc.eventListener import EventListener, responseHandler, binaryHandler,\
     workerRegister
 from manager.misc.workerRoom import WorkerRoom
-from manager.misc.letter import Letter
+from manager.misc.basic.letter import Letter
 from manager.misc.components import Components
 from manager.misc.dispatcher import Dispatcher
 
@@ -40,7 +40,6 @@ class ManagerConfig(AppConfig):
         Components.workerRoom = workerRoom
         Components.dispatcher = dispatcher
         Components.eventListener = eventListener
-        Components.flag = {}
 
         # Daemon processes start
         workerRoom.start()

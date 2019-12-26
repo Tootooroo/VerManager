@@ -6,90 +6,20 @@
 import socket
 import typing
 import select
+
+from .task import *
 from datetime import datetime, timedelta
 
 from functools import reduce
 from threading import Thread, Lock
 
-from manager.misc.letter import Letter
-from manager.misc.type import Ok, Error
-
-class Task:
-    STATE_PREPARE = 0
-    STATE_IN_PROC = 1
-    STATE_FINISHED = 2
-    STATE_FAILURE = 3
-
-    def __init__(self, id: typing.AnyStr, content):
-        self.taskId = id
-
-        self.content = content
-        self.state = Task.STATE_PREPARE
-
-        # This field will be set by EventListener while
-        # the task is complete by worker and transfer
-        # totally
-        self.data = None
-
-    def id(self):
-        return self.taskId
-
-    def taskState(self):
-        return self.state
-
-    def stateChange(self, state):
-        self.state = state
-
-    def setData(self, data):
-        self.data = data
-
-    def isProc(self):
-        return self.state == Task.STATE_IN_PROC
-
-    def isFailure(self):
-        return self.state == Task.STATE_FAILURE
-
-    def isFinished(self):
-        return self.state == Task.STATE_FINISHED
-
-    def isValidState(s):
-        return s >= Task.STATE_PREPARE and s <= Task.STATE_FAILURE
-
-class TaskGroup:
-    def __init__(self):
-        self.__dict_tasks = {}
-        self.__numOfTasks = 0
-
-    def newTask(self, task):
-        self.__dict_tasks[task.id()] = task
-        self.__numOfTasks += 1
-
-    def remove(self, id):
-        if id in self.__dict_tasks:
-            del self.__dict_tasks [id]
-            return Ok
-        return Error
-
-    def finidhed(self, id):
-        task = self.search(id)
-        task.stateChange(Task.STATE_FINISHED)
-
-        return Ok
-
-    def failure(self, id):
-        task = self.search(id)
-        task.stateChange(Task.STATE_FAILURE)
-
-        return Ok
-
-    def search(self, id):
-        if not id in self.__dict_tasks:
-            return None
-
-        return self.__dict_tasks[id]
+from manager.misc.basic.letter import Letter
+from manager.misc.basic.type import Ok, Error
 
 class WorkerInitFailed(Exception):
     pass
+
+WorkerState = int
 
 class Worker(socket.socket):
 
@@ -97,12 +27,12 @@ class Worker(socket.socket):
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, sock):
+    def __init__(self, sock: socket.socket) -> None:
         self.sock = sock
         self.max = 0
         self.processing = 0
         self.inProcTask = TaskGroup()
-        self.ident = None
+        self.ident = ""
 
         # TaskGroup is not a thread safe object
         # lock should protect TaskGroup and processing
@@ -124,7 +54,7 @@ class Worker(socket.socket):
         # counters[STATE_WAITING] : wait_counter
         # counters[STATE_OFFLINE] : offline_counter
         self.counters = [0, 0, 0]
-        self.__clock = None
+        self.__clock = datetime.now()
 
         # Prevent permanent blocking from waiting for PropertyNotify from worker
         self.sock.settimeout(10)
@@ -134,6 +64,11 @@ class Worker(socket.socket):
         # must a PropertyNotify type
         try:
             l = self.__recv()
+
+            # May happen if messages from worker is not valid
+            if l is None:
+                raise WorkerInitFailed()
+
         except socket.timeout:
             raise WorkerInitFailed()
 
@@ -149,43 +84,42 @@ class Worker(socket.socket):
         else:
             raise Exception
 
-    def sockSet(self, sock):
+    def sockSet(self, sock: socket.socket) -> None:
         self.sock = sock
 
-    def sockGet(self):
+    def sockGet(self) -> socket.socket:
         return self.sock
 
-    def waitCounter(self):
+    def waitCounter(self) -> int:
         return self.counters[Worker.STATE_WAITING]
 
-    def offlineCounter(self):
+    def offlineCounter(self) -> int:
         return self.counters[Worker.STATE_OFFLINE]
 
-    def onlineCounter(self):
+    def onlineCounter(self) -> int:
         return self.counters[Worker.STATE_ONLINE]
 
-    def counterSync(self):
+    def counterSync(self) -> None:
         delta = datetime.utcnow() - self.__clock
         self.counters[self.state] = delta.seconds
 
-    def setState(self, s):
+    def setState(self, s: WorkerState) -> None:
         if self.state != s:
             self.counters[self.state] = 0
 
         self.state = s
         self.__clock = datetime.utcnow()
-        return None
 
-    def getIdent(self):
+    def getIdent(self) -> str:
         return self.ident
 
-    def isOnline(self):
+    def isOnline(self) -> bool:
         return self.state == Worker.STATE_ONLINE
 
-    def isWaiting(self):
+    def isWaiting(self) -> bool:
         return self.state == Worker.STATE_WAITING
 
-    def isOffline(self):
+    def isOffline(self) -> bool:
         return self.state == Worker.STATE_OFFLINE
 
     def isFree(self) -> bool:
@@ -194,19 +128,19 @@ class Worker(socket.socket):
     def isAbleToAccept(self) -> bool:
         return self.processing < self.max
 
-    def searchTask(self, tid: typing.AnyStr):
+    def searchTask(self, tid: str) -> Optional[Task]:
         with self.lock:
             return self.inProcTask.search(tid)
 
-    def removeTask(self, tid: typing.AnyStr):
+    def removeTask(self, tid: str) -> None:
         with self.lock:
             self.processing -= 1
-            return self.inProcTask.remove(tid)
+            self.inProcTask.remove(tid)
 
-    def numOfTaskProc(self):
+    def numOfTaskProc(self) -> int:
         return self.processing
 
-    def do(self, task) -> None:
+    def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
             raise Exception
 
@@ -225,11 +159,11 @@ class Worker(socket.socket):
     # Provide ability to cancel task in queue or
     # processed task
     # Note: sn here should be a version sn
-    def cancel(self, id: typing.AnyStr):
+    def cancel(self, id: str) -> str:
         pass
 
     # fixme: should support binary letter
-    def receving(sock):
+    def receving(sock: socket.socket) -> Optional[Letter]:
         content = b''
         remain = Letter.BINARY_HEADER_LEN
 
@@ -243,7 +177,7 @@ class Worker(socket.socket):
 
         return Letter.parse(content)
 
-    def sending(sock, l):
+    def sending(sock: socket.socket, l: Letter) -> None:
         jBytes = l.toBytesWithLength()
         totalSent = 0
         length = len(jBytes)
@@ -254,8 +188,8 @@ class Worker(socket.socket):
                 raise Exception
             totalSent += sent
 
-    def __recv(self):
+    def __recv(self) -> Optional[Letter]:
         return Worker.receving(self.sock)
 
-    def __send(self, l):
-        return Worker.sending(self.sock, l)
+    def __send(self, l: Letter) -> None:
+        Worker.sending(self.sock, l)
