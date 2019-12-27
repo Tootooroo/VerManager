@@ -23,6 +23,8 @@ class Dispatcher(Thread):
         # An Event to indicate that there is some task in taskWait queue
         self.taskEvent = Event()
 
+        self.dispatchLock = Lock()
+
         # For query purposes
         # { taskId : Task }
         self.__tasks = {} # type: Dict[str, Task]
@@ -38,10 +40,10 @@ class Dispatcher(Thread):
     # all by overhead of workers
     #
     # return True if task is assign successful otherwise return False
-    def __dispatch(self, task: Task) -> Optional[bool]:
+    def __dispatch(self, task: Task) -> bool:
 
         if task.id() in self.__tasks:
-            return True
+            return False
 
         # Method to get an online worker which
         # with lowest overhead of all online workerd
@@ -51,7 +53,7 @@ class Dispatcher(Thread):
             onlineWorkers = list(filter(lambda w: f_online_acceptable, workers))
 
             if onlineWorkers == []:
-                return None
+                return False
 
             # Find out the worker with lowest overhead on a collection of online acceptable workers
             f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
@@ -65,8 +67,11 @@ class Dispatcher(Thread):
         theWorker = self.__workers.getWorkerWithCond(viaOverhead)
 
         if theWorker != None:
-            # fixme: do() may failed
-            theWorker.do(task)
+            try:
+                theWorker.do(task)
+            except:
+                return False
+
             print("push " + task.id() + " into tasks")
             self.__tasks[task.id()] = task
             return True
@@ -74,11 +79,19 @@ class Dispatcher(Thread):
         return False
 
     def dispatch(self, task: Task) -> bool:
-        if self.__dispatch(task) == None:
-            self.taskWait.insert(0, task)
-            self.taskEvent.set()
-            return False
-        return True
+        with self.dispatchLock:
+            if self.__dispatch(task) == False:
+                # fixme: Queue may full while inserting
+                self.taskWait.insert(0, task)
+                self.taskEvent.set()
+
+            return True
+
+    def redispatch(self, task: Task) -> bool:
+        taskId = task.id()
+        if taskId in self.__tasks:
+            del self.__tasks [taskId]
+        return self.dispatch(task)
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
@@ -95,6 +108,10 @@ class Dispatcher(Thread):
     # Cancel a task identified by taskId
     # and taskId is unique
     def cancel(self, taskId: str) -> None:
+        pass
+
+    # Cancel all tasks processing on a worker
+    def cancelOnWorker(self, wId: str) -> None:
         pass
 
     # Use to get result of task
@@ -119,6 +136,9 @@ class Dispatcher(Thread):
         task = self.__tasks[taskId]
         return task.taskState()
 
+    def isTaskExists(self, taskId: str) -> bool:
+        return taskId in self.__tasks
+
     def __isTask(self, taskId: str, state: Callable) -> bool:
         if not taskId in self.__tasks:
             return False
@@ -140,3 +160,9 @@ class Dispatcher(Thread):
 
     def removeWorkers(self, ident: str) -> State:
         return self.__workers.removeWorker(ident)
+
+
+# Hooks will be registered into WorkerRoom
+def workerLost_redispatch(w: Worker, d: Dispatcher) -> None:
+    tasks = w.inProcTasks()
+    list(map(lambda task: d.redispatch(task), tasks))

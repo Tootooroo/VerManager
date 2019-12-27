@@ -7,7 +7,7 @@ from manager.misc.eventListener import EventListener, responseHandler, binaryHan
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.basic.letter import Letter
 from manager.misc.components import Components
-from manager.misc.dispatcher import Dispatcher
+from manager.misc.dispatcher import Dispatcher, workerLost_redispatch
 
 
 initialized = False
@@ -36,6 +36,7 @@ class ManagerConfig(AppConfig):
 
         # Register hooks into workerRoom
         workerRoom.hookRegister((workerRegister, [eventListener]))
+        workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))
 
         Components.workerRoom = workerRoom
         Components.dispatcher = dispatcher
@@ -46,5 +47,6 @@ class ManagerConfig(AppConfig):
         eventListener.start()
         dispatcher.start()
 
-        # Signal registering via decorator
-        from .misc.verControl import RevSync
+        from .misc.verControl import RevSync, revSyncSpawn
+
+        revSyncSpawn(None)

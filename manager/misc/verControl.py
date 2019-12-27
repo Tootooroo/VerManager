@@ -2,7 +2,7 @@
 #
 # This module define a object that deal with Revisions
 
-import typing
+from typing import *
 
 from threading import Thread
 from manager.models import Revisions
@@ -24,7 +24,6 @@ class RevSync(Thread):
     # put such revision into model so the revision database
     # will remain updated
     revQueue = queue.Queue(maxsize=10) # type: queue.Queue
-
 
     def __init__(self):
         Thread.__init__(self)
@@ -72,7 +71,7 @@ class RevSync(Thread):
         RevSync.revQueue.put(rev, block=True, timeout=None)
         return True
 
-    def gitlabWebHooksChecking(self, request: HttpRequest) -> typing.Dict:
+    def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
         headers = request.headers
 
         if not 'X-Gitlab-Event' in headers:
@@ -121,7 +120,6 @@ class RevSync(Thread):
                             dateTime = date_time_)
             rev.save()
 
-@receiver(connection_created)
 def revSyncSpawn(sender, **kwargs):
     try :
         revSyncner = RevSync()

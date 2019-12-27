@@ -100,6 +100,9 @@ class EventListener(Thread):
 
                 try:
                     letter = Worker.receving(sock)
+
+                    if not letter.validity():
+                        continue
                 except:
                     traceback.print_exc()
                     # Notify workerRoom an worker is disconnected
@@ -139,6 +142,11 @@ def responseHandler(eventListener, letter):
         # Do some operation after finished such as close file description
         # of received binary
         if state == Task.STATE_FINISHED:
+            # Store result to the target position specified in configuration file
+
+            # Send email to notify that task id done
+
+            task.setData("http://127.0.0.1:8000/static/" + task.id())
             fdSet = eventListener.taskResultFdSet
             fdSet[taskId].close()
             del fdSet [taskId]

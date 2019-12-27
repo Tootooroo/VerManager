@@ -21,7 +21,7 @@ class WorkerInitFailed(Exception):
 
 WorkerState = int
 
-class Worker(socket.socket):
+class Worker:
 
     STATE_ONLINE = 0
     STATE_WAITING = 1
@@ -132,6 +132,9 @@ class Worker(socket.socket):
         with self.lock:
             return self.inProcTask.search(tid)
 
+    def inProcTasks(self) -> List[Task]:
+        return self.inProcTask.toList()
+
     def removeTask(self, tid: str) -> None:
         with self.lock:
             self.processing -= 1
@@ -158,11 +161,11 @@ class Worker(socket.socket):
 
     # Provide ability to cancel task in queue or
     # processed task
-    # Note: sn here should be a version sn
+    # Note: sn here should be a verion sn
     def cancel(self, id: str) -> str:
         pass
 
-    # fixme: should support binary letter
+    @staticmethod
     def receving(sock: socket.socket) -> Optional[Letter]:
         content = b''
         remain = Letter.BINARY_HEADER_LEN
@@ -177,6 +180,7 @@ class Worker(socket.socket):
 
         return Letter.parse(content)
 
+    @staticmethod
     def sending(sock: socket.socket, l: Letter) -> None:
         jBytes = l.toBytesWithLength()
         totalSent = 0

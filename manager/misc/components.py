@@ -8,8 +8,8 @@ from manager.misc.eventListener import EventListener
 
 class Components:
 
-    dispatcher = None # type: Union[None, Dispatcher]
+    dispatcher = None # type: Optional[Dispatcher]
 
-    workerRoom = None # type: Union[None, WorkerRoom]
+    workerRoom = None # type: Optional[WorkerRoom]
 
-    eventListener = None # type: Union[None, EventListener]
+    eventListener = None # type: Optional[EventListener]

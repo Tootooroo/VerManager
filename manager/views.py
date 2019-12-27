@@ -18,6 +18,8 @@ from .misc.components import Components
 
 from .misc.basic.type import *
 
+from datetime import datetime
+
 # Models
 from .models import Revisions, Versions
 
@@ -82,17 +84,16 @@ def isGenerationDone(request):
 
     verIdent = request.POST['Version']
 
-    ret = dispatcher.isTaskFailure(verIdent)
-
-    if ret == Error:
-        return HttpResponseNotModified()
-    elif ret == True:
+    if not dispatcher.isTaskExists(verIdent):
         return HttpResponseBadRequest()
 
     if dispatcher.isTaskFinished(verIdent):
-        return HttpResponse("http://127.0.0.1:8000/static/" + verIdent)
+        resultUrl = dispatcher.retrive(verIdent)
+        return HttpResponse(resultUrl)
     elif dispatcher.isTaskInProc(verIdent):
         return HttpResponseNotModified()
+    elif dispatcher.isTaskFailure(verIdent):
+        return HttpResponseBadRequest()
 
     # Task is failure or the task is not exists
     return HttpResponseBadRequest()

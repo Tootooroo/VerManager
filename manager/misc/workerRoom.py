@@ -197,7 +197,6 @@ class WorkerRoom(Thread):
 
             return self.__workers[ident]
 
-    # Type of condRtn is condRtn([worker1, worker2, worker3, ...])
     def getWorkerWithCond(self, condRtn: filterFunc) -> Optional[Worker]:
         with self.lock:
             workerList = list(self.__workers.values())
