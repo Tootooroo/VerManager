@@ -11,9 +11,9 @@ import typing
 from threading import Lock
 import traceback
 
-from letter import Letter
+from basics.letter import Letter
 from info import Info
-from type import *
+from basics.type import *
 
 from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
@@ -77,7 +77,7 @@ class TASK_DEAL_DAEMON(Thread):
 
     # Processing the assigned task and send back the result to server
     @staticmethod
-    def job(server: Server, letter: typing.Any, info: Info) -> None:
+    def job(server: 'Server', letter: typing.Any, info: Info) -> None:
 
         REPO_URL = info.getConfig('REPO_URL')
         PROJECT_NAME = info.getConfig('PROJECT_NAME')

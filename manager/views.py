@@ -16,7 +16,7 @@ from .misc.worker import Task
 
 from .misc.components import Components
 
-from .misc.type import *
+from .misc.basic.type import *
 
 # Models
 from .models import Revisions, Versions

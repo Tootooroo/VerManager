@@ -11,7 +11,6 @@ from manager.misc.worker import Worker, WorkerInitFailed
 from threading import Thread
 from queue import Queue, Empty
 
-from manager.misc.components import Components
 from manager.misc.util import spawnThread
 
 from typing import *

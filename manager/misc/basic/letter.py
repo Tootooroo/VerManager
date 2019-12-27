@@ -100,7 +100,7 @@ class Letter:
         return packet
 
     @staticmethod
-    def json2Letter(s: str) -> Letter:
+    def json2Letter(s: str) -> 'Letter':
         dict_ = None
 
         begin = s.find('{')
@@ -138,7 +138,7 @@ class Letter:
             return length - (len(s) - 2)
 
     @staticmethod
-    def parse(s : bytes) -> Optional[Letter]:
+    def parse(s : bytes) -> Optional['Letter']:
         # Need at least BINARY_MIN_HEADER_LEN bytes to parse
         if len(s) < Letter.BINARY_MIN_HEADER_LEN:
             return None
@@ -150,14 +150,14 @@ class Letter:
             return Letter.__parse(s)
 
     @staticmethod
-    def __parse_binary(s: bytes) -> Optional[Letter]:
+    def __parse_binary(s: bytes) -> Optional['Letter']:
         tid = s[6:70].decode().replace(" ", "")
         content = s[70:]
 
         return Letter(Letter.BinaryFile, {"tid":tid}, {"content":content})
 
     @staticmethod
-    def __parse(s: bytes) -> Optional[Letter]:
+    def __parse(s: bytes) -> Optional['Letter']:
         letter = s[2:].decode()
         dict_ = json.loads(letter)
 
