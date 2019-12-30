@@ -2,14 +2,10 @@
 
 from typing import *
 
-from manager.misc.dispatcher import Dispatcher
-from manager.misc.workerRoom import WorkerRoom
-from manager.misc.eventListener import EventListener
+dispatcher = None # type: Any
 
-class Components:
+workerRoom = None # type: Any
 
-    dispatcher = None # type: Optional[Dispatcher]
+eventListener = None # type: Any
 
-    workerRoom = None # type: Optional[WorkerRoom]
-
-    eventListener = None # type: Optional[EventListener]
+logger = None # type: Any

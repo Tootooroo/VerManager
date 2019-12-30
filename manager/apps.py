@@ -6,8 +6,10 @@ from manager.misc.eventListener import EventListener, responseHandler, binaryHan
     workerRegister
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.basic.letter import Letter
-from manager.misc.components import Components
 from manager.misc.dispatcher import Dispatcher, workerLost_redispatch
+from manager.misc.logger import Logger
+
+import manager.misc.components as Components
 
 
 initialized = False
@@ -30,6 +32,7 @@ class ManagerConfig(AppConfig):
         workerRoom = WorkerRoom('127.0.0.1', 8024)
         dispatcher = Dispatcher(workerRoom)
         eventListener = EventListener(workerRoom)
+        logger = Logger("./log")
 
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)

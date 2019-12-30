@@ -2,49 +2,57 @@ import socket
 import select
 from threading import Thread
 
+from typing import *
+
 from manager.misc.worker import Worker, Task
 from manager.misc.basic.type import *
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.basic.letter import Letter
 
+import manager.misc.components as Components
+
 import traceback
+
+Handler = Callable[['EventListener', Letter], None]
 
 class EventListener(Thread):
 
-    def __init__(self, workerRoom):
+    def __init__(self, workerRoom: WorkerRoom) -> None:
         Thread.__init__(self)
         self.entries = select.poll()
         self.workers = workerRoom
         self.numOfEntries = 0
         # Handler in handlers should be unique
-        self.handlers = {}
+        self.handlers = {} # type: Dict[str, Handler]
 
         # {tid:fd}
-        self.taskResultFdSet = {}
+        self.taskResultFdSet = {} # type: Dict[str, BinaryIO]
 
-    def registerEvent(self, eventType, handler):
+    def registerEvent(self, eventType: str, handler: Handler) -> None:
         if eventType in self.handlers:
             return None
 
         self.handlers[eventType] = handler
 
-    def unregisterEvent(self, eventType):
+    def unregisterEvent(self, eventType: str) -> None:
         if not eventType in self.handlers:
             return None
 
         del self.handlers [eventType]
 
-    def fdRegister(self, worker):
+    def fdRegister(self, worker: Worker) -> None:
         sock = worker.sock
         self.entries.register(sock.fileno(), select.POLLIN)
 
-    def fdUnregister(self, ident):
+    def fdUnregister(self, ident: str) -> None:
         worker = self.getWorker(ident)
-        sock = worker.sock
+
+        if not worker is None:
+            sock = worker.sock
 
         self.entries.unregister(sock.fileno())
 
-    def addWorker(self, worker):
+    def addWorker(self, worker: Worker) -> State:
         ident = worker.getIdent()
         isNotExists = not self.workers.isExists(ident)
 
@@ -58,23 +66,22 @@ class EventListener(Thread):
 
         return Error
 
-    def removeWorker(self, ident):
-        sock = None
-        isExists = self.workers.isExists(ident)
+    def removeWorker(self, ident) -> State:
+        worker = self.workers.getWorker(ident)
 
-        if isExists:
+        if not worker is None:
             # Unregister the socket from poll object
-            self.entries.unregister(sock)
+            self.entries.unregister(worker.sockGet())
             # remove worker
             self.workers.removeWorker(ident)
             return Ok
 
         return Error
 
-    def getWorker(self, ident):
+    def getWorker(self, ident: str) -> Optional[Worker]:
         return self.workers.getWorker(ident)
 
-    def Acceptor(self, letter):
+    def Acceptor(self, letter: Letter) -> None:
         # Check letter's type
         event = letter.type_
 
@@ -84,7 +91,7 @@ class EventListener(Thread):
         handler = self.handlers[event]
         handler(self, letter)
 
-    def run(self):
+    def run(self) -> None:
 
         while True:
             # Polling every 10 seconds due to polling
@@ -101,13 +108,17 @@ class EventListener(Thread):
                 try:
                     letter = Worker.receving(sock)
 
+                    if letter is None:
+                        continue
+
                     if not letter.validity():
                         continue
                 except:
                     traceback.print_exc()
                     # Notify workerRoom an worker is disconnected
                     worker = self.workers.getWorkerViaFd(fd)
-                    self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, worker.getIdent())
+                    if not worker is None:
+                        self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, worker.getIdent())
 
                     self.entries.unregister(fd)
                     continue
@@ -116,14 +127,14 @@ class EventListener(Thread):
                     self.Acceptor(letter)
 
 # Hooks
-def workerRegister(worker, args):
+def workerRegister(worker: Worker, args: Any) -> None:
     eventListener = args[0]
     eventListener.fdRegister(worker)
 
 # Handlers definitions
 
 # Handler to process response of NewTask request
-def responseHandler(eventListener, letter):
+def responseHandler(eventListener: EventListener, letter: Letter) -> None:
     # Should verify the letter's format
     print(letter.toString())
 
@@ -133,9 +144,11 @@ def responseHandler(eventListener, letter):
     state = int(letter.getContent('state'))
 
     worker = eventListener.getWorker(ident)
-    task = worker.searchTask(taskId)
 
-    if Task.isValidState(state):
+    if not worker is None:
+        task = worker.searchTask(taskId)
+
+    if not task is None and Task.isValidState(state):
         print(ident + " change to state " + str(state))
         task.stateChange(state)
 
@@ -151,7 +164,7 @@ def responseHandler(eventListener, letter):
             fdSet[taskId].close()
             del fdSet [taskId]
 
-def binaryHandler(eventListener, letter):
+def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     fdSet = eventListener.taskResultFdSet
     tid = letter.getHeader('tid')
 
@@ -164,4 +177,22 @@ def binaryHandler(eventListener, letter):
     fd = fdSet[tid]
     content = letter.getContent('content')
 
+    if isinstance(content, str):
+        return None
+
     fd.write(content)
+
+def logHandler(eventListener: EventListener, letter: Letter) -> None:
+    logger = Components.logger
+
+    logId = letter.getHeader('logId')
+    logMsg = letter.getContent('logMsg')
+
+    logger.log_put((logId, logMsg))
+
+def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
+    logger = Components.logger
+
+    logId = letter.getHeader('logId')
+
+    logger.log_register(logId)

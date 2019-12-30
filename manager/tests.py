@@ -306,7 +306,7 @@ class UnitTest(TestCase):
 
         time.sleep(10)
 
-    def test_integration(self):
+    def tes_integration(self):
         import sys
         sys.path.append("./worker")
 
@@ -337,7 +337,7 @@ class UnitTest(TestCase):
             task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
             dispatcher.dispatch(task)
 
-            dispatcher.join()
+            time.sleep(10)
 
         def clientAction():
             info = Info("worker/config.yaml")
@@ -354,11 +354,6 @@ class UnitTest(TestCase):
             t2.start()
 
             time.sleep(10)
-            print("disconnect")
-            s.disconnect()
-
-            t1.join()
-            t2.join()
 
 
         s = Process(target=serverAction)
@@ -371,6 +366,17 @@ class UnitTest(TestCase):
         s.join()
         c.join()
 
+    def test_logger(self):
+
+        from .misc.logger import Logger
+
+        logger = Logger("./logger")
+        logger.start()
+
+        logger.log_register("123")
+        logger.log_put(("123", "ABC"))
+
+        time.sleep(10)
 
 
 

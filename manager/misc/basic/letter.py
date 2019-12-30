@@ -8,46 +8,37 @@ import json
 import typing
 from typing import *
 
-validityMethods = {
-    Letter.NewTask        :newTaskLetterValidity,
-    Letter.Response       :responseLetterValidity,
-    Letter.PropertyNotify :propertyLetterValidity,
-    Letter.BinaryFile     :binaryLetterValidity,
-    Letter.Log            :logLetterValidity,
-    Letter.LogRegister    :logRegisterLetterValidity
-} # type: Dict[str, Callable]
-
-def newTaskLetterValidity(letter: Letter) -> bool:
+def newTaskLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('sn') != "" and letter.getContent('vsn') != ""
 
     return isHValid and isCValid
 
-def responseLetterValidity(letter: Letter) -> bool:
+def responseLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('state') != ""
 
     return isHValid and isCValid
 
-def propertyLetterValidity(letter: Letter) -> bool:
+def propertyLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != ""
     isCValid = letter.getContent('MAX') != "" and letter.getContent('PROC') != ""
 
     return isHValid and isCValid
 
-def binaryLetterValidity(letter: Letter) -> bool:
+def binaryLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('tid') != ""
     isCValid = letter.getContent('bytes') != ""
 
     return isHValid and isCValid
 
-def logLetterValidity(letter: Letter) -> bool:
+def logLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
     isCValid = letter.getContent('logMsg') != ""
 
     return isHValid and isCValid
 
-def logRegisterLetterValidity(letter: Letter) -> bool:
+def logRegisterLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
 
     return isHValid
@@ -236,3 +227,13 @@ class Letter:
         return int(self.content['PROC'])
     def propNotify_IDENT(self) -> str:
         return self.header['ident']
+
+
+validityMethods = {
+    Letter.NewTask        :newTaskLetterValidity,
+    Letter.Response       :responseLetterValidity,
+    Letter.PropertyNotify :propertyLetterValidity,
+    Letter.BinaryFile     :binaryLetterValidity,
+    Letter.Log            :logLetterValidity,
+    Letter.LogRegister    :logRegisterLetterValidity
+} # type: Dict[str, Callable]

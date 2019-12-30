@@ -14,7 +14,7 @@ from .misc.verControl import RevSync
 from .misc.dispatcher import Dispatcher
 from .misc.worker import Task
 
-from .misc.components import Components
+import manager.misc.components as Components
 
 from .misc.basic.type import *
 
