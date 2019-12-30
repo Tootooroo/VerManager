@@ -1,0 +1,9 @@
+[submodule "manager/misc/VerManager-basic"]
+	path = manager/misc/VerManager-basic
+	url = https://github.com/Tootooroo/VerManager-basic.git
+[submodule "manager/misc/basic"]
+	path = manager/misc/basic
+	url = https://github.com/Tootooroo/VerManager-basic.git
+[submodule "worker/basic"]
+	path = worker/basic
+	url = https://github.com/Tootooroo/VerManager-basic.git
