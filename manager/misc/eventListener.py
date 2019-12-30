@@ -149,12 +149,10 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
         task = worker.searchTask(taskId)
 
     if not task is None and Task.isValidState(state):
-        print(ident + " change to state " + str(state))
-        task.stateChange(state)
-
         # Do some operation after finished such as close file description
         # of received binary
         if state == Task.STATE_FINISHED:
+            print("Finished")
             # Store result to the target position specified in configuration file
 
             # Send email to notify that task id done
@@ -163,6 +161,9 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
             fdSet = eventListener.taskResultFdSet
             fdSet[taskId].close()
             del fdSet [taskId]
+
+        print(ident + " change to state " + str(state))
+        task.stateChange(state)
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     fdSet = eventListener.taskResultFdSet
