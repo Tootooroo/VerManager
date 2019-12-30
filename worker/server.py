@@ -11,9 +11,9 @@ import typing
 from threading import Lock
 import traceback
 
-from basics.letter import Letter
+from basic.letter import Letter
 from info import Info
-from basics.type import *
+from basic.type import *
 
 from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition
