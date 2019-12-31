@@ -64,12 +64,14 @@ def generation(request):
 
     try:
         verIdent = request.POST['Version']
+        dateTime = request.POST['Datetime']
         version = Versions.objects.get(pk=verIdent)
 
         if version == None:
             return HttpResponseBadRequest()
 
-        task = Task(verIdent, {"sn":version.sn, "vsn":verIdent})
+        task = Task(verIdent,
+                    {"sn":version.sn, "vsn":verIdent, "datetime":dateTime})
 
         if dispatcher.dispatch(task) == False:
             return HttpResponseBadRequest()

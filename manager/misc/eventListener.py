@@ -3,6 +3,7 @@ import select
 from threading import Thread
 
 from typing import *
+from manager.misc.exceptions import *
 
 from manager.misc.worker import Worker, Task
 from manager.misc.basic.type import *
@@ -13,15 +14,21 @@ import manager.misc.components as Components
 
 import traceback
 
+# Constant
+letterLog = "letterLog"
+
 Handler = Callable[['EventListener', Letter], None]
 
 class EventListener(Thread):
 
     def __init__(self, workerRoom: WorkerRoom) -> None:
+        global letterLog
+
         Thread.__init__(self)
         self.entries = select.poll()
         self.workers = workerRoom
         self.numOfEntries = 0
+
         # Handler in handlers should be unique
         self.handlers = {} # type: Dict[str, Handler]
 
@@ -92,6 +99,15 @@ class EventListener(Thread):
         handler(self, letter)
 
     def run(self) -> None:
+        global letterLog
+        logger = Components.logger
+
+        if Components.logger is None:
+            raise COMPONENTS_LOG_NOT_INIT
+        else:
+            # Register log files
+            Components.logger.log_register(letterLog)
+
 
         while True:
             # Polling every 10 seconds due to polling
@@ -109,16 +125,26 @@ class EventListener(Thread):
                     letter = Worker.receving(sock)
 
                     if letter is None:
+                        logger.log_put((letterLog, "Letter is NoneType"))
                         continue
 
                     if not letter.validity():
+                        logger.log_put((letterLog, "Receive invalid letter " + letter.toString()))
                         continue
+
+                    logger.log_put((letterLog, "Receive letter " + letter.toString()))
+
                 except:
                     traceback.print_exc()
                     # Notify workerRoom an worker is disconnected
                     worker = self.workers.getWorkerViaFd(fd)
+
                     if not worker is None:
-                        self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, worker.getIdent())
+                        ident = worker.getIdent()
+                        logger.log_put((letterLog, "Worker " + ident + " is disconnected"))
+                        self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, ident)
+                    else:
+                        logger.log_put((letterLog, "workers.getWorkerViaFd() return None"))
 
                     self.entries.unregister(fd)
                     continue
@@ -136,8 +162,6 @@ def workerRegister(worker: Worker, args: Any) -> None:
 # Handler to process response of NewTask request
 def responseHandler(eventListener: EventListener, letter: Letter) -> None:
     # Should verify the letter's format
-    print(letter.toString())
-
     ident = letter.getHeader('ident')
     taskId = letter.getHeader('tid')
 

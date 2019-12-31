@@ -15,9 +15,15 @@ from manager.misc.util import spawnThread
 
 from typing import *
 
+import manager.misc.components as Components
+
+# Type alias
 EVENT_TYPE = int
 hookTuple = Tuple[Callable[[Worker, Any], None], Any]
 filterFunc = Callable[[List[Worker]], Optional[Worker]]
+
+# Constant
+wrLog = "wrLog"
 
 class WorkerRoom(Thread):
 
@@ -66,28 +72,33 @@ class WorkerRoom(Thread):
         # Spawn a thread which respond to worker maintain
         maintainer = spawnThread(lambda wr: wr.maintain(), self)
 
+        global wrLog
+        logger = Components.logger
+
+        logger.log_register(wrLog)
+
         while True:
             (workersocket, address) = self.sock.accept()
+            logger.log_put(wrLog, "A new connection(" + address + ") has been accepted")
 
             workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            logger.log_put(wrLog, "Socket options set up")
 
             try:
                 acceptedWorker = Worker(workersocket)
+                ident = acceptedWorker.getIdent()
+
+                logger.log_put(wrLog, "Worker " + ident + " initialized success")
             except WorkerInitFailed:
+                logger.log_put(wrLog, "Worker initialize faile and close the socket")
                 workersocket.shutdown(socket.SHUT_RDWR)
                 continue
 
-            if acceptedWorker == None:
-                return None
-
-            print("New worker Arrived:" + acceptedWorker.getIdent())
-
-            ident = acceptedWorker.getIdent()
-
             if self.isExists(ident):
+                logger.log_put(wrLog, "Worker " + ident + " is already exist in WorkerRoom")
                 continue
 
             self.syncLock.acquire()
@@ -122,6 +133,7 @@ class WorkerRoom(Thread):
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
     def maintain(self) -> None:
+        logger = Components.logger
 
         while True:
             self.__waiting_worker_processing(self.__workers_waiting)
@@ -132,14 +144,15 @@ class WorkerRoom(Thread):
                 continue
 
             worker = self.getWorker(ident)
-            # fixme: Should reject such a worker that send invalid message ?
+
             if worker is None:
                 continue
 
             ident = worker.getIdent()
 
             if eventType == WorkerRoom.EVENT_DISCONNECTED:
-                print("Worker " + ident + " is disconnected...Waiting")
+                logger.log_put(wrLog, "Worker " + ident + \
+                               " is disconnected changed state into Waiting")
 
                 # Update worker's counter
                 worker.setState(Worker.STATE_WAITING)
@@ -155,6 +168,8 @@ class WorkerRoom(Thread):
     # Update workers's counter and deal with workers
     # thoses out of date
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
+        logger = Components.logger
+
         workers_list = list(workers.values())
 
         if len(workers) == 0:
@@ -163,11 +178,13 @@ class WorkerRoom(Thread):
         outOfTime = list(filter(lambda w: w.waitCounter() > 300, workers_list))
 
         for worker in outOfTime:
+            ident = worker.getIdent()
+            logger.log_put(wrLog, "Worker " + ident +\
+                           " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
             list(map(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)) # type: ignore
 
         list(map(lambda w: self.removeWorker(w.getIdent()), outOfTime))
-
 
     def hookRegister(self, hook: hookTuple) -> None:
         self.hooks.append(hook)
@@ -202,7 +219,7 @@ class WorkerRoom(Thread):
             workerList = list(self.__workers.values())
             return condRtn(workerList)
 
-    def addWorker(self, w) -> State:
+    def addWorker(self, w: Worker) -> State:
         ident = w.getIdent()
         with self.lock:
             if ident in self.__workers:
@@ -212,7 +229,7 @@ class WorkerRoom(Thread):
             self.numOfWorkers += 1
             return Ok
 
-    def isExists(self, ident) -> bool:
+    def isExists(self, ident: str) -> bool:
         if ident in self.__workers:
             return True
         else:
@@ -221,7 +238,7 @@ class WorkerRoom(Thread):
     def getNumOfWorkers(self) -> int:
         return self.numOfWorkers
 
-    def removeWorker(self, ident) -> State:
+    def removeWorker(self, ident: str) -> State:
         with self.lock:
             if not ident in self.__workers:
                 return Error

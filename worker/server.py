@@ -100,6 +100,11 @@ class TASK_DEAL_DAEMON(Thread):
 
         revision = letter.getContent('sn')
         vsn = letter.getContent('vsn')
+        vsn_date = letter.getContent('datetime')
+
+        # Replace <vsn> and <sn> with value from server
+        BUILDING_CMDS = BUILDING_CMDS.replace("<vsn>", vsn)
+        BUILDING_CMDS = BUILDING_CMDS.replace("<datetime>", vsn_date)
 
         # Processing
         try:

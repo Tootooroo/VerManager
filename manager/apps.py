@@ -44,6 +44,7 @@ class ManagerConfig(AppConfig):
         Components.workerRoom = workerRoom
         Components.dispatcher = dispatcher
         Components.eventListener = eventListener
+        Components.logger = logger
 
         # Daemon processes start
         workerRoom.start()
