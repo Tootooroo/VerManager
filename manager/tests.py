@@ -149,9 +149,10 @@ class UnitTest(TestCase):
                         + tid \
                         + (123123).to_bytes(4, "big")
         l_parsed = Letter.parse(letterInBytes)
+        print("l_parsed" + l_parsed.toString())
 
         self.assertEqual(tid.decode(), l_parsed.getHeader('tid'))
-        self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('content'))
+        self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('bytes'))
 
         # letterBytesRemain check
         streamComplete = (14).to_bytes(2, "big") + b'{"type":"new"}'
@@ -369,6 +370,7 @@ class UnitTest(TestCase):
     def test_logger(self):
 
         from .misc.logger import Logger
+        from manager.misc.eventListener import responseHandler, logHandler, logRegisterhandler
 
         logger = Logger("./logger")
         logger.start()
@@ -378,6 +380,59 @@ class UnitTest(TestCase):
 
         time.sleep(10)
 
+        # log letter
+        import manager.misc.components as Components
+
+        def register(worker, args):
+            el = args[0]
+            el.fdRegister(worker)
+
+        def serverAction():
+            w = WorkerRoom('127.0.0.1', 8025)
+            e = EventListener(w)
+            l = Logger("./log")
+
+            Components.logger = l
+
+            e.registerEvent(Letter.Response, responseHandler)
+            e.registerEvent(Letter.LogRegister, logRegisterhandler)
+            e.registerEvent(Letter.Log, logHandler)
+            w.hookRegister((register, [e]))
+
+            l.start()
+            w.start()
+            e.start()
+
+            time.sleep(3)
+
+        def clientAction(args):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(('127.0.0.1', 8025))
+
+            content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
+            content = len(content).to_bytes(2, "big") + content
+
+            sock.send(content)
+
+            logRegLetter = b'{"type":"logRegister", "header":{"logId":"logTest"}, "content":{"1":1}}'
+            logRegLetter = len(logRegLetter).to_bytes(2, "big") + logRegLetter
+            sock.send(logRegLetter)
+
+            logLetter = b'{"type":"log", "header":{"logId":"logTest"}, "content":{"logMsg":"Logger Test success"}}'
+            logLetter = len(logLetter).to_bytes(2, "big") + logLetter
+
+            sock.send(logLetter)
+
+            time.sleep(3)
+
+        s = ServerT(serverAction)
+        c = ClientT(clientAction, None)
+
+        s.start()
+        time.sleep(1)
+        c.start()
+
+        time.sleep(10)
 
 
 if __name__ == '__main__':
