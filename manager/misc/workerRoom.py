@@ -79,7 +79,7 @@ class WorkerRoom(Thread):
 
         while True:
             (workersocket, address) = self.sock.accept()
-            logger.log_put(wrLog, "A new connection(" + address + ") has been accepted")
+            logger.log_put(wrLog, "A new connection(" + str(address) + ") has been accepted")
 
             workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)

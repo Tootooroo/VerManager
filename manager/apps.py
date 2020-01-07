@@ -50,6 +50,7 @@ class ManagerConfig(AppConfig):
         workerRoom.start()
         eventListener.start()
         dispatcher.start()
+        logger.start()
 
         from .misc.verControl import RevSync, revSyncSpawn
 

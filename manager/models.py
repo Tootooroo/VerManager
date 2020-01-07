@@ -20,8 +20,8 @@ class Versions(models.Model):
 
 
 def infoBetweenVer(v1: str, v2: str) -> List[str]:
-    ver1 = Revisions.objects.get(pk=v1) # type: ignore
-    ver2 = Revisions.objects.get(pk=v2) # type: ignore
+    ver1 = Versions.objects.get(pk=v1) # type: ignore
+    ver2 = Versions.objects.get(pk=v2) # type: ignore
 
     begin = rev1 = Revisions.objects.get(pk=ver1.sn) # type: ignore
     end = rev2 = Revisions.objects.get(pk=ver2.sn) # type: ignore
@@ -32,7 +32,7 @@ def infoBetweenVer(v1: str, v2: str) -> List[str]:
 
     vers = Revisions.objects.filter(
         dateTime__gt=begin.dateTime,
-        dateTime__lt=end.dateTime) # type: ignore
+        dateTime__lte=end.dateTime) # type: ignore
 
     # Mapping vers into vers's comment informations
     comments = list(map(lambda ver: ver.comment, vers))

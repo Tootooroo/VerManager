@@ -1,4 +1,5 @@
 import socket
+import zipfile
 import select
 from threading import Thread
 
@@ -125,14 +126,14 @@ class EventListener(Thread):
                     letter = Worker.receving(sock)
 
                     if letter is None:
-                        logger.log_put((letterLog, "Letter is NoneType"))
+                        logger.log_put(letterLog, "Letter is NoneType")
                         continue
 
                     if not letter.validity():
-                        logger.log_put((letterLog, "Receive invalid letter " + letter.toString()))
+                        logger.log_put(letterLog, "Receive invalid letter " + letter.toString())
                         continue
 
-                    logger.log_put((letterLog, "Receive letter " + letter.toString()))
+                    logger.log_put(letterLog, letter.typeOfLetter())
 
                 except:
                     traceback.print_exc()
@@ -141,16 +142,56 @@ class EventListener(Thread):
 
                     if not worker is None:
                         ident = worker.getIdent()
-                        logger.log_put((letterLog, "Worker " + ident + " is disconnected"))
+                        logger.log_put(letterLog, "Worker " + ident + " is disconnected")
                         self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, ident)
                     else:
-                        logger.log_put((letterLog, "workers.getWorkerViaFd() return None"))
+                        logger.log_put(letterLog, "workers.getWorkerViaFd() return None")
 
                     self.entries.unregister(fd)
                     continue
 
                 if letter != None:
                     self.Acceptor(letter)
+
+
+# Misc
+def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
+    from manager.models import infoBetweenVer, Versions
+
+    vers = list(map(lambda v: v.vsn, list(Versions.objects.all()))) # type: ignore
+
+    try:
+        idx = vers.index(vsn)
+
+        # Which means this is the first versions so no change log to
+        # indicate what is changed from the last version
+        if idx == 0:
+            return ""
+
+        lastVerBefore = vers[idx - 1]
+
+        changeLog = infoBetweenVer(vsn, lastVerBefore)
+        logFile = open("./log.txt", "w")
+
+        for log in changeLog:
+            logFile.write(log)
+
+        logFile.close()
+
+        zipFileName = vsn + "with_log.rar"
+
+        zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
+        for aFile in ["./log.txt", filePath]:
+            zipFd.write(aFile)
+
+        zipFd.close()
+
+        return zipFileName
+
+    except ValueError:
+        return ""
+
+
 
 # Hooks
 def workerRegister(worker: Worker, args: Any) -> None:
@@ -161,8 +202,6 @@ def workerRegister(worker: Worker, args: Any) -> None:
 
 # Handler to process response of NewTask request
 def responseHandler(eventListener: EventListener, letter: Letter) -> None:
-    from manager.models import infoBetweenVer
-
     # Should verify the letter's format
     ident = letter.getHeader('ident')
     taskId = letter.getHeader('tid')
@@ -178,15 +217,17 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
         # Do some operation after finished such as close file description
         # of received binary
         if state == Task.STATE_FINISHED:
-            print("Finished")
+            # Pending feature
             # Store result to the target position specified in configuration file
-
             # Send email to notify that task id done
 
-            task.setData("http://127.0.0.1:8000/static/" + task.id())
             fdSet = eventListener.taskResultFdSet
             fdSet[taskId].close()
             del fdSet [taskId]
+
+            destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", "./data")
+            task.setData("http://127.0.0.1:8000/static/" + destFileName)
+
 
         print(ident + " change to state " + str(state))
         task.stateChange(state)
@@ -198,11 +239,11 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     # This is the first binary letter of the task correspond to the
     # received tid just open a file and store the relation into fdSet
     if not tid in fdSet:
-        newFd = open("./data/" + tid, "wb")
+        newFd = open("./data/" + tid + ".rar", "wb")
         fdSet[tid] = newFd
 
     fd = fdSet[tid]
-    content = letter.getContent('content')
+    content = letter.getContent('bytes')
 
     if isinstance(content, str):
         return None
@@ -215,7 +256,7 @@ def logHandler(eventListener: EventListener, letter: Letter) -> None:
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
 
-    logger.log_put((logId, logMsg))
+    logger.log_put(logId, logMsg)
 
 def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
     logger = Components.logger

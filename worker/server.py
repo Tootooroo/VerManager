@@ -89,7 +89,7 @@ class TASK_DEAL_DAEMON(Thread):
             RESULT_PATH = RESULT_PATH.replace("/", "\\")
             BUILDING_CMDS = "&&".join(list(map(lambda cmd: cmd.replace("/", "\\"), BUILDING_CMDS)))
         else:
-            # Linux platfor
+            # Linux platform
             BUILDING_CMDS = ";".join(BUILDING_CMDS)
 
         # Notify to server the worker is in processing
@@ -153,7 +153,6 @@ class Server:
 
     def init(self):
         return self.connect()
-
 
     def connect(self):
         host = self.info.getConfig('MASTER_ADDRESS', 'host')

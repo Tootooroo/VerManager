@@ -95,15 +95,16 @@ class Dispatcher(Thread):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        self.taskEvent.wait()
+        while True:
+            self.taskEvent.wait()
 
-        task = self.taskWait.pop()
+            task = self.taskWait.pop()
 
-        if not self.__dispatch(task):
-            self.taskWait.append(task)
+            if not self.__dispatch(task):
+                self.taskWait.append(task)
 
-        if len(self.taskWait) == 0:
-            self.taskEvent.clear()
+            if len(self.taskWait) == 0:
+                self.taskEvent.clear()
 
     # Cancel a task identified by taskId
     # and taskId is unique

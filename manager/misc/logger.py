@@ -27,15 +27,12 @@ class Logger(Thread):
             os.mkdir(path)
 
     def run(self) -> None:
-
         while True:
-
             msgUnit = self.logQueue.get() # type: Tuple[LOG_ID, LOG_MSG]
-            print(msgUnit)
             self.__output(msgUnit)
 
-    def log_put(self, msg:Tuple[LOG_ID, LOG_MSG]) -> None:
-        self.logQueue.put(msg)
+    def log_put(self, lid: LOG_ID, msg: LOG_MSG) -> None:
+        self.logQueue.put((lid, msg))
 
     def log_register(self, logId: LOG_ID) -> State:
         if logId in self.logTunnels:
