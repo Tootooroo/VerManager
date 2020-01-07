@@ -20,7 +20,7 @@ function generate() {
         setTimeout(waitGenerateDone, 5000);
     };
 
-    xhr.open('post', 'generation', true);
+    xhr.open('post', 'verRegister/generation', true);
     xhr.setRequestHeader('X-CSRFToken', csrftoken);
 
     var form = document.getElementById('genForm');
@@ -48,7 +48,7 @@ function waitGenerateDone() {
         }
     };
 
-    xhr.open('post', 'isGenerateDone', true);
+    xhr.open('post', 'verRegister/isGenerateDone', true);
     xhr.setRequestHeader('X-CSRFToken', csrftoken);
 
     var form = document.getElementById('genForm');
