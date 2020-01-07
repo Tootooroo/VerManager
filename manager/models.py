@@ -19,18 +19,20 @@ class Versions(models.Model):
     dateTime = models.DateTimeField(default=timezone.now) # type: ignore
 
 
-def infoBetweenVer(v1: str, v2, str) -> List[str]:
-    ver1 = Versions.objects.get(pk=v1) # type: ignore
-    ver2 = Versions.objects.get(pk=v2) # type: ignore
+def infoBetweenVer(v1: str, v2: str) -> List[str]:
+    ver1 = Revisions.objects.get(pk=v1) # type: ignore
+    ver2 = Revisions.objects.get(pk=v2) # type: ignore
 
-    begin = ver1.dateTime
-    end = ver2.dateTime
+    begin = rev1 = Revisions.objects.get(pk=ver1.sn) # type: ignore
+    end = rev2 = Revisions.objects.get(pk=ver2.sn) # type: ignore
 
-    if begin > end:
-        begin = ver2.dateTime
-        end = ver1.dateTime
+    if begin.dateTime > end.dateTime:
+        begin = rev2
+        end = rev1
 
-    vers = Versions.objects.filter(dateTime__gt=begin, dateTime__lt=end) # type: ignore
+    vers = Revisions.objects.filter(
+        dateTime__gt=begin.dateTime,
+        dateTime__lt=end.dateTime) # type: ignore
 
     # Mapping vers into vers's comment informations
     comments = list(map(lambda ver: ver.comment, vers))

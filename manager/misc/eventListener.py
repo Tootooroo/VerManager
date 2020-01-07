@@ -161,6 +161,8 @@ def workerRegister(worker: Worker, args: Any) -> None:
 
 # Handler to process response of NewTask request
 def responseHandler(eventListener: EventListener, letter: Letter) -> None:
+    from manager.models import infoBetweenVer
+
     # Should verify the letter's format
     ident = letter.getHeader('ident')
     taskId = letter.getHeader('tid')
