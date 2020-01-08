@@ -20,6 +20,8 @@ from .misc.basic.type import *
 
 from datetime import datetime
 
+import traceback
+
 # Models
 from .models import Revisions, Versions
 
@@ -77,6 +79,7 @@ def generation(request):
             return HttpResponseBadRequest()
 
     except:
+        traceback.print_exc()
         return HttpResponseBadRequest()
 
     return HttpResponse()

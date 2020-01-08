@@ -3,6 +3,8 @@
 # Responsbility to version generation works dispatch,
 # load-balance, queue supported
 
+import time
+
 from typing import *
 from functools import reduce
 
@@ -45,22 +47,6 @@ class Dispatcher(Thread):
         if task.id() in self.__tasks:
             return False
 
-        # Method to get an online worker which
-        # with lowest overhead of all online workerd
-        def viaOverhead(workers):
-            # Filter out workers which is not in online status or not able to accept
-            f_online_acceptable = lambda w: w.getState() == Worker.STATE_ONLINE and w.isAbleToAccept()
-            onlineWorkers = list(filter(lambda w: f_online_acceptable, workers))
-
-            if onlineWorkers == []:
-                return False
-
-            # Find out the worker with lowest overhead on a collection of online acceptable workers
-            f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
-            theWorker = reduce(f, onlineWorkers)
-
-            return theWorker
-
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and __tasks otherwise append to taskWai
@@ -96,7 +82,15 @@ class Dispatcher(Thread):
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
         while True:
+
+            # Is there any task in taskWait queue
             self.taskEvent.wait()
+
+            # Is there any workers acceptable
+            workers = self.__workers.getWorkerWithCond(acceptableWorkers)
+            if workers == []:
+                time.sleep(60)
+                continue
 
             task = self.taskWait.pop()
 
@@ -167,3 +161,22 @@ class Dispatcher(Thread):
 def workerLost_redispatch(w: Worker, d: Dispatcher) -> None:
     tasks = w.inProcTasks()
     list(map(lambda task: d.redispatch(task), tasks))
+
+# Misc
+
+# Method to get an online worker which
+# with lowest overhead of all online workerd
+def viaOverhead(workers: List[Worker]) -> Optional[Worker]:
+    # Filter out workers which is not in online status or not able to accept
+    onlineWorkers = acceptableWorkers(workers)
+
+    if onlineWorkers == []:
+        return None
+
+    # Find out the worker with lowest overhead on a collection of online acceptable workers
+    f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
+    return reduce(f, onlineWorkers)
+
+def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
+    f_online_acceptable = lambda w: w.isOnline() and w.isAbleToAccept()
+    return list(filter(lambda w: f_online_acceptable(w), workers))

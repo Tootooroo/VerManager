@@ -109,7 +109,6 @@ class EventListener(Thread):
             # Register log files
             Components.logger.log_register(letterLog)
 
-
         while True:
             # Polling every 10 seconds due to polling
             # may not affect to new worker which be
@@ -158,7 +157,8 @@ class EventListener(Thread):
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
     from manager.models import infoBetweenVer, Versions
 
-    vers = list(map(lambda v: v.vsn, list(Versions.objects.all()))) # type: ignore
+    verData = Versions.objects.all().order_by('dateTime') # type: ignore
+    vers = list(map(lambda v: v.vsn, list(verData))) # type: ignore
 
     try:
         idx = vers.index(vsn)
@@ -210,13 +210,18 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
 
     worker = eventListener.getWorker(ident)
 
-    if not worker is None:
-        task = worker.searchTask(taskId)
+    if worker is None:
+        return None
+
+    task = worker.searchTask(taskId)
 
     if not task is None and Task.isValidState(state):
         # Do some operation after finished such as close file description
         # of received binary
         if state == Task.STATE_FINISHED:
+
+            worker.removeTask(taskId)
+
             # Pending feature
             # Store result to the target position specified in configuration file
             # Send email to notify that task id done
@@ -228,9 +233,9 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
             destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", "./data")
             task.setData("http://127.0.0.1:8000/static/" + destFileName)
 
-
         print(ident + " change to state " + str(state))
         task.stateChange(state)
+
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     fdSet = eventListener.taskResultFdSet
