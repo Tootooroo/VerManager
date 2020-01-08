@@ -29,4 +29,4 @@ kjk
 
 + 需要严格区分，不同时间的Master以及Worker是不是曾经的某一个Master或者Worker
 
-+
++ 是否可以将Worker的链接状态监控转移到WorkerRoom模块中?
