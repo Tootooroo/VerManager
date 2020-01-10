@@ -60,7 +60,6 @@ function waitGenerateDone() {
 
     xhr.send(formData);
 
-    console.log("waitGenerationDone");
 }
 
 function fillVerList() {
@@ -71,12 +70,10 @@ function fillVerList() {
 
     xhr.onload = function() {
 
-        console.log(xhr.responseText);
         if (xhr.status != 200)
             return null;
 
         var vers = xhr.responseText.split(verSeperator);
-        console.log(vers);
         var ver_options = vers.map(function(ver) {
             var ver_option = document.createElement("option");
             ver_option.setAttribute("value", ver);

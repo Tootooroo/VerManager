@@ -90,12 +90,13 @@ def isGenerationDone(request):
     verIdent = request.POST['verSelect']
 
     if not dispatcher.isTaskExists(verIdent):
+        print(verIdent + " Not Exists")
         return HttpResponseBadRequest()
 
     if dispatcher.isTaskFinished(verIdent):
         resultUrl = dispatcher.retrive(verIdent)
         return HttpResponse(resultUrl)
-    elif dispatcher.isTaskInProc(verIdent):
+    elif dispatcher.isTaskInProc(verIdent) or dispatcher.isTaskPrepare(verIdent):
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
         return HttpResponseBadRequest()

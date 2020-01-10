@@ -45,7 +45,7 @@ class Dispatcher(Thread):
     def __dispatch(self, task: Task) -> bool:
 
         if task.id() in self.__tasks:
-            return False
+            return True
 
         # First to find a acceptable worker
         # if found then assign task to the worker
@@ -69,6 +69,7 @@ class Dispatcher(Thread):
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
+                self.__tasks[task.id()] = task
                 self.taskEvent.set()
 
             return True
@@ -140,6 +141,9 @@ class Dispatcher(Thread):
 
         task = self.__tasks[taskId]
         return state(task)
+
+    def isTaskPrepare(self, taskId: str) -> bool:
+        return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_PREPARE)
 
     def isTaskInProc(self, taskId: str) -> bool:
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)

@@ -120,12 +120,19 @@ function radioAppend(element, radio) {
 
 function radio_create(revInfos) {
     var content = revInfos.stringify();
+    content = content.split("<br>");
 
     var div = document.createElement("div");
 
     var label = document.createElement("Label");
     label.setAttribute("for", "verChoice");
-    label.innerHTML = content;
+
+    var content_comment = content[2];
+    if (content_comment.length > 35) {
+        content_comment = content_comment.substring(0, 35) + "...";
+        label.setAttribute("title", content[2]);
+    }
+    label.innerHTML = content[0] + "<br>" + content[1] + "<br>" + content_comment;
 
     var radio = document.createElement("input");
     radio.setAttribute("type", "radio");
