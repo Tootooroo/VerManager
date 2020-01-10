@@ -131,20 +131,17 @@ class EventListener(Thread):
                     if not letter.validity():
                         logger.log_put(letterLog, "Receive invalid letter " + letter.toString())
                         continue
-
-                    logger.log_put(letterLog, letter.typeOfLetter())
-
                 except:
                     traceback.print_exc()
                     # Notify workerRoom an worker is disconnected
                     worker = self.workers.getWorkerViaFd(fd)
 
-                    if not worker is None:
+                    if worker is None:
+                        logger.log_put(letterLog, "workers.getWorkerViaFd() return None")
+                    else:
                         ident = worker.getIdent()
                         logger.log_put(letterLog, "Worker " + ident + " is disconnected")
                         self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, ident)
-                    else:
-                        logger.log_put(letterLog, "workers.getWorkerViaFd() return None")
 
                     self.entries.unregister(fd)
                     continue
@@ -162,36 +159,30 @@ def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
 
     try:
         idx = vers.index(vsn)
-
-        # Which means this is the first versions so no change log to
-        # indicate what is changed from the last version
-        if idx == 0:
-            return ""
-
-        lastVerBefore = vers[idx - 1]
-
-        changeLog = infoBetweenVer(vsn, lastVerBefore)
-        logFile = open("./log.txt", "w")
-
-        for log in changeLog:
-            logFile.write(log)
-
-        logFile.close()
-
-        zipFileName = vsn + "with_log.rar"
-
-        zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
-        for aFile in ["./log.txt", filePath]:
-            zipFd.write(aFile)
-
-        zipFd.close()
-
-        return zipFileName
-
     except ValueError:
         return ""
 
+    # Which means this is the first versions so no change log to
+    # indicate what is changed from the last version
+    if idx == 0:
+        return ""
 
+    lastVerBefore = vers[idx - 1]
+
+    changeLog = infoBetweenVer(vsn, lastVerBefore)
+
+    with open("./log.txt", "w") as logFile:
+        for log in changeLog:
+            logFile.write(log)
+
+    zipFileName = vsn + "with_log.rar"
+
+    zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
+    for aFile in ["./log.txt", filePath]:
+        zipFd.write(aFile)
+    zipFd.close()
+
+    return zipFileName
 
 # Hooks
 def workerRegister(worker: Worker, args: Any) -> None:
@@ -235,7 +226,6 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
 
         print(ident + " change to state " + str(state))
         task.stateChange(state)
-
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     fdSet = eventListener.taskResultFdSet

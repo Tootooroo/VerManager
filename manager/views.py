@@ -65,7 +65,7 @@ def generation(request):
     dispatcher = Components.dispatcher
 
     try:
-        verIdent = request.POST['Version']
+        verIdent = request.POST['verSelect']
         dateTime = request.POST['Datetime']
         version = Versions.objects.get(pk=verIdent)
 
@@ -87,7 +87,7 @@ def generation(request):
 def isGenerationDone(request):
     dispatcher = Components.dispatcher
 
-    verIdent = request.POST['Version']
+    verIdent = request.POST['verSelect']
 
     if not dispatcher.isTaskExists(verIdent):
         return HttpResponseBadRequest()
@@ -137,3 +137,13 @@ def revisionRetrive(request):
     # Request does not contain info is need
     # to retrive revisions
     return HttpResponseBadRequest()
+
+def versionRetrive(request):
+    vers = Versions.objects.all()
+    vers = vers.order_by('-dateTime')
+
+    if len(vers) == 0:
+        return HttpResponseNotModified()
+
+    verStr = reduce(lambda acc,ver: str(acc) + "__<?>__" + str(ver), vers)
+    return HttpResponse(verStr)

@@ -24,7 +24,7 @@
     <div class="container-fluid">
       <form id="genForm" action="verRegister/register" method="post" target="dummyframe">
         {% csrf_token %}
-        <p>Version: <input type="text" name="Version"></p>
+        <select id="verSelect" name="verSelect"></select>
         <p>Datetime: <input type="text" name="Datetime"></p>
       </form>
       <input id="generationBtn" type="submit" name="generation" value="generation">

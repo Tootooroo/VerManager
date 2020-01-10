@@ -18,6 +18,8 @@ class Versions(models.Model):
     sn = models.CharField(max_length=30) # type: ignore
     dateTime = models.DateTimeField(default=timezone.now) # type: ignore
 
+    def __str__(self):
+        return self.vsn
 
 def infoBetweenVer(v1: str, v2: str) -> List[str]:
     ver1 = Versions.objects.get(pk=v1) # type: ignore
