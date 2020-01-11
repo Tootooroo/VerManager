@@ -5,6 +5,8 @@
 
 import time
 
+import manager.misc.components as Components
+
 from typing import *
 from functools import reduce
 
@@ -44,7 +46,7 @@ class Dispatcher(Thread):
     # return True if task is assign successful otherwise return False
     def __dispatch(self, task: Task) -> bool:
 
-        if task.id() in self.__tasks:
+        if task.id() in self.__tasks and task.taskState() == Task.STATE_IN_PROC:
             return True
 
         # First to find a acceptable worker
@@ -82,18 +84,26 @@ class Dispatcher(Thread):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
+        logger = Components.logger;
+
+        logger.log_register("dispatcher")
+
         while True:
 
             # Is there any task in taskWait queue
             self.taskEvent.wait()
+            logger.log_put("dispatcher", "Task arrived")
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
             if workers == []:
-                time.sleep(60)
+                logger.log_put("dispatcher", "No acceptable worker")
+                time.sleep(5)
                 continue
 
             task = self.taskWait.pop()
+
+            logger.log_put("dispatcher", "Dispatch task: " + task.id())
 
             if not self.__dispatch(task):
                 self.taskWait.append(task)
