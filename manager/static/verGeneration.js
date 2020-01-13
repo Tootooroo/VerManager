@@ -12,7 +12,12 @@ function verGeneration_main() {
 
     var submit = document.getElementById('generationBtn');
     submit.addEventListener('click', function() {
+        var vSelect = document.getElementById('verSelect');
+
         generate();
+
+        vSelect.setAttribute('disabled', true);
+        submit.setAttribute('disabled', true);
     });
 }
 
@@ -29,6 +34,10 @@ function generate() {
 
     var form = document.getElementById('genForm');
     var formData = new FormData(form);
+
+    var verIdent = formData.get("verSelect");
+    waitGenerateDone.prototype.verSelect = verIdent;
+
     xhr.send(formData);
 
     return ok;
@@ -43,6 +52,11 @@ function waitGenerateDone() {
         if (xhr.status == 200) {
             // Download file via returned url
             location.assign(xhr.responseText);
+
+            var submit = document.getElementById('generationBtn');
+            var vSelect = document.getElementById('verSelect');
+            submit.setAttribute('disabled', false);
+            vSelect.setAttribute('disabled', false);
         } else if (xhr.status == 304) {
             // Pending
             waitGenerateDone.prototype.timer = setTimeout(waitGenerateDone, 1000);
@@ -57,6 +71,7 @@ function waitGenerateDone() {
 
     var form = document.getElementById('genForm');
     var formData = new FormData(form);
+    formData.append("verSelect", waitGenerateDone.prototype.verSelect);
 
     xhr.send(formData);
 

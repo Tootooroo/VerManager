@@ -228,7 +228,10 @@ class Server:
         return ret
 
     def reconnect(self):
-        return self.connect()
+        try:
+            return self.connect()
+        except:
+            return Error
 
     def isResponseInQ(self):
         return not self.q.empty()
