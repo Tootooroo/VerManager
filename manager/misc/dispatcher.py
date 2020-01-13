@@ -46,8 +46,12 @@ class Dispatcher(Thread):
     # return True if task is assign successful otherwise return False
     def __dispatch(self, task: Task) -> bool:
 
-        if task.id() in self.__tasks and task.taskState() == Task.STATE_IN_PROC:
-            return True
+        if task.id() in self.__tasks:
+            task = self.__tasks[task.id()]
+            task.refs += 1
+
+            if task.taskState() == Task.STATE_IN_PROC:
+                return True
 
         # First to find a acceptable worker
         # if found then assign task to the worker
@@ -135,7 +139,10 @@ class Dispatcher(Thread):
         if not task.isFinished():
             return None
 
-        del self.__tasks [taskId]
+        if task.refs > 0:
+            task.refs -= 1
+        else:
+            del self.__tasks [taskId]
 
         return task.data
 

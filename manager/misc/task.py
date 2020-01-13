@@ -23,6 +23,9 @@ class Task:
         # totally
         self.data = ""
 
+        # Indicate that the number of client request to the task
+        self.refs = 0
+
     def id(self) -> str:
         return self.taskId
 
