@@ -16,22 +16,22 @@
     <VerMLayout>
 
       <div class="container-fluid" id="RegisterBox" style="border-style:solid; margin-left: 10px; padding: 20px">
-        <form id="regForm" action="verRegister/register" method="post" target="dummyframe">
+        <form id="regForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
           {% csrf_token %}
           <div id="verList"></div>
-          <p>Version: <input type="text" name="Version"></p>
+          <p>Version<input type="text" class="form-control" name="Version"></p>
         </form>
-        <input id="registerBtn" type="submit" name="register" value="register">
+        <input id="registerBtn" class="btn btn-primary" type="submit" name="register" value="register">
       </div>
 
       <div class="container-fluid" id="GenerateBox" style="border-style:solid; padding: 20px">
-        <form id="genForm" action="verRegister/register" method="post" target="dummyframe">
+        <form id="genForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
           {% csrf_token %}
-          <label>Versions:</label>
-          <select id="verSelect" name="verSelect"></select>
-          <p>Datetime: <input type="text" name="Datetime"></p>
+          <label>Versions</label>
+          <select id="verSelect" class="form-control" name="verSelect"></select>
+          <p>Datetime<input type="text" class="form-control" name="Datetime"></p>
         </form>
-        <input id="generationBtn" type="submit" name="generation" value="generation">
+        <input id="generationBtn" class="btn btn-primary" type="submit" name="generation" value="generation">
       </div>
 
     </VerMLayout>
@@ -39,6 +39,9 @@
     <!-- Javascript import via requireJS -->
     <script type="module" src="{% static "verRegister.js" %}"></script>
     <script type="module" src="{% static "verGeneration.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/jquery/dist/jquery.min.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/popperjs/core/dist/umd/popper.min.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/bootstrap/dist/js/bootstrap.min.js" %}"></script>
   </body>
 
 </html>

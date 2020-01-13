@@ -36,6 +36,7 @@ def verGenPage(request):
     return render(request, 'verGeneration.html')
 
 def register(request):
+    print(request.POST)
     try:
         verName = request.POST['Version']
         revision = request.POST['verChoice']
@@ -115,6 +116,8 @@ def revisionRetrive(request):
         if 'beginRev' in info and 'numOfRev' in info:
             beginRev = info['beginRev']
             numOfRev = info['numOfRev']
+
+            print(beginRev + ":" + numOfRev)
 
         # Search for 'numOfRev' lasted revisions
         numOfRev_int = int(numOfRev)

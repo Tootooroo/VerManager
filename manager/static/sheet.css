@@ -5,22 +5,22 @@ h1 {
 
 VerMLayout {
     display: grid;
-    grid-template-rows: repeat(10, 1fr);
-    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(20, 1fr);
+    grid-template-columns: repeat(20, 1fr);
 }
 
 #RegisterBox {
     grid-row-start: 1;
-    grid-row-end: 6;
+    grid-row-end: 4;
     grid-column-start: 1;
-    grid-column-end: 5;
+    grid-column-end: 9;
 }
 
 #GenerateBox {
     grid-row-start: 1;
-    grid-row-end: 3;
-    grid-column-start: 6;
-    grid-column-end: 9;
+    grid-row-end: 2;
+    grid-column-start: 10;
+    grid-column-end: 15;
 }
 
 formLayout {
@@ -31,9 +31,8 @@ formLayout {
 
 #verList {
     overflow: auto;
-    height: 400px;
-    margin-bottom:10px;
-    border-style:double;
+    height: 500px;
+    border-style:solid;
 }
 
 body {

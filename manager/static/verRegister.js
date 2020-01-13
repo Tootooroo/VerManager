@@ -55,6 +55,7 @@ function verRegister_main() {
         var runOut = this.scrollHeight - this.scrollTop === this.clientHeight;
 
         if (runOut) {
+            console.log(this.lastChild);
             var lastRadioVal = this.lastChild.firstChild.getAttribute('value');
             fillRevList('verList', lastRadioVal, NUM_OF_REVISION_CELL);
         }
@@ -124,8 +125,8 @@ function radio_create(revInfos) {
 
     var div = document.createElement("div");
 
-    var label = document.createElement("Label");
-    label.setAttribute("for", "verChoice");
+    var label = document.createElement("label");
+    label.setAttribute("class", "verLabel");
 
     var content_comment = content[2];
     if (content_comment.length > 35) {
@@ -135,6 +136,7 @@ function radio_create(revInfos) {
     label.innerHTML = content[0] + "<br>" + content[1] + "<br>" + content_comment;
 
     var radio = document.createElement("input");
+    radio.setAttribute("class", "verRadio");
     radio.setAttribute("type", "radio");
     radio.setAttribute("name", "verChoice");
     radio.setAttribute("value", revInfos.sn);
