@@ -120,6 +120,10 @@ class Dispatcher(Thread):
     def cancelOnWorker(self, wId: str) -> None:
         pass
 
+    def removeTask(self, taskId: str) -> None:
+        if taskId in self.__tasks:
+            del self.__tasks [taskId]
+
     # Use to get result of task
     # after the call of this method task will be
     # remove from __tasks

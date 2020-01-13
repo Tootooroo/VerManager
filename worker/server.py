@@ -40,6 +40,23 @@ class RESPONSE_TO_SERVER_DAEMON(Thread):
                 time.sleep(5)
                 continue
 
+class TASK_COUNTER_MAINTAIN(Thread):
+
+    def __init__(self, t) -> None:
+        Thread.__init__(self)
+        self.tasks = t.inProcTasks
+        self.t = t
+
+    def run(self) -> None:
+        while True:
+
+            for task in self.tasks:
+                if task.ready() == True:
+                    self.t.numOfTasksInProc -= 1
+
+            time.sleep(0.05)
+
+
 class TASK_DEAL_DAEMON(Thread):
 
     def __init__(self, server, info) -> None:
@@ -51,9 +68,15 @@ class TASK_DEAL_DAEMON(Thread):
         self.pool = Pool(info.getConfig('PROCESS_POOL_SIZE'))
         self.info = info
 
+        self.inProcTasks = [] # type: ignore
+
     def run(self) -> None:
         WORKER_NAME = self.info.getConfig('WORKER_NAME')
         server = self.server
+
+        # Spawn TASK_COUNTER_MAINTAIN Thread
+        counter_maintainer = TASK_COUNTER_MAINTAIN(self)
+        counter_maintainer.start()
 
         while True:
             l = server.waitLetter()
@@ -73,7 +96,8 @@ class TASK_DEAL_DAEMON(Thread):
 
             self.numOfTasksInProc += 1
             res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l, self.info))
-            res.get()
+
+            self.inProcTasks.append(res)
 
     # Processing the assigned task and send back the result to server
     @staticmethod

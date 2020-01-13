@@ -1,0 +1,45 @@
+h1 {
+    border-bottom: solid;
+    padding-bottom: 0.5em;
+}
+
+VerMLayout {
+    display: grid;
+    grid-template-rows: repeat(10, 1fr);
+    grid-template-columns: repeat(10, 1fr);
+}
+
+#RegisterBox {
+    grid-row-start: 1;
+    grid-row-end: 6;
+    grid-column-start: 1;
+    grid-column-end: 5;
+}
+
+#GenerateBox {
+    grid-row-start: 1;
+    grid-row-end: 3;
+    grid-column-start: 6;
+    grid-column-end: 9;
+}
+
+formLayout {
+    display: grid;
+    grid-template-rows: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+}
+
+#verList {
+    overflow: auto;
+    height: 400px;
+    margin-bottom:10px;
+    border-style:double;
+}
+
+body {
+    overflow:hidden;
+}
+
+input[type="radio"] {
+    vertical-align: middle;
+}

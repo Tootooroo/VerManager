@@ -99,6 +99,7 @@ def isGenerationDone(request):
     elif dispatcher.isTaskInProc(verIdent) or dispatcher.isTaskPrepare(verIdent):
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
+        dispatcher.removeTask(verIdent)
         return HttpResponseBadRequest()
 
     # Task is failure or the task is not exists
