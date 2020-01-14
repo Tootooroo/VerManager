@@ -117,8 +117,6 @@ def revisionRetrive(request):
             beginRev = info['beginRev']
             numOfRev = info['numOfRev']
 
-            print(beginRev + ":" + numOfRev)
-
         # Search for 'numOfRev' lasted revisions
         numOfRev_int = int(numOfRev)
 
