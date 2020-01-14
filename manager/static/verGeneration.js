@@ -62,6 +62,7 @@ function waitGenerateDone() {
             waitGenerateDone.prototype.timer = setTimeout(waitGenerateDone, 1000);
         } else if (xhr.status == 400) {
             // Generation failed
+            alert("Generation failed");
             clearTimeout(waitGenerateDone.prototype.timer);
         }
     };
