@@ -27,11 +27,13 @@
       <div class="container-fluid" id="GenerateBox" style="border-style:solid; padding: 20px">
         <form id="genForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
           {% csrf_token %}
-          <label>Versions</label>
+          <label id="verLabel">Versions</label>
           <select id="verSelect" class="form-control" name="verSelect"></select>
-          <p>Datetime<input type="text" class="form-control" name="Datetime"></p>
+          <p id="dateInput">Datetime <input type="text" class="form-control" name="Datetime"></p>
         </form>
+        <div>
         <input id="generationBtn" class="btn btn-primary" type="submit" name="generation" value="generation">
+        </div>
       </div>
 
     </VerMLayout>
