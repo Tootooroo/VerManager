@@ -16,6 +16,8 @@ import json
 from django.dispatch import receiver
 from django.db.backends.signals import connection_created
 
+import traceback
+
 revSyncner = None
 
 class RevSync(Thread):
@@ -38,7 +40,11 @@ class RevSync(Thread):
                              author=rev.author_name,
                              comment=rev.message,
                              dateTime=RevSync.timeFormat(rev.committed_date, "+08:00"))
-        revision.save()
+        try:
+            revision.save()
+        except:
+            traceback.print_exc()
+
         return revision
 
     # format of offset if "+08:00"

@@ -19,9 +19,6 @@ class ManagerConfig(AppConfig):
 
     def ready(self):
 
-        if os.environ.get("RUN_MAIN") != 'true':
-            return None
-
         global initialized
         if initialized == False:
             initialized = True

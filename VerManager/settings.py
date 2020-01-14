@@ -25,7 +25,7 @@ SECRET_KEY = '6uler=ay#_%8&f5d!_8ktc^la6i096g&q%_w$x(#7%1v1u3)hc'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["10.5.4.26"]
+ALLOWED_HOSTS = ["10.5.1.30"]
 
 
 # Application definition
@@ -77,8 +77,8 @@ WSGI_APPLICATION = 'VerManager.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'try',
-        'USER': 'ver',
+        'NAME': 'vermanager',
+        'USER': 'verM',
         'PASSWORD': '123456',
         'HOST': 'localhost',
         'PORT': '5432'

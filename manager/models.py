@@ -5,9 +5,9 @@ from django.utils import timezone
 
 # Create your models here.
 class Revisions(models.Model):
-    sn = models.CharField(max_length=30, primary_key=True) # type: ignore
+    sn = models.CharField(max_length=50, primary_key=True) # type: ignore
     author = models.CharField(max_length=25) # type: ignore
-    comment = models.CharField(max_length=1024) # type: ignore
+    comment = models.CharField(max_length=2048) # type: ignore
     dateTime = models.DateTimeField(default=timezone.now) # type: ignore
 
     def __str__(self):
@@ -15,7 +15,7 @@ class Revisions(models.Model):
 
 class Versions(models.Model):
     vsn = models.CharField(max_length=50, primary_key=True) # type: ignore
-    sn = models.CharField(max_length=30) # type: ignore
+    sn = models.CharField(max_length=50) # type: ignore
     dateTime = models.DateTimeField(default=timezone.now) # type: ignore
 
     def __str__(self):
