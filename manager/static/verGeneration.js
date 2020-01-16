@@ -1,10 +1,9 @@
 import util from "./lib/util.js";
 import { ok, error } from "./lib/type.js";
 
-var verSeperator = "__<?>__";
+export { verGeneration_main };
 
-// Main
-verGeneration_main();
+var verSeperator = "__<?>__";
 
 // Definitions
 function verGeneration_main() {

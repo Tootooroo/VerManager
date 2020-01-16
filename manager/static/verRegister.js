@@ -1,12 +1,11 @@
 import util from "./lib/util.js";
 import { ok, error } from "./lib/type.js";
 
+export { verRegister_main };
+
 var NUM_OF_REVISION_CELL = 10;
 var revSeperator = "__<?>__";
 var revItemSeperator = "<:>";
-
-// Main
-verRegister_main();
 
 // Defitions
 function RevInfos(sn, author, comment) {
