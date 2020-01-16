@@ -224,6 +224,9 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
             destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", "./data")
             task.setData("http://127.0.0.1:8000/static/" + destFileName)
 
+        elif state == Task.STATE_FAILURE:
+            worker.removeTask(taskId)
+
         print(ident + " change to state " + str(state))
         task.stateChange(state)
 
