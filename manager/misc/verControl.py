@@ -114,6 +114,9 @@ class RevSync(Thread):
             # database
             body = self.gitlabWebHooksChecking(request)
 
+            if body == None:
+                continue
+
             last_commit = body['object_attributes']['last_commit']
             sn_ = last_commit['id']
             author_ = last_commit['author']['name']
