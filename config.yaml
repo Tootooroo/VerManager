@@ -1,0 +1,8 @@
+Port: 8024
+
+LogDir: ./log
+
+GitlabUrl: http://gpon.git.com:8011
+PrivateToken: 4mU2joxotSkzTqLPhvgu
+
+TimeZone: +8:00

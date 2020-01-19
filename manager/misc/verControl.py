@@ -2,6 +2,8 @@
 #
 # This module define a object that deal with Revisions
 
+import manager.misc.components as Components
+
 from typing import *
 
 from threading import Thread
@@ -30,16 +32,22 @@ class RevSync(Thread):
     def __init__(self):
         Thread.__init__(self)
 
+        cfgs = Components.config
+
+        url = cfg.getConfig('GitlabUrl')
+        token = cfg.getConfig('PrivateToken')
         # fixme: repo url and token key must not a constant just place these in
         #        configuration file
-        self.gitlabRef = gitlab.Gitlab("http://gpon.git.com:8011", "4mU2joxotSkzTqLPhvgu");
+        self.gitlabRef = gitlab.Gitlab(url, token);
         self.gitlabRef.auth()
 
     def revTransfer(rev):
+        tz = Components.config.getConfig('TimeZone')
+
         revision = Revisions(sn=rev.id,
                              author=rev.author_name,
                              comment=rev.message,
-                             dateTime=RevSync.timeFormat(rev.committed_date, "+08:00"))
+                             dateTime=RevSync.timeFormat(rev.committed_date, tz))
         try:
             revision.save()
         except:
@@ -104,6 +112,7 @@ class RevSync(Thread):
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
     def run(self):
+        tz = Components.config.getConfig('TimeZone')
         while True:
             request = RevSync.revQueue.get(block=True, timeout=None)
 
@@ -118,7 +127,7 @@ class RevSync(Thread):
             sn_ = last_commit['id']
             author_ = last_commit['author']['name']
             comment_ = last_commit['message']
-            date_time_ = RevSync.timeFormat(last_commit['timestamp'], '+08:00')
+            date_time_ = RevSync.timeFormat(last_commit['timestamp'], tz)
 
             rev = Revisions(sn = sn_,
                             author = author_,

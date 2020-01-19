@@ -12,7 +12,7 @@ from threading import Lock
 import traceback
 
 from basic.letter import Letter
-from info import Info
+from .basic.info import Info
 from basic.type import *
 
 from multiprocessing import Pool, Queue, Manager

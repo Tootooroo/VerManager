@@ -25,11 +25,21 @@ class ManagerConfig(AppConfig):
         else:
             return None
 
+        # Load arguments
+        configPath = sys.argv[1]
+
+        # Load configuration file
+        info = Info(configPath)
+        Components.config = info
+
+        port = info.getConfig('Port')
+        logDir = info.getConfig('LogDir')
+
         # Daemon processes initialization
-        workerRoom = WorkerRoom('127.0.0.1', 8024)
+        workerRoom = WorkerRoom('0.0.0.0', port)
         dispatcher = Dispatcher(workerRoom)
         eventListener = EventListener(workerRoom)
-        logger = Logger("./log")
+        logger = Logger(logDir)
 
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)

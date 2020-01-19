@@ -222,7 +222,9 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
             del fdSet [taskId]
 
             destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", "./data")
-            task.setData("http://127.0.0.1:8000/static/" + destFileName)
+
+            url = Components.config.getConfig('GitlabUrl')
+            task.setData(url + "/static/" + destFileName)
 
         print(ident + " change to state " + str(state))
         task.stateChange(state)
