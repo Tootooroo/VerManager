@@ -3,6 +3,9 @@
 from typing import *
 from manager.misc.basic.type import *
 
+from datetime import datetime
+from threading import Lock
+
 TaskState = int
 
 class Task:
@@ -26,17 +29,40 @@ class Task:
         # Indicate that the number of client request to the task
         self.refs = 0
 
+        self.lastAccess = datetime.utcnow()
+
     def id(self) -> str:
         return self.taskId
+
+    def lastUpdate(self) -> None:
+        self.lastAccess = datetime.utcnow()
+
+    def last(self) -> datetime:
+        return self.lastAccess
 
     def taskState(self) -> TaskState:
         return self.state
 
-    def stateChange(self, state: TaskState) -> None:
+    def stateChange(self, state:int) -> None:
         self.state = state
+
+    def toPreState(self) -> None:
+        self.state = Task.STATE_PREPARE
+
+    def toProcState(self) -> None:
+        self.state = Task.STATE_IN_PROC
+
+    def toFinState(self) -> None:
+        self.state = Task.STATE_FINISHED
+
+    def toFailState(self) -> None:
+        self.state = Task.STATE_FAILURE
 
     def setData(self, data: str) -> None:
         self.data = data
+
+    def isPrepare(self) -> bool:
+        return self.state == Task.STATE_PREPARE
 
     def isProc(self) -> bool:
         return self.state == Task.STATE_IN_PROC
@@ -56,16 +82,26 @@ class TaskGroup:
     def __init__(self) -> None:
         self.__dict_tasks = {} # type: Dict[str, Task]
         self.__numOfTasks = 0
+        self.__lock = Lock()
 
     def newTask(self, task: Task) -> None:
-        self.__dict_tasks[task.id()] = task
-        self.__numOfTasks += 1
+        tid = task.id()
+
+        with self.__lock:
+            if tid in self.__dict_tasks:
+                return None
+
+            self.__dict_tasks[task.id()] = task
+            self.__numOfTasks += 1
 
     def remove(self, id: str) -> State:
-        if id in self.__dict_tasks:
+        with self.__lock:
+            if not id in self.__dict_tasks:
+                return Error
+
             del self.__dict_tasks [id]
+            self.__numOfTasks -= 1
             return Ok
-        return Error
 
     def __mark(self, id: str, st: TaskState) -> State:
         task = self.search(id)
@@ -77,6 +113,12 @@ class TaskGroup:
 
     def toList(self) -> List[Task]:
         return list(self.__dict_tasks.values())
+
+    def toList_(self) -> List[str]:
+        l = self.toList()
+        l_id = map(lambda t: t.id(), l)
+
+        return list(l_id)
 
     def markPre(self, id: str) -> State:
         return self.__mark(id, Task.STATE_PREPARE)
@@ -91,7 +133,11 @@ class TaskGroup:
         return self.__mark(id, Task.STATE_FAILURE)
 
     def search(self, id: str) -> Union[Task, None]:
-        if not id in self.__dict_tasks:
-            return None
+        with self.__lock:
+            if not id in self.__dict_tasks:
+                return None
 
-        return self.__dict_tasks[id]
+            return self.__dict_tasks[id]
+
+    def numOfTasks(self) -> int:
+        return self.__numOfTasks

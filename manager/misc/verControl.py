@@ -33,9 +33,11 @@ class RevSync(Thread):
         Thread.__init__(self)
 
         cfgs = Components.config
+        url = cfgs.getConfig('GitlabUrl')
+        token = cfgs.getConfig('PrivateToken')
 
-        url = cfg.getConfig('GitlabUrl')
-        token = cfg.getConfig('PrivateToken')
+        if url == "" or token == "":
+            return None
         # fixme: repo url and token key must not a constant just place these in
         #        configuration file
         self.gitlabRef = gitlab.Gitlab(url, token);
@@ -113,6 +115,7 @@ class RevSync(Thread):
     # to be complicated.
     def run(self):
         tz = Components.config.getConfig('TimeZone')
+
         while True:
             request = RevSync.revQueue.get(block=True, timeout=None)
 
@@ -129,9 +132,7 @@ class RevSync(Thread):
             comment_ = last_commit['message']
             date_time_ = RevSync.timeFormat(last_commit['timestamp'], tz)
 
-            rev = Revisions(sn = sn_,
-                            author = author_,
-                            comment = comment_,
+            rev = Revisions(sn = sn_, author = author_, comment = comment_,
                             dateTime = date_time_)
             rev.save()
 

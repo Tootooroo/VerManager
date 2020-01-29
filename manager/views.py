@@ -36,7 +36,6 @@ def verGenPage(request):
     return render(request, 'verGeneration.html')
 
 def register(request):
-    print(request.POST)
     try:
         verName = request.POST['Version']
         revision = request.POST['verChoice']
@@ -91,13 +90,17 @@ def isGenerationDone(request):
     verIdent = request.POST['verSelect']
 
     if not dispatcher.isTaskExists(verIdent):
-        print(verIdent + " Not Exists")
         return HttpResponseBadRequest()
 
     if dispatcher.isTaskFinished(verIdent):
         resultUrl = dispatcher.retrive(verIdent)
         return HttpResponse(resultUrl)
     elif dispatcher.isTaskInProc(verIdent) or dispatcher.isTaskPrepare(verIdent):
+
+        # Update last counter of Task. This counter will
+        # give help to remove outdated tasks
+        dispatcher.taskLastUpdate(verIdent)
+
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
         dispatcher.removeTask(verIdent)

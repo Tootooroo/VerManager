@@ -15,6 +15,7 @@ from manager.misc.worker import Worker
 from manager.misc.basic.type import *
 from manager.misc.task import TaskState, Task
 from manager.misc.basic.type import *
+from datetime import datetime
 
 class Dispatcher(Thread):
 
@@ -89,13 +90,23 @@ class Dispatcher(Thread):
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
         logger = Components.logger;
-
         logger.log_register("dispatcher")
+
+        counter = 0
 
         while True:
 
+            # Remove oudated tasks
+            self.__taskAging()
+
             # Is there any task in taskWait queue
-            self.taskEvent.wait()
+            # fixme: need to setup a timeout value
+            isArrived = self.taskEvent.wait(1)
+            if not isArrived or counter % 5 == 0:
+                if counter > 10000:
+                    counter = 0
+                continue
+
             logger.log_put("dispatcher", "Task arrived")
 
             # Is there any workers acceptable
@@ -114,6 +125,31 @@ class Dispatcher(Thread):
 
             if len(self.taskWait) == 0:
                 self.taskEvent.clear()
+
+    def __taskAging(self) -> None:
+        tasks = list(self.__tasks.values())
+
+        current = datetime.utcnow()
+        cond_long = lambda t: (current - t.last()).seconds > 60
+
+        # For a task that refs reduce to 0 do aging instance otherwise wait 1 min
+        tasks_outdated = list(filter(lambda t: True if t.refs == 0 else cond_long(t), tasks))
+
+        idents_outdated = list(map(lambda t: t.id(), tasks_outdated))
+
+        for ident in idents_outdated:
+            if not ident in self.__tasks:
+                continue
+
+            t = self.__tasks[ident]
+
+            # Task in proc or prepare status
+            # will not be aging even thought
+            # their counter is out of date.
+            if t.isProc() or t.isPrepare():
+                continue
+
+            del self.__tasks [ident]
 
     # Cancel a task identified by taskId
     # and taskId is unique
@@ -141,8 +177,6 @@ class Dispatcher(Thread):
 
         if task.refs > 0:
             task.refs -= 1
-        else:
-            del self.__tasks [taskId]
 
         return task.data
 
@@ -174,6 +208,13 @@ class Dispatcher(Thread):
 
     def isTaskFinished(self, taskId: str) -> bool:
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
+
+    def taskLastUpdate(self, taskId: str) -> None:
+        if not taskId in self.__tasks:
+            return None
+
+        task = self.__tasks[taskId]
+        task.lastUpdate()
 
     def addWorkers(self, w: Worker) -> State:
         return self.__workers.addWorker(w)

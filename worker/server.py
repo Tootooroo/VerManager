@@ -11,7 +11,7 @@ import typing
 from threading import Lock
 import traceback
 
-from basic.letter import Letter
+from basic.letter import *
 from .basic.info import Info
 from basic.type import *
 
@@ -90,7 +90,10 @@ class TASK_DEAL_DAEMON(Thread):
             if not self.numOfTasksInProc < self.max:
                 # Worker is unable to accept task
                 # just response failure to server
-                letter = Letter(Letter.Response, {"ident":WORKER_NAME}, {"state":"3"})
+                letter = ResponseLetter(
+                    ident = WORKER_NAME,
+                    state = Letter.RESPONSE_STATE_FAILURE,
+                    tid = l.getContent('vsn'))
                 server.transfer(letter)
                 continue
 
@@ -117,9 +120,10 @@ class TASK_DEAL_DAEMON(Thread):
             BUILDING_CMDS = ";".join(BUILDING_CMDS)
 
         # Notify to server the worker is in processing
-        letterInProc = Letter(Letter.Response, \
-                        {"ident":WORKER_NAME, "tid":letter.getContent('vsn')},\
-                        {"state":"1"})
+        letterInProc = ResponseLetter(
+            ident = WORKER_NAME,
+            tid = letter.getContent('vsn'),
+            state = Letter.RESPONSE_STATE_IN_PROC)
         server.transfer(letterInProc)
 
         revision = letter.getContent('sn')
@@ -146,11 +150,12 @@ class TASK_DEAL_DAEMON(Thread):
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
                 for line in file:
-                    binaryLetter= Letter(Letter.BinaryFile, {"tid":vsn}, {"bytes":line})
+                    binaryLetter = BinaryLetter(tid = vsn, bStr = line)
                     server.transfer(binaryLetter)
 
             # Response to server to notify that the task is finished
-            finishedLetter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn}, {"state":"2"})
+            finishedLetter = ResponseLetter(ident = WORKER_NAME, tid = vsn,
+                                            state = Letter.RESPONSE_STATE_FINISHED)
             server.transfer(finishedLetter)
 
             # os.chdir("..")
@@ -158,8 +163,8 @@ class TASK_DEAL_DAEMON(Thread):
 
         except:
             traceback.print_exc()
-            letter = Letter(Letter.Response, {"ident":WORKER_NAME, "tid":vsn},\
-                            {"state":"3"})
+            letter = ResponseLetter(ident = WORKER_NAME, tid = vsn,
+                                    state = Letter.RESPONSE_STATE_FAILURE)
             server.transfer(letter)
             return None
 
@@ -188,10 +193,7 @@ class Server:
         WORKER_NAME = self.info.getConfig('WORKER_NAME')
         MAX_TASK_CAN_PROC = self.info.getConfig('MAX_TASK_CAN_PROC')
 
-
-        propLetter = Letter(Letter.PropertyNotify,\
-                            {"ident":WORKER_NAME},\
-                            {"MAX":str(MAX_TASK_CAN_PROC), "PROC":"0"})
+        propLetter = PropLetter(ident = WORKER_NAME, max = str(MAX_TASK_CAN_PROC), proc = str(0))
         if self.__send(propLetter) == Error:
             return Error
 

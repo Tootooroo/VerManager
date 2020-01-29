@@ -45,6 +45,14 @@ class Logger(Thread):
 
         return Ok
 
+    def log_close(self, logId: LOG_ID) -> None:
+        if not logId in self.logTunnels:
+            return None
+
+        fd = self.logTunnels[logId]
+        fd.close()
+
+
     def __output(self, unit: Tuple[LOG_ID, LOG_MSG]) -> None:
         logId = unit[0]
         logMessage = unit[1]

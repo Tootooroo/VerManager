@@ -7,7 +7,7 @@ from manager.views import index, verRegPage
 
 from manager.misc.verControl import RevSync
 from manager.misc.workerRoom import WorkerRoom
-from manager.misc.basic.letter import Letter
+from manager.misc.basic.letter import *
 from manager.misc.eventListener import EventListener
 from manager.misc.worker import Task
 
@@ -42,7 +42,6 @@ class ClientT(Thread):
         self.action(self.args)
 
 class FunctionalTest(TestCase):
-
     def setUp(self):
         self.browser = webdriver.Firefox()
 
@@ -60,6 +59,7 @@ class HttpRequest_:
         self.body = ""
 
 class UnitTest(TestCase):
+
     def test_index_page(self):
         response = self.client.get('/manager/')
         self.assertTemplateUsed(response, 'index.html')
@@ -73,7 +73,11 @@ class UnitTest(TestCase):
                                     data = { 'Version' : 'V1', 'verChoice' : 'XXXX' })
         self.assertTrue(response.status_code == 200)
 
-    def test_new_rev(self):
+    def tes_new_rev(self):
+        import manager.misc.components as Components
+        from manager.misc.basic.info import Info
+        Components.config = Info("./config.yaml")
+
         revSyncner = RevSync()
 
         revSyncner.revDBInit()
@@ -117,24 +121,47 @@ class UnitTest(TestCase):
         except:
             self.assertTrue(False)
 
+    def test_info(self):
+        from manager.misc.basic.info import Info
+
+        cfgs = Info("./config.yaml")
+
+        predicates = [
+            lambda c: "Address" in c,
+            lambda c: "Port" in c,
+            lambda c: "LogDir" in c,
+            lambda c: "ResultDir" in c,
+            lambda c: "GitlabUrl" in c,
+            lambda c: "PrivateToken" in c,
+            lambda c: "TimeZone" in c
+        ]
+
+        self.assertTrue(cfgs.validityChecking(predicates))
+
     def test_letter(self):
 
         def letterTest(l):
             self.assertEqual(Letter.NewTask, l.type_)
             self.assertEqual(content, l.content)
             self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
-            self.assertEqual('value', l.getContent('key'))
-            self.assertEqual('value', l.getHeader('key'))
 
-        header = {"key":"value"}
-        content = {"key":"value"}
+            # Content testing
+            self.assertEqual('sn', l.getContent('sn'))
+            self.assertEqual('vsn', l.getContent('vsn'))
+            self.assertEqual('123', l.getContent('datetime'))
+
+            # Header testing
+            self.assertEqual('t', l.getHeader('tid'))
+            self.assertEqual('i', l.getHeader('ident'))
+
+        header = {"ident":"i", "tid":"t"}
+        content = {"sn":"sn", "vsn":"vsn", "datetime":"123"}
         l = Letter(Letter.NewTask, header, content)
 
         letterTest(l)
 
-
         # Json to letter
-        l1 = Letter.json2Letter('{"type":"new", "header":{"key":"value"},"content":{"key":"value"}}')
+        l1 = Letter.json2Letter('{"type":"new", "header":{"ident":"i", "tid":"t"},"content":{"sn":"sn", "vsn":"vsn", "datetime":"123"}}')
         letterTest(l1)
 
         # Letter parse
@@ -149,7 +176,6 @@ class UnitTest(TestCase):
                         + tid \
                         + (123123).to_bytes(4, "big")
         l_parsed = Letter.parse(letterInBytes)
-        print("l_parsed" + l_parsed.toString())
 
         self.assertEqual(tid.decode(), l_parsed.getHeader('tid'))
         self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('bytes'))
@@ -169,13 +195,66 @@ class UnitTest(TestCase):
         self.assertEqual(0, Letter.letterBytesRemain(letterInBytes))
         self.assertEqual(1, Letter.letterBytesRemain(letterInBytes_incomplete))
 
-    def tes_worker(self):
+        # Parse testing
+
+        # NewTask Letter
+        newLetter = NewLetter(ident = "123", tid = "tid", sn = "sn", vsn = "vsn", datetime = "123")
+        l = Letter.parse(newLetter.toBytesWithLength())
+
+        self.assertEqual("123", l.getHeader('ident'))
+        self.assertEqual("tid", l.getHeader('tid'))
+        self.assertEqual("sn", l.getContent("sn"))
+        self.assertEqual("vsn", l.getContent("vsn"))
+        self.assertEqual("123", l.getContent("datetime"))
+
+        # Response Letter
+        responseLetter = ResponseLetter(ident = "ident", tid = "tid", state = "s")
+        l = Letter.parse(responseLetter.toBytesWithLength())
+
+        self.assertEqual("ident", l.getHeader("ident"))
+        self.assertEqual("tid", l.getHeader("tid"))
+        self.assertEqual("s", l.getContent("state"))
+
+        # PropertyNotify Letter
+        propLetter = PropLetter(ident = "123", max = "2", proc = "2")
+        l = Letter.parse(propLetter.toBytesWithLength())
+
+        self.assertEqual("123", l.getHeader('ident'))
+        self.assertEqual("2", l.getContent('MAX'))
+        self.assertEqual("2", l.getContent('PROC'))
+
+        # Binary Letter
+        binLetter = BinaryLetter(tid = "123", bStr = b"123")
+        l = Letter.parse(binLetter.toBytesWithLength())
+
+        self.assertEqual("123", l.getHeader('tid'))
+        self.assertEqual(b"123", l.getContent("bytes"))
+
+        # Log Letter
+        logLetter = LogLetter(logId = "123", logMsg = "123")
+        l = Letter.parse(logLetter.toBytesWithLength())
+
+        self.assertEqual("123", l.getHeader('logId'))
+        self.assertEqual("123", l.getContent('logMsg'))
+
+        # Log Register Letter
+        logRegLetter = LogRegLetter(logId = "123")
+        l = Letter.parse(logRegLetter.toBytesWithLength())
+
+        self.assertEqual("123", l.getHeader('logId'))
+
+    def test_worker(self):
         import socket
         import json
         from threading import Thread
 
         from manager.misc.worker import Worker
         from manager.misc.eventListener import EventListener
+
+        from manager.misc.logger import Logger
+        import manager.misc.components as Components
+
+        Components.logger = Logger("./logger")
 
         listener = EventListener(WorkerRoom('localhost', 8013))
         listener.start()
@@ -197,10 +276,11 @@ class UnitTest(TestCase):
 
                 (clientsock, address) = sock.accept()
                 w = Worker(clientsock)
+                w.active()
 
                 test.assertEqual('test', w.ident)
                 test.assertEqual(2, w.max)
-                test.assertEqual(0, w.processing)
+                test.assertEqual(0, w.numOfTaskProc())
                 listener.registerEvent('test_event', Server.testEvent)
                 listener.addWorker(w)
                 test.assertTrue(listener.getWorker("test") != None)
@@ -257,6 +337,11 @@ class UnitTest(TestCase):
 
     def test_WorkerRoom_EventListener(self):
         import json
+
+        from manager.misc.logger import Logger
+        import manager.misc.components as Components
+
+        Components.logger = Logger("./logger")
 
         def register(worker, args):
             el = args[0]
@@ -333,8 +418,6 @@ class UnitTest(TestCase):
             el.start()
             dispatcher.start()
 
-            time.sleep(2)
-
             task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
             dispatcher.dispatch(task)
 
@@ -354,7 +437,7 @@ class UnitTest(TestCase):
             t1.start()
             t2.start()
 
-            time.sleep(10)
+            time.sleep(13)
 
 
         s = Process(target=serverAction)
@@ -376,7 +459,7 @@ class UnitTest(TestCase):
         logger.start()
 
         logger.log_register("123")
-        logger.log_put(("123", "ABC"))
+        logger.log_put("123", "ABC")
 
         time.sleep(10)
 

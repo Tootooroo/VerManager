@@ -74,7 +74,6 @@ class WorkerRoom(Thread):
 
         global wrLog
         logger = Components.logger
-
         logger.log_register(wrLog)
 
         while True:
@@ -89,9 +88,12 @@ class WorkerRoom(Thread):
 
             try:
                 acceptedWorker = Worker(workersocket)
+                acceptedWorker.active()
+
                 ident = acceptedWorker.getIdent()
 
                 logger.log_put(wrLog, "Worker " + ident + " initialized success")
+
             except WorkerInitFailed:
                 logger.log_put(wrLog, "Worker initialize faile and close the socket")
                 workersocket.shutdown(socket.SHUT_RDWR)
@@ -139,11 +141,16 @@ class WorkerRoom(Thread):
             self.__waiting_worker_processing(self.__workers_waiting)
 
             try:
-                (eventType, ident) = self.__eventQueue.get(timeout=1)
+                (eventType, index) = self.__eventQueue.get(timeout=1)
             except Empty:
                 continue
 
-            worker = self.getWorker(ident)
+            if isinstance(index, str):
+                # Via Worker Ident
+                worker = self.getWorker(index)
+            elif isinstance(index, int):
+                # Via Fd in worker
+                worker = self.getWorkerViaFd(index)
 
             if worker is None:
                 continue
@@ -198,6 +205,9 @@ class WorkerRoom(Thread):
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self.__eventQueue.put((eventType, ident))
 
+    def notifyEventFd(self, eventType: EVENT_TYPE, fd: int) -> None:
+        self.__eventQueue.put((eventType, fd))
+
     def getWorkerViaFd(self, fd: int) -> Optional[Worker]:
         workers = list(self.__workers.values())
         theWorker = list(filter(lambda w: w.sock.fileno() == fd, workers))
@@ -247,3 +257,10 @@ class WorkerRoom(Thread):
             self.numOfWorkers -= 1
 
         return Ok
+
+    # Content of dictionary:
+    # { PropertyName:PropertyValue }
+    # e.g { "max":0, "sock":ref, "processing":0, "inProcTask":ref, "ident":name }
+    def statusOfWorker(self, ident:str) -> Dict:
+        worker = self.getWorker(ident)
+        return worker.status()

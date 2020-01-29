@@ -133,15 +133,7 @@ class EventListener(Thread):
                         continue
                 except:
                     traceback.print_exc()
-                    # Notify workerRoom an worker is disconnected
-                    worker = self.workers.getWorkerViaFd(fd)
-
-                    if worker is None:
-                        logger.log_put(letterLog, "workers.getWorkerViaFd() return None")
-                    else:
-                        ident = worker.getIdent()
-                        logger.log_put(letterLog, "Worker " + ident + " is disconnected")
-                        self.workers.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, ident)
+                    self.workers.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED, fd)
 
                     self.entries.unregister(fd)
                     continue
@@ -221,9 +213,13 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
             fdSet[taskId].close()
             del fdSet [taskId]
 
-            destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", "./data")
+            resultDir = Components.config.getConfig('ResultDir')
+            try:
+                destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", resultDir)
+            except FileNotFoundError:
+                Components.logger.log_put(letterLog, "ResultDir's value is invalid")
 
-            url = Components.config.getConfig('GitlabUrl')
+            url = Components.config.getConfig('GitlabUr')
             task.setData(url + "/static/" + destFileName)
 
         print(ident + " change to state " + str(state))
@@ -259,5 +255,4 @@ def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
     logger = Components.logger
 
     logId = letter.getHeader('logId')
-
     logger.log_register(logId)
