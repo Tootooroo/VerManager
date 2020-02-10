@@ -15,10 +15,12 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id: str, content: Dict) -> None:
+    def __init__(self, id: str, sn:str, vsn:str) -> None:
         self.taskId = id
 
-        self.content = content
+        self.__sn = sn
+        self.__vsn = vsn
+
         self.state = Task.STATE_PREPARE
 
         # This field will be set by EventListener while
@@ -30,6 +32,12 @@ class Task:
         self.refs = 0
 
         self.lastAccess = datetime.utcnow()
+
+    def getSN(self) -> str:
+        return self.__sn
+
+    def getVSN(self) -> str:
+        return self.__vsn
 
     def id(self) -> str:
         return self.taskId

@@ -5,8 +5,6 @@
 
 import time
 
-import manager.misc.components as Components
-
 from typing import *
 from functools import reduce
 
@@ -15,12 +13,18 @@ from manager.misc.worker import Worker
 from manager.misc.basic.type import *
 from manager.misc.task import TaskState, Task
 from manager.misc.basic.type import *
+
+from manager.misc.workerRoom import WorkerRoom
+
 from datetime import datetime
+
 
 class Dispatcher(Thread):
 
-    def __init__(self, workerRoom) -> None:
+    def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
         Thread.__init__(self)
+
+        self.__sInst = inst
 
         # A queue contain a collection of tasks
         self.taskWait = [] # type: List[Task]
@@ -57,11 +61,11 @@ class Dispatcher(Thread):
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and __tasks otherwise append to taskWai
-        theWorker = self.__workers.getWorkerWithCond(viaOverhead)
+        workers = self.__workers.getWorkerWithCond(viaOverhead)
 
-        if theWorker != None:
+        if workers != []:
             try:
-                theWorker.do(task)
+                workers[0].do(task)
             except:
                 return False
 
@@ -89,7 +93,7 @@ class Dispatcher(Thread):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        logger = Components.logger;
+        logger = self.__sInst.getModule('Logger')
         logger.log_register("dispatcher")
 
         counter = 0
@@ -111,6 +115,7 @@ class Dispatcher(Thread):
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
+
             if workers == []:
                 logger.log_put("dispatcher", "No acceptable worker")
                 time.sleep(5)
@@ -232,7 +237,7 @@ def workerLost_redispatch(w: Worker, d: Dispatcher) -> None:
 
 # Method to get an online worker which
 # with lowest overhead of all online workerd
-def viaOverhead(workers: List[Worker]) -> Optional[Worker]:
+def viaOverhead(workers: List[Worker]) -> List[Worker]:
     # Filter out workers which is not in online status or not able to accept
     onlineWorkers = acceptableWorkers(workers)
 
@@ -241,7 +246,9 @@ def viaOverhead(workers: List[Worker]) -> Optional[Worker]:
 
     # Find out the worker with lowest overhead on a collection of online acceptable workers
     f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
-    return reduce(f, onlineWorkers)
+    theWorker = reduce(f, onlineWorkers)
+
+    return [theWorker]
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     f_online_acceptable = lambda w: w.isOnline() and w.isAbleToAccept()

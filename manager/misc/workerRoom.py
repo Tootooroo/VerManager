@@ -5,6 +5,7 @@
 import socket
 
 from threading import Lock
+
 from manager.misc.basic.type import *
 from manager.misc.worker import Worker, WorkerInitFailed
 
@@ -15,12 +16,10 @@ from manager.misc.util import spawnThread
 
 from typing import *
 
-import manager.misc.components as Components
-
 # Type alias
 EVENT_TYPE = int
 hookTuple = Tuple[Callable[[Worker, Any], None], Any]
-filterFunc = Callable[[List[Worker]], Optional[Worker]]
+filterFunc = Callable[[List[Worker]], List[Worker]]
 
 # Constant
 wrLog = "wrLog"
@@ -33,8 +32,12 @@ class WorkerRoom(Thread):
     EVENT_DISCONNECTED = 1
     EVENT_WAITING = 2
 
-    def __init__(self, host:str, port:int) -> None:
+    def __init__(self, host:str, port:int, sInst:Any) -> None:
         Thread.__init__(self)
+
+        configs = sInst.getModule('Config')
+
+        self.__serverInst = sInst
 
         # This lock is use to protect __workers
         # while add or remove workers from it
@@ -64,6 +67,10 @@ class WorkerRoom(Thread):
         self.__host = host
         self.__port = port
 
+        self.__WAITING_INTERVAL = int(configs.getConfig('WaitingInterval'))
+        if self.__WAITING_INTERVAL == "":
+            self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
+
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.__host, self.__port))
@@ -73,7 +80,7 @@ class WorkerRoom(Thread):
         maintainer = spawnThread(lambda wr: wr.maintain(), self)
 
         global wrLog
-        logger = Components.logger
+        logger = self.__serverInst.getModule('Logger')
         logger.log_register(wrLog)
 
         while True:
@@ -117,6 +124,8 @@ class WorkerRoom(Thread):
 
                 list(map(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)) # type: ignore
 
+                logger.log_put(wrLog, "Worker " + ident + " is reconnect")
+
                 self.syncLock.release()
 
                 continue
@@ -135,54 +144,53 @@ class WorkerRoom(Thread):
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
     def maintain(self) -> None:
-        logger = Components.logger
 
         while True:
+            self.__waiting_worker_update()
             self.__waiting_worker_processing(self.__workers_waiting)
 
-            try:
-                (eventType, index) = self.__eventQueue.get(timeout=1)
-            except Empty:
-                continue
+    def __waiting_worker_update(self) -> None:
+        logger = self.__serverInst.getModule('Logger')
 
-            if isinstance(index, str):
-                # Via Worker Ident
-                worker = self.getWorker(index)
-            elif isinstance(index, int):
-                # Via Fd in worker
-                worker = self.getWorkerViaFd(index)
+        try:
+            (eventType, index) = self.__eventQueue.get(timeout=1)
+        except Empty:
+            return None
 
-            if worker is None:
-                continue
+        if isinstance(index, str):
+            # Via Worker Ident
+            worker = self.getWorker(index)
+        elif isinstance(index, int):
+            # Via Fd in worker
+            worker = self.getWorkerViaFd(index)
 
-            ident = worker.getIdent()
+        if worker is None:
+            return None
 
-            if eventType == WorkerRoom.EVENT_DISCONNECTED:
-                logger.log_put(wrLog, "Worker " + ident + \
-                               " is disconnected changed state into Waiting")
+        ident = worker.getIdent()
 
-                # Update worker's counter
-                worker.setState(Worker.STATE_WAITING)
-                worker.counterSync()
+        if eventType == WorkerRoom.EVENT_DISCONNECTED:
+            logger.log_put(wrLog, "Worker " + ident + \
+                            " is disconnected changed state into Waiting")
 
-                self.removeWorker(ident)
+            # Update worker's counter
+            worker.setState(Worker.STATE_WAITING)
+            self.removeWorker(ident)
 
-                with self.syncLock:
-                    self.__workers_waiting[ident] = worker
+            with self.syncLock:
+                self.__workers_waiting[ident] = worker
 
-                list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)) # type: ignore
+            list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)) # type: ignore
 
-    # Update workers's counter and deal with workers
-    # thoses out of date
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
-        logger = Components.logger
+        logger = self.__serverInst.getModule('Logger')
 
         workers_list = list(workers.values())
 
         if len(workers) == 0:
             return None
 
-        outOfTime = list(filter(lambda w: w.waitCounter() > 300, workers_list))
+        outOfTime = list(filter(lambda w: w.waitCounter() > self.__WAITING_INTERVAL, workers_list))
 
         for worker in outOfTime:
             ident = worker.getIdent()
@@ -191,7 +199,8 @@ class WorkerRoom(Thread):
             worker.setState(Worker.STATE_OFFLINE)
             list(map(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)) # type: ignore
 
-        list(map(lambda w: self.removeWorker(w.getIdent()), outOfTime))
+        for w in outOfTime:
+            del self.__workers_waiting [w.getIdent()]
 
     def hookRegister(self, hook: hookTuple) -> None:
         self.hooks.append(hook)
@@ -224,7 +233,7 @@ class WorkerRoom(Thread):
 
             return self.__workers[ident]
 
-    def getWorkerWithCond(self, condRtn: filterFunc) -> Optional[Worker]:
+    def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
         with self.lock:
             workerList = list(self.__workers.values())
             return condRtn(workerList)
@@ -237,6 +246,7 @@ class WorkerRoom(Thread):
 
             self.__workers[ident] = w
             self.numOfWorkers += 1
+
             return Ok
 
     def isExists(self, ident: str) -> bool:
@@ -247,6 +257,9 @@ class WorkerRoom(Thread):
 
     def getNumOfWorkers(self) -> int:
         return self.numOfWorkers
+
+    def getNumOfWorkersInWait(self) -> int:
+        return len(self.__workers_waiting)
 
     def removeWorker(self, ident: str) -> State:
         with self.lock:

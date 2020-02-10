@@ -1,3 +1,5 @@
+# EventListener
+
 import socket
 import zipfile
 import select
@@ -11,8 +13,6 @@ from manager.misc.basic.type import *
 from manager.misc.workerRoom import WorkerRoom
 from manager.misc.basic.letter import Letter
 
-import manager.misc.components as Components
-
 import traceback
 
 # Constant
@@ -22,8 +22,10 @@ Handler = Callable[['EventListener', Letter], None]
 
 class EventListener(Thread):
 
-    def __init__(self, workerRoom: WorkerRoom) -> None:
+    def __init__(self, workerRoom: WorkerRoom, inst:Any) -> None:
         global letterLog
+
+        self.__sInst = inst
 
         Thread.__init__(self)
         self.entries = select.poll()
@@ -31,16 +33,22 @@ class EventListener(Thread):
         self.numOfEntries = 0
 
         # Handler in handlers should be unique
-        self.handlers = {} # type: Dict[str, Handler]
+        self.handlers = {} # type: Dict[str, List[Handler]]
 
         # {tid:fd}
         self.taskResultFdSet = {} # type: Dict[str, BinaryIO]
+
+    def refToModule(self, m:str) -> Any:
+        return self.__sInst.getModule(m)
 
     def registerEvent(self, eventType: str, handler: Handler) -> None:
         if eventType in self.handlers:
             return None
 
-        self.handlers[eventType] = handler
+        if not eventType in self.handlers:
+            self.handlers[eventType] = []
+
+        self.handlers[eventType].append(handler)
 
     def unregisterEvent(self, eventType: str) -> None:
         if not eventType in self.handlers:
@@ -53,7 +61,8 @@ class EventListener(Thread):
         self.entries.register(sock.fileno(), select.POLLIN)
 
     def fdUnregister(self, ident: str) -> None:
-        worker = self.getWorker(ident)
+        workers = self.refToModule('WorkerRoom')
+        worker = workers.getWorker()
 
         if not worker is None:
             sock = worker.sock
@@ -86,9 +95,6 @@ class EventListener(Thread):
 
         return Error
 
-    def getWorker(self, ident: str) -> Optional[Worker]:
-        return self.workers.getWorker(ident)
-
     def Acceptor(self, letter: Letter) -> None:
         # Check letter's type
         event = letter.type_
@@ -96,18 +102,18 @@ class EventListener(Thread):
         if event == Letter.NewTask or event == Letter.TaskCancel:
             return None
 
-        handler = self.handlers[event]
-        handler(self, letter)
+        handlers = self.handlers[event]
+        list(map(lambda h: h(self, letter), handlers))
 
     def run(self) -> None:
         global letterLog
-        logger = Components.logger
+        logger = self.__sInst.getModule('Logger')
 
-        if Components.logger is None:
+        if logger is None:
             raise COMPONENTS_LOG_NOT_INIT
         else:
             # Register log files
-            Components.logger.log_register(letterLog)
+            logger.log_register(letterLog)
 
         while True:
             # Polling every 10 seconds due to polling
@@ -141,118 +147,7 @@ class EventListener(Thread):
                 if letter != None:
                     self.Acceptor(letter)
 
-
-# Misc
-def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
-    from manager.models import infoBetweenVer, Versions
-
-    verData = Versions.objects.all().order_by('dateTime') # type: ignore
-    vers = list(map(lambda v: v.vsn, list(verData))) # type: ignore
-
-    try:
-        idx = vers.index(vsn)
-    except ValueError:
-        return ""
-
-    # Which means this is the first versions so no change log to
-    # indicate what is changed from the last version
-    if idx == 0:
-        return ""
-
-    lastVerBefore = vers[idx - 1]
-
-    changeLog = infoBetweenVer(vsn, lastVerBefore)
-
-    with open("./log.txt", "w") as logFile:
-        for log in changeLog:
-            logFile.write(log)
-
-    zipFileName = vsn + "with_log.rar"
-
-    zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
-    for aFile in ["./log.txt", filePath]:
-        zipFd.write(aFile)
-    zipFd.close()
-
-    return zipFileName
-
 # Hooks
-def workerRegister(worker: Worker, args: Any) -> None:
+def workerRegister(worker:Worker, args:Any) -> None:
     eventListener = args[0]
     eventListener.fdRegister(worker)
-
-# Handlers definitions
-
-# Handler to process response of NewTask request
-def responseHandler(eventListener: EventListener, letter: Letter) -> None:
-    # Should verify the letter's format
-    ident = letter.getHeader('ident')
-    taskId = letter.getHeader('tid')
-
-    state = int(letter.getContent('state'))
-
-    worker = eventListener.getWorker(ident)
-
-    if worker is None:
-        return None
-
-    task = worker.searchTask(taskId)
-
-    if not task is None and Task.isValidState(state):
-        # Do some operation after finished such as close file description
-        # of received binary
-        if state == Task.STATE_FINISHED:
-
-            worker.removeTask(taskId)
-
-            # Pending feature
-            # Store result to the target position specified in configuration file
-            # Send email to notify that task id done
-
-            fdSet = eventListener.taskResultFdSet
-            fdSet[taskId].close()
-            del fdSet [taskId]
-
-            resultDir = Components.config.getConfig('ResultDir')
-            try:
-                destFileName = packDataWithChangeLog(taskId, "./data/" + taskId + ".rar", resultDir)
-            except FileNotFoundError:
-                Components.logger.log_put(letterLog, "ResultDir's value is invalid")
-
-            url = Components.config.getConfig('GitlabUr')
-            task.setData(url + "/static/" + destFileName)
-
-        print(ident + " change to state " + str(state))
-        task.stateChange(state)
-
-def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
-    fdSet = eventListener.taskResultFdSet
-    tid = letter.getHeader('tid')
-
-    # This is the first binary letter of the task correspond to the
-    # received tid just open a file and store the relation into fdSet
-    if not tid in fdSet:
-        newFd = open("./data/" + tid + ".rar", "wb")
-        fdSet[tid] = newFd
-
-    fd = fdSet[tid]
-    content = letter.getContent('bytes')
-
-    if isinstance(content, str):
-        return None
-
-    fd.write(content)
-
-def logHandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = Components.logger
-
-    logId = letter.getHeader('logId')
-    logMsg = letter.getContent('logMsg')
-
-    logger.log_put(logId, logMsg)
-
-def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = Components.logger
-
-    logId = letter.getHeader('logId')
-    logger.log_register(logId)

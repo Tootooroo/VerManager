@@ -2,9 +2,11 @@ Address: "127.0.0.1"
 Port: 8024
 
 LogDir: ./log
-ResultDir: ./result_data
+ResultDir: ./data
 
 GitlabUrl: http://gpon.git.com:8011
 PrivateToken: 4mU2joxotSkzTqLPhvgu
 
 TimeZone: +8:00
+
+WaitingInterval: 10

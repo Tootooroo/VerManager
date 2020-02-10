@@ -13,6 +13,11 @@ from manager.misc.worker import Task
 
 from manager.misc.dispatcher import Dispatcher
 
+from manager.misc.util import spawnThread
+
+from manager.misc.server import ServerInst
+import worker.server as Client
+
 import time
 import unittest
 import socket
@@ -243,7 +248,55 @@ class UnitTest(TestCase):
 
         self.assertEqual("123", l.getHeader('logId'))
 
-    def test_worker(self):
+    def test_Connected(self):
+
+        sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
+        sInst.start()
+        time.sleep(1)
+
+        client1 = Client.Client("127.0.0.1", 8012, "./worker/config.yaml", name = "W1")
+        client1.start()
+
+        client2 = Client.Client("127.0.0.1", 8012, "./worker/config.yaml", name = "W2")
+        client2.start()
+
+        time.sleep(1)
+
+        wr = sInst.getModule('WorkerRoom')
+        self.assertEqual(2, wr.getNumOfWorkers())
+
+        # Reconnect tests case
+        client1.disconnect()
+
+        # After client1 disconnect there should be one
+        # worker in wait queue
+        time.sleep(1)
+        self.assertEqual(1, wr.getNumOfWorkersInWait())
+
+        time.sleep(10)
+        self.assertEqual(2, wr.getNumOfWorkers())
+
+        time.sleep(2)
+
+        self.assertEqual(2, wr.getNumOfWorkers())
+        self.assertEqual(0, wr.getNumOfWorkersInWait())
+
+        # Client Stop
+        time.sleep(5)
+
+        client1.stop()
+        client2.stop()
+
+        time.sleep(2)
+
+        self.assertEqual(1, client1.status())
+        self.assertEqual(1, client2.status())
+
+        time.sleep(10)
+
+        self.assertEqual(0, wr.getNumOfWorkersInWait())
+
+    def tes_worker(self):
         import socket
         import json
         from threading import Thread
@@ -261,81 +314,64 @@ class UnitTest(TestCase):
 
         test = self
 
-        class Server(Thread):
-            def __init__(self):
-                Thread.__init__(self)
+        def testEvent(eventListener, letter):
+            test.assertEqual('test_event', letter.typeOfLetter())
+            exit(0)
 
-            def testEvent(eventListener, letter):
-                test.assertEqual('test_event', letter.typeOfLetter())
-                exit(0)
+        def serverAction():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(('localhost', 8011))
+            sock.listen(1)
 
-            def run(self):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.bind(('localhost', 8011))
-                sock.listen(1)
+            (clientsock, address) = sock.accept()
+            w = Worker(clientsock)
+            w.active()
 
-                (clientsock, address) = sock.accept()
-                w = Worker(clientsock)
-                w.active()
+            test.assertEqual('test', w.ident)
+            test.assertEqual(2, w.max)
+            test.assertEqual(0, w.numOfTaskProc())
+            listener.registerEvent('test_event', testEvent)
+            listener.addWorker(w)
+            test.assertTrue(listener.getWorker("test") != None)
 
-                test.assertEqual('test', w.ident)
-                test.assertEqual(2, w.max)
-                test.assertEqual(0, w.numOfTaskProc())
-                listener.registerEvent('test_event', Server.testEvent)
-                listener.addWorker(w)
-                test.assertTrue(listener.getWorker("test") != None)
+            task = Task('1', sn = "123", vsn = "123")
+            w.do(task)
 
-                task = Task('1', {"sn":"123", "vsn":"123"})
-                w.do(task)
+            time.sleep(3)
 
-                time.sleep(3)
+            w.counterSync()
+            test.assertTrue(w.onlineCounter() == 3)
+            test.assertTrue(w.offlineCounter() == 0)
+            test.assertTrue(w.waitCounter() == 0)
 
-                w.counterSync()
-                test.assertTrue(w.onlineCounter() == 3)
-                test.assertTrue(w.offlineCounter() == 0)
-                test.assertTrue(w.waitCounter() == 0)
+        def clientAction():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(('localhost', 8011))
 
-        class Client(Thread):
-            def __init__(self):
-                Thread.__init__(self)
+            # Notify master
+            notifyL = PropLetter(ident = "test", max = "2", proc = "0")
+            Worker.sending(sock, notifyL)
 
-            def run(self):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect(('localhost', 8011))
+            letter = Worker.receving(sock)
 
-                content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
-                content = len(content).to_bytes(2, "big") + content
-                sock.send(content)
+            test.assertEqual(Letter.NewTask, letter.typeOfLetter())
+            test.assertEqual('test', letter.getHeader('ident'))
+            test.assertEqual('1', letter.getHeader('tid'))
+            test.assertEqual('123', letter.getContent('sn'))
+            test.assertEqual('123', letter.getContent('vsn'))
 
-                chunk = sock.recv(100)
-                content = json.loads(chunk.decode()[2:])
+            response = ResponseLetter(ident = "test", tid = "1", state = "2")
+            Worker.sending(sock, response)
 
-                ident = content['header']['ident']
-                tid = content['header']['tid']
-                sn = content['content']['sn']
-                vsn = content['content']['vsn']
-
-                test.assertEqual(Letter.NewTask, content['type'])
-                test.assertEqual('test', ident)
-                test.assertEqual('1', tid)
-                test.assertEqual('123', sn)
-                test.assertEqual('123', vsn)
-
-                response = b'{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"state":"2"}}'
-                response = len(content).to_bytes(2, "big") + response
-                sock.send(response)
-
-        s_thread = Server()
-        s_thread.start()
+        spawnThread(serverAction)
 
         time.sleep(1)
 
-        c_thread = Client()
-        c_thread.start()
+        spawnThread(clientAction)
 
         time.sleep(10)
 
-    def test_WorkerRoom_EventListener(self):
+    def tes_WorkerRoom_EventListener(self):
         import json
 
         from manager.misc.logger import Logger
@@ -343,30 +379,12 @@ class UnitTest(TestCase):
 
         Components.logger = Logger("./logger")
 
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
-
-        def serverAction():
-            workerRoom = WorkerRoom('localhost', 8012)
-            el = EventListener(workerRoom)
-
-            workerRoom.hookRegister((register, [el]))
-
-            workerRoom.start()
-
-            time.sleep(5)
-
-            self.assertTrue(workerRoom.isExists('A'))
-            self.assertTrue(workerRoom.isExists('B'))
-            self.assertTrue(workerRoom.isExists('C'))
-
-            self.assertTrue(workerRoom.getNumOfWorkers() == 3)
-
-        s = ServerT(serverAction)
-        s.start()
+        sInst = ServerInst('localhost', 8012, './config.yaml')
+        sInst.start()
 
         time.sleep(2)
+
+
 
         def clientAction(ident):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -380,15 +398,11 @@ class UnitTest(TestCase):
 
             chunk = sock.recv(100)
 
-            time.sleep(10)
+            time.sleep(2)
 
-        c1 = ClientT(clientAction, 'A')
-        c2 = ClientT(clientAction, 'B')
-        c3 = ClientT(clientAction, 'C')
-
-        c1.start()
-        c2.start()
-        c3.start()
+        spawnThread(clientAction, 'A')
+        spawnThread(clientAction, 'B')
+        spawnThread(clientAction, 'C')
 
         time.sleep(10)
 
@@ -398,7 +412,7 @@ class UnitTest(TestCase):
 
         from worker.server import Server, RESPONSE_TO_SERVER_DAEMON, TASK_DEAL_DAEMON
         from manager.misc.eventListener import responseHandler, binaryHandler
-        from worker.info import Info
+        from worker.basic.info import Info
 
         def register(worker, args):
             el = args[0]
@@ -450,10 +464,11 @@ class UnitTest(TestCase):
         s.join()
         c.join()
 
-    def test_logger(self):
+    def tes_logger(self):
 
         from .misc.logger import Logger
-        from manager.misc.eventListener import responseHandler, logHandler, logRegisterhandler
+        from manager.misc.eventHandlers import responseHandler, \
+            logHandler, logRegisterhandler
 
         logger = Logger("./logger")
         logger.start()

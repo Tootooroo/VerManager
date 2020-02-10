@@ -81,15 +81,18 @@ class Worker:
         return self.sock
 
     def waitCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_WAITING]
 
     def offlineCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_OFFLINE]
 
     def onlineCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_ONLINE]
 
-    def counterSync(self) -> None:
+    def __counterSync(self) -> None:
         delta = datetime.utcnow() - self.__clock
         self.counters[self.state] = delta.seconds
 
@@ -138,9 +141,9 @@ class Worker:
             raise Exception
 
         # Task assign
-        content = task.content
         letter= NewLetter(ident = self.ident, tid = task.id(),
-                          sn = content['sn'], vsn = content['vsn'], datetime = content['datetime'])
+                          sn = task.getSN(), vsn = task.getVSN(),
+                          datetime = str(datetime.utcnow()))
         self.__send(letter)
 
         # Register task into task group
