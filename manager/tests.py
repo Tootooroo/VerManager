@@ -25,27 +25,6 @@ from threading import Thread
 from multiprocessing import Process
 
 # Create your tests here.
-
-class ServerT(Thread):
-
-    def __init__(self, action):
-        Thread.__init__(self)
-        self.action = action
-
-    def run(self):
-        self.action()
-
-
-class ClientT(Thread):
-
-    def __init__(self, action, args):
-        Thread.__init__(self)
-        self.action = action
-        self.args = args
-
-    def run(self):
-        self.action(self.args)
-
 class FunctionalTest(TestCase):
     def setUp(self):
         self.browser = webdriver.Firefox()
@@ -248,7 +227,7 @@ class UnitTest(TestCase):
 
         self.assertEqual("123", l.getHeader('logId'))
 
-    def test_Connected(self):
+    def tes_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
         sInst.start()
@@ -260,7 +239,7 @@ class UnitTest(TestCase):
         client2 = Client.Client("127.0.0.1", 8012, "./worker/config.yaml", name = "W2")
         client2.start()
 
-        time.sleep(1)
+        time.sleep(2)
 
         wr = sInst.getModule('WorkerRoom')
         self.assertEqual(2, wr.getNumOfWorkers())
@@ -274,6 +253,7 @@ class UnitTest(TestCase):
         self.assertEqual(1, wr.getNumOfWorkersInWait())
 
         time.sleep(10)
+        self.assertEqual(0, wr.getNumOfWorkersInWait())
         self.assertEqual(2, wr.getNumOfWorkers())
 
         time.sleep(2)
@@ -287,7 +267,7 @@ class UnitTest(TestCase):
         client1.stop()
         client2.stop()
 
-        time.sleep(2)
+        time.sleep(3)
 
         self.assertEqual(1, client1.status())
         self.assertEqual(1, client2.status())
@@ -296,241 +276,102 @@ class UnitTest(TestCase):
 
         self.assertEqual(0, wr.getNumOfWorkersInWait())
 
-    def tes_worker(self):
-        import socket
-        import json
-        from threading import Thread
-
-        from manager.misc.worker import Worker
-        from manager.misc.eventListener import EventListener
+    def test_logger(self):
 
         from manager.misc.logger import Logger
-        import manager.misc.components as Components
-
-        Components.logger = Logger("./logger")
-
-        listener = EventListener(WorkerRoom('localhost', 8013))
-        listener.start()
-
-        test = self
-
-        def testEvent(eventListener, letter):
-            test.assertEqual('test_event', letter.typeOfLetter())
-            exit(0)
-
-        def serverAction():
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(('localhost', 8011))
-            sock.listen(1)
-
-            (clientsock, address) = sock.accept()
-            w = Worker(clientsock)
-            w.active()
-
-            test.assertEqual('test', w.ident)
-            test.assertEqual(2, w.max)
-            test.assertEqual(0, w.numOfTaskProc())
-            listener.registerEvent('test_event', testEvent)
-            listener.addWorker(w)
-            test.assertTrue(listener.getWorker("test") != None)
-
-            task = Task('1', sn = "123", vsn = "123")
-            w.do(task)
-
-            time.sleep(3)
-
-            w.counterSync()
-            test.assertTrue(w.onlineCounter() == 3)
-            test.assertTrue(w.offlineCounter() == 0)
-            test.assertTrue(w.waitCounter() == 0)
-
-        def clientAction():
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('localhost', 8011))
-
-            # Notify master
-            notifyL = PropLetter(ident = "test", max = "2", proc = "0")
-            Worker.sending(sock, notifyL)
-
-            letter = Worker.receving(sock)
-
-            test.assertEqual(Letter.NewTask, letter.typeOfLetter())
-            test.assertEqual('test', letter.getHeader('ident'))
-            test.assertEqual('1', letter.getHeader('tid'))
-            test.assertEqual('123', letter.getContent('sn'))
-            test.assertEqual('123', letter.getContent('vsn'))
-
-            response = ResponseLetter(ident = "test", tid = "1", state = "2")
-            Worker.sending(sock, response)
-
-        spawnThread(serverAction)
-
-        time.sleep(1)
-
-        spawnThread(clientAction)
-
-        time.sleep(10)
-
-    def tes_WorkerRoom_EventListener(self):
-        import json
-
-        from manager.misc.logger import Logger
-        import manager.misc.components as Components
-
-        Components.logger = Logger("./logger")
-
-        sInst = ServerInst('localhost', 8012, './config.yaml')
-        sInst.start()
-
-        time.sleep(2)
-
-
-
-        def clientAction(ident):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('localhost', 8012))
-
-            content = b'{"type":"notify", "header":{"ident":"' + ident.encode() + \
-                      b'"}, "content":{"MAX":"2", "PROC":"0"}}'
-
-            content = len(content).to_bytes(2, "big") + content
-            sock.send(content)
-
-            chunk = sock.recv(100)
-
-            time.sleep(2)
-
-        spawnThread(clientAction, 'A')
-        spawnThread(clientAction, 'B')
-        spawnThread(clientAction, 'C')
-
-        time.sleep(10)
-
-    def tes_integration(self):
-        import sys
-        sys.path.append("./worker")
-
-        from worker.server import Server, RESPONSE_TO_SERVER_DAEMON, TASK_DEAL_DAEMON
-        from manager.misc.eventListener import responseHandler, binaryHandler
-        from worker.basic.info import Info
-
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
-
-        def serverAction():
-            workerRoom = WorkerRoom('127.0.0.1', 8024)
-            el = EventListener(workerRoom)
-            dispatcher = Dispatcher(workerRoom)
-
-            el.registerEvent(Letter.Response, responseHandler)
-            el.registerEvent(Letter.BinaryFile, binaryHandler)
-
-            workerRoom.hookRegister((register, [el]))
-
-            workerRoom.start()
-            el.start()
-            dispatcher.start()
-
-            task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
-            dispatcher.dispatch(task)
-
-            time.sleep(10)
-
-        def clientAction():
-            info = Info("worker/config.yaml")
-            print(info.getConfigs())
-
-            s = Server(info)
-            self.assertTrue(s.init() == 0)
-
-
-            t1 = TASK_DEAL_DAEMON(s, info)
-            t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
-
-            t1.start()
-            t2.start()
-
-            time.sleep(13)
-
-
-        s = Process(target=serverAction)
-        c = Process(target=clientAction)
-
-        s.start()
-        time.sleep(1)
-        c.start()
-
-        s.join()
-        c.join()
-
-    def tes_logger(self):
-
-        from .misc.logger import Logger
-        from manager.misc.eventHandlers import responseHandler, \
-            logHandler, logRegisterhandler
 
         logger = Logger("./logger")
         logger.start()
 
-        logger.log_register("123")
-        logger.log_put("123", "ABC")
+        logger.log_register("Test")
+        Logger.putLog(logger, "Test", "123")
 
-        time.sleep(10)
 
-        # log letter
-        import manager.misc.components as Components
+    def test_dispatcher(self):
 
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
+        # Create a server
+        sInst = ServerInst("127.0.0.1", 8013, "./config.yaml")
+        sInst.start()
 
-        def serverAction():
-            w = WorkerRoom('127.0.0.1', 8025)
-            e = EventListener(w)
-            l = Logger("./log")
-
-            Components.logger = l
-
-            e.registerEvent(Letter.Response, responseHandler)
-            e.registerEvent(Letter.LogRegister, logRegisterhandler)
-            e.registerEvent(Letter.Log, logHandler)
-            w.hookRegister((register, [e]))
-
-            l.start()
-            w.start()
-            e.start()
-
-            time.sleep(3)
-
-        def clientAction(args):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('127.0.0.1', 8025))
-
-            content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
-            content = len(content).to_bytes(2, "big") + content
-
-            sock.send(content)
-
-            logRegLetter = b'{"type":"logRegister", "header":{"logId":"logTest"}, "content":{"1":1}}'
-            logRegLetter = len(logRegLetter).to_bytes(2, "big") + logRegLetter
-            sock.send(logRegLetter)
-
-            logLetter = b'{"type":"log", "header":{"logId":"logTest"}, "content":{"logMsg":"Logger Test success"}}'
-            logLetter = len(logLetter).to_bytes(2, "big") + logLetter
-
-            sock.send(logLetter)
-
-            time.sleep(3)
-
-        s = ServerT(serverAction)
-        c = ClientT(clientAction, None)
-
-        s.start()
         time.sleep(1)
-        c.start()
 
-        time.sleep(10)
+        # Create workers
+        client1 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W1")
+        client2 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W2")
+        client3 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W3")
+        client4 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W4")
+
+        workers = [client1, client2, client3, client4]
+
+        # Activate workers
+        list( map(lambda c: c.start(), workers) )
+
+        # Then wait a while so workers have enough time to connect to master
+        time.sleep(2)
+
+        # Get 'Dispatcher' Module on server so we can dispatch task to workers
+        dispatcher = sInst.getModule("Dispatcher")
+        if not isinstance(dispatcher, Dispatcher):
+            self.assertTrue(False)
+
+        # Dispatch task
+        task = Task("123", "123", "123")
+        dispatcher.dispatch(task)
+
+        time.sleep(3)
+
+        # To check workers is task dispatch to one of four workers
+        w_set = list( filter(lambda w: len(w.inProcTasks()) > 0, workers) )
+
+        # There should be only one worker has task in processing
+        self.assertTrue(len(w_set) == 1)
+
+        w = w_set[0]
+
+        # The task's ident should be match the ident of Task
+        self.assertEqual("123", w.inProcTasks()[0])
+
+        workerRoom = sInst.getModule("WorkerRoom")
+        if not isinstance(workerRoom, WorkerRoom):
+            self.assertTrue(False)
+
+        status = workerRoom.statusOfWorker(w.getIdent())
+        self.assertEqual(1, status["processing"])
+        self.assertEqual("123", status["inProcTask"][0])
+
+        # Now let us dispatch three more task to workers
+        # if nothing wrong each of these workers should
+        # in work.
+        task = Task("124", "123", "123")
+        dispatcher.dispatch(task)
+
+        task = Task("125", "123", "123")
+        dispatcher.dispatch(task)
+
+        task = Task("126", "123", "123")
+        dispatcher.dispatch(task)
+
+        time.sleep(5)
+
+        tasks = ["123", "124", "125", "126"]
+        for w in workers:
+            status = workerRoom.statusOfWorker(w.getIdent())
+
+            self.assertTrue(len(w.inProcTasks()) == 1)
+            self.assertEqual(w.inProcTasks()[0], status["inProcTask"][0])
+
+        # Now let client4 stop
+        client4.stop()
+
+        # Wait 15 seconds so client4 will be removed
+        # from WorkerRoom
+        time.sleep(15)
+
+        # Now client1 should have two task in processing
+        cond = len(client1.inProcTasks()) == 2 or \
+               len(client2.inProcTasks()) == 2 or \
+               len(client3.inProcTasks()) == 2
+        self.assertTrue(cond)
 
 
 if __name__ == '__main__':

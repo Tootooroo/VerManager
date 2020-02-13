@@ -8,6 +8,7 @@ from manager.misc.basic.letter import *
 from manager.misc.task import Task
 
 from manager.misc.storage import Storage, StoChooser
+from manager.misc.logger import Logger
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
     from manager.models import infoBetweenVer, Versions
@@ -92,7 +93,7 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
         destFileName = packDataWithChangeLog(taskId, chooser.path(), "./data")
     except FileNotFoundError:
         logger = eventListener.refToModule('Logger')
-        logger.log_put(letterLog, "ResultDir's value is invalid")
+        Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
     workers = eventListener.refToModule('WorkerRoom')
     worker = workers.getWorker(ident)
@@ -137,7 +138,8 @@ def logHandler(eventListener: EventListener, letter: Letter) -> None:
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
 
-    logger.log_put(logId, logMsg)
+    if isinstance(logMsg, str):
+        Logger.putLog(logger, logId, logMsg)
 
 def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
     logger = eventListener.refToModule('Logger')

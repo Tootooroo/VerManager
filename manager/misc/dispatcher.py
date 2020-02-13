@@ -18,6 +18,8 @@ from manager.misc.workerRoom import WorkerRoom
 
 from datetime import datetime
 
+from manager.misc.logger import Logger
+
 
 class Dispatcher(Thread):
 
@@ -69,7 +71,6 @@ class Dispatcher(Thread):
             except:
                 return False
 
-            print("push " + task.id() + " into tasks")
             self.__tasks[task.id()] = task
             return True
 
@@ -94,7 +95,9 @@ class Dispatcher(Thread):
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
         logger = self.__sInst.getModule('Logger')
-        logger.log_register("dispatcher")
+
+        if not logger is None:
+            logger.log_register("dispatcher")
 
         counter = 0
 
@@ -111,19 +114,19 @@ class Dispatcher(Thread):
                     counter = 0
                 continue
 
-            logger.log_put("dispatcher", "Task arrived")
+            Logger.putLog(logger, "dispatcher", "Task arrived")
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
 
             if workers == []:
-                logger.log_put("dispatcher", "No acceptable worker")
+                Logger.putLog(logger, "dispatcher", "No acceptable worker")
                 time.sleep(5)
                 continue
 
             task = self.taskWait.pop()
 
-            logger.log_put("dispatcher", "Dispatch task: " + task.id())
+            Logger.putLog(logger, "dispatcher", "Dispatch task: " + task.id())
 
             if not self.__dispatch(task):
                 self.taskWait.append(task)
@@ -229,9 +232,13 @@ class Dispatcher(Thread):
 
 
 # Hooks will be registered into WorkerRoom
-def workerLost_redispatch(w: Worker, d: Dispatcher) -> None:
+def workerLost_redispatch(w: Worker, args:Any ) -> None:
     tasks = w.inProcTasks()
-    list(map(lambda task: d.redispatch(task), tasks))
+    dispatcher = args[0]
+
+    print(w.getIdent())
+    print(tasks)
+    list(map(lambda task: dispatcher.redispatch(task), tasks))
 
 # Misc
 
@@ -242,7 +249,7 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
     onlineWorkers = acceptableWorkers(workers)
 
     if onlineWorkers == []:
-        return None
+        return []
 
     # Find out the worker with lowest overhead on a collection of online acceptable workers
     f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w

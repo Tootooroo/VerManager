@@ -72,8 +72,7 @@ def generation(request):
         if version == None:
             return HttpResponseBadRequest()
 
-        task = Task(verIdent,
-                    {"sn":version.sn, "vsn":verIdent, "datetime":dateTime})
+        task = Task(verIdent, {"sn":version.sn, "vsn":verIdent, "datetime":dateTime})
 
         if dispatcher.dispatch(task) == False:
             return HttpResponseBadRequest()

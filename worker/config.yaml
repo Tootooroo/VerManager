@@ -17,14 +17,4 @@ PROCESS_POOL_SIZE: 4
 RESULT_PATH: ./BSP/config/image/link/pack.rar
 
 BUILDING_CMDS:
-  - cd GBN/src
-  - ./gcom_gpon_build_boot.bat 1
-  - ./gcom_gpon_build_boot.bat 2
-  - ./gcom_gpon_build_boot.bat 5
-  - ./gcom_gpon_build_boot.bat 6
-  - cd ../..
-  - cd BSP/config/image/link
-  - link_hybrid_gl5610.bat
-  - link_image_gl89.bat
-  - rar a -k -r -s -ibck pack pack
-  - cd ../../../..
+  - sleep 60

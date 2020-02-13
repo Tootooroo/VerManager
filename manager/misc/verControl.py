@@ -83,6 +83,7 @@ class RevSync(Thread):
 
         return True
 
+    @staticmethod
     def revNewPush(rev: HttpRequest) -> bool:
         RevSync.revQueue.put(rev, block=True, timeout=None)
         return True

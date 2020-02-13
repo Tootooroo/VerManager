@@ -26,7 +26,13 @@ class StopableThread(Thread):
     def stop(self) -> None:
         pass
 
-class RESPONSE_TO_SERVER_DAEMON(StopableThread):
+class Module:
+    pass
+
+class ModuleT(Module, StopableThread):
+    pass
+
+class RESPONSE_TO_SERVER_DAEMON(ModuleT):
 
     def __init__(self, server, info) -> None:
         Thread.__init__(self)
@@ -62,9 +68,9 @@ class RESPONSE_TO_SERVER_DAEMON(StopableThread):
                 time.sleep(5)
                 continue
 
-class TASK_COUNTER_MAINTAIN(StopableThread):
+class TASK_COUNTER_MAINTAIN(ModuleT):
 
-    def __init__(self, t) -> None:
+    def __init__(self, t:'TASK_DEAL_DAEMON') -> None:
         Thread.__init__(self)
         self.tasks = t.inProcTasks
         self.t = t
@@ -79,19 +85,21 @@ class TASK_COUNTER_MAINTAIN(StopableThread):
 
     def run(self) -> None:
         while True:
-
             if self.__status == 1:
                 self.__status = 2
                 return None
 
-            for task in self.tasks:
+            for key in list(self.tasks.keys()):
+                task = self.tasks[key]
+
                 if task.ready() == True:
                     self.t.numOfTasksInProc -= 1
+                    del self.tasks [key]
 
             time.sleep(0.05)
 
 
-class TASK_DEAL_DAEMON(StopableThread):
+class TASK_DEAL_DAEMON(ModuleT):
 
     def __init__(self, server, info) -> None:
         Thread.__init__(self)
@@ -102,8 +110,7 @@ class TASK_DEAL_DAEMON(StopableThread):
         self.pool = Pool( int(info.getConfig('PROCESS_POOL_SIZE')) )
         self.info = info
 
-        self.inProcTasks = [] # type: ignore
-
+        self.inProcTasks = {} # type: Dict[str, Any]
         self.__status = 0
 
     def numOfTasks(self) -> int:
@@ -117,6 +124,12 @@ class TASK_DEAL_DAEMON(StopableThread):
 
     def status(self) -> int:
         return self.__status
+
+    def listOfTasks(self) -> List[Any]:
+        return list( self.inProcTasks.values())
+
+    def listOfTasks_ident(self) -> List[str]:
+        return list( self.inProcTasks.keys())
 
     def run(self) -> None:
 
@@ -150,10 +163,14 @@ class TASK_DEAL_DAEMON(StopableThread):
                 server.transfer(letter)
                 continue
 
+            tid = l.getHeader('tid')
+            if tid in self.inProcTasks:
+                continue
+
             self.numOfTasksInProc += 1
             res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l, self.info))
 
-            self.inProcTasks.append(res)
+            self.inProcTasks[tid] = res
 
     # Processing the assigned task and send back the result to server
     @staticmethod
@@ -221,7 +238,7 @@ class TASK_DEAL_DAEMON(StopableThread):
             server.transfer(letter)
             return None
 
-class Server:
+class Server(Module):
 
     STATE_CONNECTED = 0
     STATE_CONNECTING = 1
@@ -234,7 +251,7 @@ class Server:
     def __init__(self, address:str, port:int, info:Info) -> None:
         self.info = info
 
-        queueSize = int(info.getConfig('QUEUE_SIZE'))
+        queueSize = info.getConfig('QUEUE_SIZE')
         self.q = Manager().Queue(queueSize)
 
         # Lock to protect socket while reconnecting
@@ -294,7 +311,7 @@ class Server:
 
         while ret == Error:
             ret = self.reconnect(workerName, max, proc)
-            time.sleep(timeout)
+            time.sleep(timeout) # type: ignore
 
         return ret
 
@@ -318,7 +335,6 @@ class Server:
             if self.__status != Server.STATE_DISCONNECTED:
                 return Server.SOCK_OK
 
-            print("Reconnect")
 
             if retry >= 0:
                 while retry > 0:
@@ -338,7 +354,7 @@ class Server:
     def __send(self, l:Letter, retry:int = 0) -> int:
         try:
             if isinstance(l, BinaryLetter):
-                Server.__sending_bytes(self.sock, l.binaryPack())
+                Server.__sending_bytes(self.sock, l.binaryPack()) # type: ignore
             else:
                 Server.__sending(self.sock, l)
             return Server.SOCK_OK
@@ -388,7 +404,7 @@ class Server:
             content += chunk
             remain = Letter.letterBytesRemain(content)
 
-        return Letter.parse(content)
+        return Letter.parse(content) # type: ignore
 
     @staticmethod
     def __sending(sock:socket.socket, l:Letter) -> None:
@@ -422,41 +438,57 @@ class Client(Thread):
         self.__mPort = mPort
 
         self.__status = 0
-        self.__modules = [] # type: List[Any]
+        self.__modules = {} # type: Dict[str, Module]
+
+    def getIdent(self) -> str:
+        return self.__name
 
     def stop(self) -> None:
-        for m in self.__modules:
-            if isinstance(m, StopableThread):
+        modules = list(self.__modules.values())
+        for m in modules:
+            if isinstance(m, ModuleT):
                 m.stop()
+
+    def inProcTasks(self) -> List[str]:
+        taskDealer = self.getModule('TASK_DEAL_DAEMON')
+        if not isinstance(taskDealer, TASK_DEAL_DAEMON):
+            return []
+
+        return taskDealer.listOfTasks_ident()
 
     def status(self) -> int:
         return self.__status
 
     def connect(self) -> None:
-        s = list( filter(lambda m: isinstance(m, Server), self.__modules))
-        s1 = list( filter(lambda m: isinstance(m, TASK_DEAL_DAEMON), self.__modules))
+        server = self.getModule('Server')
+        taskDealer = self.getModule('TASK_DEAL_DAEMON')
 
-        if s == [] or len(s) > 1:
+        if server is None or not isinstance(server, Server):
+            return None
+        if taskDealer is None or not isinstance(taskDealer, TASK_DEAL_DAEMON):
             return None
 
-        if s1 == [] or len(s1) > 1:
-            return None
-
-        server = s[0]
-        taskDealer = s1[0]
-
-        server.connect(self.__name, taskDealer.maxNumber(), taskDealer.numOfTasks)
+        server.connect(self.__name, taskDealer.maxNumber(), taskDealer.numOfTasks())
 
 
     def disconnect(self) -> None:
-        s = list( filter(lambda m: isinstance(m, Server), self.__modules))
-        if s == [] or len(s) > 1:
+        server = self.getModule('Server')
+        if server is None or not isinstance(server, Server):
             return None
-
-        server = s[0]
 
         server.disconnect()
 
+    def getModule(self, ident:str) -> Optional[Module]:
+        if not ident in self.__modules:
+            return None
+
+        return self.__modules[ident]
+
+    def addModules(self, ident:str, m:Module) -> None:
+        if ident in self.__modules:
+            return None
+
+        self.__modules[ident] = m
 
     def run(self) -> None:
         info = Info(self.__cfgPath)
@@ -473,27 +505,27 @@ class Client(Thread):
         proc = info.getConfig('PROCESS_POOL_SIZE')
 
         s = Server(address, port, info)
-        s.connect(workerName, int(max), int(proc))
-        self.__modules.append(s)
+        s.connect(workerName, max, proc)
+        self.__modules['Server'] = s
 
         t1 = TASK_DEAL_DAEMON(s, info)
-        self.__modules.append(t1)
+        self.__modules['TASK_DEAL_DAEMON'] = t1
 
         t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
-        self.__modules.append(t2)
+        self.__modules['PROCESS_POLL_SIZE'] = t2
 
-        for m in self.__modules:
-            if isinstance(m, Thread):
+        modulesThread = list( filter(lambda m: isinstance(m, ModuleT), list(self.__modules.values())))
+
+        for m in modulesThread:
+            if isinstance(m, ModuleT):
                 m.start()
 
-        for m in self.__modules:
-            if isinstance(m, Thread):
+        for m in modulesThread:
+            if isinstance(m, ModuleT):
                 m.join()
 
         s.disconnect()
         self.__status = 1
-
-        print("Client Stop")
 
 
 if __name__ == '__main__':
@@ -502,7 +534,7 @@ if __name__ == '__main__':
     info = Info(configPath)
 
     address = info.getConfig('MASTER_ADDRESS', 'host')
-    port = int(info.getConfig('MASTER_ADDRESS', 'port'))
+    port = info.getConfig('MASTER_ADDRESS', 'port')
 
     client = Client(address, port, configPath)
     client.start()

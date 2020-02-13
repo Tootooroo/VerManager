@@ -57,11 +57,21 @@ class Logger(Thread):
         logId = unit[0]
         logMessage = unit[1]
 
+        if not logId in self.logTunnels:
+            return None
+
         logFile = self.logTunnels[logId]
 
         logMessage = self.__format(logMessage)
         logFile.write(logMessage)
         logFile.flush()
+
+    @staticmethod
+    def putLog(log:'Logger', lid:LOG_ID, msg:LOG_MSG) -> None:
+        if log is None:
+            return None
+
+        log.log_put(lid, msg)
 
     @staticmethod
     def __format(message: LOG_MSG) -> str:

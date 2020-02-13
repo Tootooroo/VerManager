@@ -103,7 +103,7 @@ class EventListener(Thread):
             return None
 
         handlers = self.handlers[event]
-        list(map(lambda h: h(self, letter), handlers))
+        list(map(lambda h: h(self, letter), handlers)) # type: ignore
 
     def run(self) -> None:
         global letterLog
@@ -138,7 +138,6 @@ class EventListener(Thread):
                         logger.log_put(letterLog, "Receive invalid letter " + letter.toString())
                         continue
                 except:
-                    traceback.print_exc()
                     self.workers.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED, fd)
 
                     self.entries.unregister(fd)

@@ -10,7 +10,7 @@ from manager.misc.basic.info import Info
 from manager.misc.basic.letter import Letter
 
 from manager.misc.workerRoom import WorkerRoom
-from manager.misc.dispatcher import Dispatcher
+from manager.misc.dispatcher import Dispatcher, workerLost_redispatch
 
 from manager.misc.eventListener import EventListener, workerRegister
 from manager.misc.eventHandlers import responseHandler, binaryHandler, logHandler, logRegisterhandler
@@ -97,6 +97,7 @@ class ServerInst(Thread):
         self.addModule('Storage', storage)
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
+        workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))
 
         if self.isModuleEnable('WorkerRoom'):
             workerRoom.start()

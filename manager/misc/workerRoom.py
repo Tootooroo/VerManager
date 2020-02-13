@@ -13,6 +13,7 @@ from threading import Thread
 from queue import Queue, Empty
 
 from manager.misc.util import spawnThread
+from manager.misc.logger import Logger
 
 from typing import *
 
@@ -67,7 +68,7 @@ class WorkerRoom(Thread):
         self.__host = host
         self.__port = port
 
-        self.__WAITING_INTERVAL = int(configs.getConfig('WaitingInterval'))
+        self.__WAITING_INTERVAL = configs.getConfig('WaitingInterval')
         if self.__WAITING_INTERVAL == "":
             self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
@@ -85,13 +86,13 @@ class WorkerRoom(Thread):
 
         while True:
             (workersocket, address) = self.sock.accept()
-            logger.log_put(wrLog, "A new connection(" + str(address) + ") has been accepted")
+            Logger.putLog(logger, wrLog, "A new connection(" + str(address) + ") has been accepted")
 
             workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
-            logger.log_put(wrLog, "Socket options set up")
+            Logger.putLog(logger, wrLog, "Socket options set up")
 
             try:
                 acceptedWorker = Worker(workersocket)
@@ -99,15 +100,15 @@ class WorkerRoom(Thread):
 
                 ident = acceptedWorker.getIdent()
 
-                logger.log_put(wrLog, "Worker " + ident + " initialized success")
+                Logger.putLog(logger, wrLog, "Worker " + ident + " initialized success")
 
             except WorkerInitFailed:
-                logger.log_put(wrLog, "Worker initialize faile and close the socket")
+                Logger.putLog(logger, wrLog, "Worker initialize faile and close the socket")
                 workersocket.shutdown(socket.SHUT_RDWR)
                 continue
 
             if self.isExists(ident):
-                logger.log_put(wrLog, "Worker " + ident + " is already exist in WorkerRoom")
+                Logger.putLog(logger, wrLog, "Worker " + ident + " is already exist in WorkerRoom")
                 continue
 
             self.syncLock.acquire()
@@ -124,7 +125,7 @@ class WorkerRoom(Thread):
 
                 list(map(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)) # type: ignore
 
-                logger.log_put(wrLog, "Worker " + ident + " is reconnect")
+                Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
 
                 self.syncLock.release()
 
@@ -170,7 +171,7 @@ class WorkerRoom(Thread):
         ident = worker.getIdent()
 
         if eventType == WorkerRoom.EVENT_DISCONNECTED:
-            logger.log_put(wrLog, "Worker " + ident + \
+            Logger.putLog(logger, wrLog, "Worker " + ident + \
                             " is disconnected changed state into Waiting")
 
             # Update worker's counter
@@ -194,7 +195,7 @@ class WorkerRoom(Thread):
 
         for worker in outOfTime:
             ident = worker.getIdent()
-            logger.log_put(wrLog, "Worker " + ident +\
+            Logger.putLog(logger, wrLog, "Worker " + ident +\
                            " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
             list(map(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)) # type: ignore
@@ -206,10 +207,10 @@ class WorkerRoom(Thread):
         self.hooks.append(hook)
 
     def waitingHookRegister(self, hook: hookTuple) -> None:
-        self.hooks.append(hook)
+        self.waitingStateHooks.append(hook)
 
     def disconnHookRegister(self, hook: hookTuple) -> None:
-        self.hooks.append(hook)
+        self.disconnStateHooks.append(hook)
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self.__eventQueue.put((eventType, ident))
@@ -276,4 +277,8 @@ class WorkerRoom(Thread):
     # e.g { "max":0, "sock":ref, "processing":0, "inProcTask":ref, "ident":name }
     def statusOfWorker(self, ident:str) -> Dict:
         worker = self.getWorker(ident)
+
+        if worker is None:
+            return {}
+
         return worker.status()
