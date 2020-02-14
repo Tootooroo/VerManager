@@ -21,6 +21,10 @@ from manager.misc.storage import Storage
 
 from manager.misc.exceptions import INVALID_CONFIGURATIONS
 
+from manager.misc.verControl import RevSync
+
+ServerInstance = None # type: Optional['ServerInst']
+
 predicates = [
     lambda cfgs: "Address" in cfgs,
     lambda cfgs: "Port" in cfgs,
@@ -93,8 +97,10 @@ class ServerInst(Thread):
         logger = Logger("./logger")
         self.addModule('Logger', logger)
 
-        storage = Storage(info.getConfig('ResultDir'), self)
+        storage = Storage(info.getConfig('Storage'), self)
         self.addModule('Storage', storage)
+
+        revSyncner = RevSync(self)
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
         workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))
@@ -110,6 +116,9 @@ class ServerInst(Thread):
 
         if self.isModuleEnable('Logger'):
             logger.start()
+
+        if self.isModuleEnable('RevSyncner'):
+            revSyncner.start()
 
         modules = self.modules()
 

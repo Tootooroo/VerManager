@@ -3,19 +3,6 @@ import sys
 
 from django.apps import AppConfig
 
-from manager.misc.eventHandlers import responseHandler, binaryHandler
-from manager.misc.eventListener import EventListener, workerRegister
-from manager.misc.workerRoom import WorkerRoom
-from manager.misc.basic.letter import Letter
-from manager.misc.dispatcher import Dispatcher, workerLost_redispatch
-from manager.misc.logger import Logger
-
-import manager.misc.components as Components
-from manager.misc.basic.info import Info
-
-from manager.misc.exceptions import INVALID_CONFIGURATIONS
-
-
 initialized = False
 
 predicates = [
@@ -30,3 +17,12 @@ predicates = [
 
 class ManagerConfig(AppConfig):
     name = 'manager'
+
+    def ready(self):
+        import manager.misc.server as S
+
+        if os.environ.get('RUN_MAIN') == 'true':
+            sInst = S.ServerInst("127.0.0.1", 8012, "./config.yaml")
+            sInst.start()
+
+            S.ServerInstance = sInst

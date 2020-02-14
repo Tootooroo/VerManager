@@ -1,6 +1,7 @@
 # Storage
 
 import typing
+import os
 
 from manager.misc.basic.type import *
 
@@ -16,7 +17,7 @@ class StoChooser:
         self.__path = path
 
         try:
-            self.__fd = open(path, "wb")
+            self.__fd = open(path, "a+b")
         except FileNotFoundError:
             raise STORAGE_IDENT_NOT_FOUND
 
@@ -60,12 +61,14 @@ class StoChooser:
 
         return Ok
 
+    def rewind(self) -> None:
+        fd = self.__fd
+        fd.seek(0, 0)
+
 
 class Storage:
 
     def __init__(self, path:str, inst:typing.Any) -> None:
-
-        import os
 
         self.__sInst = inst
 
@@ -76,14 +79,20 @@ class Storage:
         # Need to check that is the path valid
         self.__path = path
 
+        # Add target directory's file into Storage
+        Storage.__addDirToCrago(self.__crago, path)
+
+    @staticmethod
+    def __addDirToCrago(crago:typing.Dict[str, str], path:str) -> None:
 
         files = os.listdir(path)
         files = list(filter(lambda f: os.path.isfile(f), files))
 
         for f in files:
-            self.__crago[f] = pathStrConcate(path, f, seperator = "/")
+            crago[f] = pathStrConcate(path, f, seperator = "/")
 
     def create(self, ident:str) -> typing.Optional[StoChooser]:
+
         if ident in self.__crago:
             return self.open(ident)
 
@@ -91,6 +100,7 @@ class Storage:
         chooser = StoChooser(path)
 
         self.__crago[ident] = path
+        self.__num += 1
 
         return chooser
 
@@ -103,3 +113,30 @@ class Storage:
         chooser = StoChooser(path)
 
         return chooser
+
+    def delete(self, ident:str) -> None:
+
+        if not ident in self.__crago:
+            return None
+
+        path = self.__crago[ident]
+
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+        del self.__crago [ident]
+        self.__num -= 1
+
+    def isExists(self, ident:str) -> bool:
+        return ident in self.__crago
+
+    def numOfFiles(self) -> int:
+        return self.__num
+
+    def getPath(self, ident:str) -> typing.Optional[str]:
+        if not ident in self.__crago:
+            return ""
+
+        return self.__crago[ident]

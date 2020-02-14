@@ -14,12 +14,11 @@ from .misc.verControl import RevSync
 from .misc.dispatcher import Dispatcher
 from .misc.worker import Task
 
-import manager.misc.components as Components
-
 from .misc.basic.type import *
 
 from datetime import datetime
 
+import manager.misc.server as S
 import traceback
 
 # Models
@@ -62,7 +61,7 @@ def newRev(request):
 def generation(request):
     import os
 
-    dispatcher = Components.dispatcher
+    dispatcher = S.ServerInstance.getModule('Dispatcher')
 
     try:
         verIdent = request.POST['verSelect']
@@ -72,8 +71,7 @@ def generation(request):
         if version == None:
             return HttpResponseBadRequest()
 
-        task = Task(verIdent, {"sn":version.sn, "vsn":verIdent, "datetime":dateTime})
-
+        task = Task(verIdent, version.sn, verIdent)
         if dispatcher.dispatch(task) == False:
             return HttpResponseBadRequest()
 
@@ -84,7 +82,7 @@ def generation(request):
     return HttpResponse()
 
 def isGenerationDone(request):
-    dispatcher = Components.dispatcher
+    dispatcher = S.ServerInstance.getModule('Dispatcher')
 
     verIdent = request.POST['verSelect']
 
@@ -102,6 +100,7 @@ def isGenerationDone(request):
 
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
+        print("F")
         dispatcher.removeTask(verIdent)
         return HttpResponseBadRequest()
 

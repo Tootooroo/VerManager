@@ -3,6 +3,7 @@ Port: 8024
 
 LogDir: ./log
 ResultDir: ./data
+Storage: ./Storage
 
 GitlabUrl: http://gpon.git.com:8011
 PrivateToken: 4mU2joxotSkzTqLPhvgu

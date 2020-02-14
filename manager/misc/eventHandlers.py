@@ -1,6 +1,7 @@
 # EventHandlers
 
 import zipfile
+import shutil
 
 from manager.misc.eventListener import EventListener, letterLog
 
@@ -10,25 +11,10 @@ from manager.misc.task import Task
 from manager.misc.storage import Storage, StoChooser
 from manager.misc.logger import Logger
 
-def packDataWithChangeLog(vsn: str, filePath: str, dest: str) -> str:
+def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
     from manager.models import infoBetweenVer, Versions
 
-    verData = Versions.objects.all().order_by('dateTime') # type: ignore
-    vers = list(map(lambda v: v.vsn, list(verData))) # type: ignore
-
-    try:
-        idx = vers.index(vsn)
-    except ValueError:
-        return ""
-
-    # Which means this is the first versions so no change log to
-    # indicate what is changed from the last version
-    if idx == 0:
-        return ""
-
-    lastVerBefore = vers[idx - 1]
-
-    changeLog = infoBetweenVer(vsn, lastVerBefore)
+    changeLog = infoBetweenVer(log_start, log_end)
 
     with open("./log.txt", "w") as logFile:
         for log in changeLog:
@@ -68,7 +54,6 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             responseHandler_ResultStore(eventListener, letter)
 
             worker.removeTask(taskId)
-
         task.stateChange(state)
 
 def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) -> None:
@@ -84,13 +69,31 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
         return None
 
     chooser = chooserSet[taskId]
+    chooser.close()
 
     # Pending feature
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
-
     try:
-        destFileName = packDataWithChangeLog(taskId, chooser.path(), "./data")
+        cfgs = eventListener.refToModule('Config')
+        resultDir = cfgs.getConfig("ResultDir")
+
+        dispatcher = eventListener.refToModule('Dispatcher')
+
+        task = dispatcher.getTask(taskId)
+        if task is None:
+            return None
+
+        extra = task.getExtra()
+
+        if not extra is None:
+            destFileName = packDataWithChangeLog(taskId,
+                                                 chooser.path(), resultDir,
+                                                 extra['logStart'], extra['logEnd'])
+        else:
+            destFilePath = shutil.copy(chooser.path(), resultDir)
+            destFileName = destFilePath.split("/")[-1]
+
     except FileNotFoundError:
         logger = eventListener.refToModule('Logger')
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")

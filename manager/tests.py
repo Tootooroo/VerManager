@@ -227,7 +227,7 @@ class UnitTest(TestCase):
 
         self.assertEqual("123", l.getHeader('logId'))
 
-    def tes_Connected(self):
+    def test_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
         sInst.start()
@@ -373,6 +373,39 @@ class UnitTest(TestCase):
                len(client3.inProcTasks()) == 2
         self.assertTrue(cond)
 
+    def test_storage(self):
+
+        import os
+        from manager.misc.storage import Storage, StoChooser
+
+        fileName = "file"
+        storage = Storage("./Storage", None)
+
+        # Create a file via storage
+        chooser = storage.open(fileName)
+
+        # To check that is the has been created
+        self.assertTrue(os.path.exists(chooser.path()))
+        self.assertTrue(storage.getPath(fileName))
+
+        chooser.store(b"12345678")
+        chooser.close()
+
+        chooser = storage.open("file")
+        chooser.rewind()
+
+        bStr = chooser.retrive(8)
+
+        # To check that is content of the file is same to
+        # the string that be writed before
+        self.assertEqual(b"12345678", bStr)
+
+        chooser.close()
+
+        filePath = chooser.path()
+
+        storage.delete(fileName)
+        self.assertTrue(not os.path.exists(filePath))
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')

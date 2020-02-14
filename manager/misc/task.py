@@ -15,11 +15,12 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id: str, sn:str, vsn:str) -> None:
+    def __init__(self, id: str, sn:str, vsn:str, extra:Dict[str, str] = {}) -> None:
         self.taskId = id
 
         self.__sn = sn
         self.__vsn = vsn
+        self.__extra = extra
 
         self.state = Task.STATE_PREPARE
 
@@ -32,6 +33,11 @@ class Task:
         self.refs = 0
 
         self.lastAccess = datetime.utcnow()
+
+    def getExtra(self) -> Optional[Dict[str, str]]:
+        if self.__extra == {}:
+            return None
+        return self.__extra
 
     def getSN(self) -> str:
         return self.__sn

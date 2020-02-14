@@ -71,6 +71,7 @@ class Dispatcher(Thread):
             except:
                 return False
 
+            task.refs += 1
             self.__tasks[task.id()] = task
             return True
 
@@ -172,6 +173,11 @@ class Dispatcher(Thread):
         if taskId in self.__tasks:
             del self.__tasks [taskId]
 
+    def getTask(self, taskId:str) -> Optional[Task]:
+        if not taskId in self.__tasks:
+            return None
+        return self.__tasks[taskId]
+
     # Use to get result of task
     # after the call of this method task will be
     # remove from __tasks
@@ -236,8 +242,6 @@ def workerLost_redispatch(w: Worker, args:Any ) -> None:
     tasks = w.inProcTasks()
     dispatcher = args[0]
 
-    print(w.getIdent())
-    print(tasks)
     list(map(lambda task: dispatcher.redispatch(task), tasks))
 
 # Misc
