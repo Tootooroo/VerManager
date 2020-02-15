@@ -3,7 +3,7 @@ import { ok, error } from "./lib/type.js";
 
 export { verRegister_main };
 
-var NUM_OF_REVISION_CELL = 10;
+var NUM_OF_REVISION_CELL = 20;
 var revSeperator = "__<?>__";
 var revItemSeperator = "<:>";
 
@@ -21,6 +21,9 @@ function RevInfos(sn, author, comment) {
 function verRegister_main() {
     // Fill revisions into verList
     fillRevList('verList', null, NUM_OF_REVISION_CELL);
+
+    fillLogFrom(null);
+    fillLogTo(null);
 
     var submit = document.getElementById('registerBtn');
     submit.addEventListener('click', function() {
@@ -54,14 +57,63 @@ function verRegister_main() {
         var runOut = this.scrollHeight - this.scrollTop === this.clientHeight;
 
         if (runOut) {
-            console.log(this.lastChild);
-            var lastRadioVal = this.lastChild.firstChild.getAttribute('value');
-            fillRevList('verList', lastRadioVal, NUM_OF_REVISION_CELL);
+            var last = this.lastChild.previousSibling.getAttribute('value');
+            var lastsn = last.split("<br>")[0];
+            fillRevList('verList', lastsn, NUM_OF_REVISION_CELL);
         }
     });
 
+    var selectFrom = document.getElementById('logFromSelect');
+    selectFrom.addEventListener('scroll', function() {
+        var runOut = this.scrollHeight - this.scrollTop === this.clientHeight;
+
+        if (runOut) {
+            var last = this.lastChild.getAttribute('value');
+            fillLogFrom(last);
+        }
+    });
+
+    var selectTo = document.getElementById('logToSelect');
+    selectTo.addEventListener('scroll', function() {
+        var runOut = this.scrollHeight - this.scrollTop === this.clientHeight;
+
+        if (runOut) {
+            var last = this.lastChild.getAttribute('value');
+            fillLogTo(last);
+        }
+    });
+
+
     return ok;
 }
+
+function fillLog(beginRev, logId) {
+
+    var select = document.getElementById(logId);
+
+    var handler = function(responseText) {
+        var infos = rawRevsParse(responseText);
+
+        infos.map(function(rev) {
+            var option = document.createElement("option");
+            option.setAttribute("value", rev.sn);
+            option.innerHTML = rev.sn;
+
+            select.appendChild(option);
+        });
+    };
+
+    revInfos(beginRev, NUM_OF_REVISION_CELL, handler);
+}
+
+function fillLogFrom(beginRev) {
+    fillLog(beginRev, "logFromSelect");
+}
+
+function fillLogTo(beginRev) {
+    fillLog(beginRev, "logToSelect");
+}
+
 
 /* Get Collection of revision infos over Http request
  * if there has enough revision infos on server then
@@ -73,6 +125,29 @@ function verRegister_main() {
  *          be returned */
 function fillRevList(listId, beginRevision, numOfRevision) {
 
+    var select = document.getElementById(listId);
+
+    var handler = function(responseText) {
+        var infos = rawRevsParse(responseText);
+        infos.map(function(rev) {
+            var option = document.createElement("option");
+            option.setAttribute("value", rev.sn);
+
+            option.innerHTML = rev.sn + "<br>" + rev.comment + "<br>" + rev.author;
+
+            var option_sep = document.createElement("option");
+            option_sep.setAttribute("disabled", true);
+            option_sep.innerHTML = "<br>";
+
+            select.appendChild(option);
+            select.appendChild(option_sep);
+        });
+    };
+
+    revInfos(beginRevision, numOfRevision, handler);
+}
+
+function revInfos(beginRevision, numOfRevision, handler) {
     var csrftoken = util.getCookie('csrftoken');
     var data = {
         beginRev: beginRevision == null ? "null" : beginRevision,
@@ -83,14 +158,9 @@ function fillRevList(listId, beginRevision, numOfRevision) {
     xhr.open('post', 'verRegister/infos', true);
 
     // After revisions is retrived fill them into verList
-    xhr.onreadystatechange = function() {
-
-        if (xhr.readyState == 4 && xhr.status == 200) {
-            var infos = rawRevsParse(xhr.responseText);
-            var radios = infos.map(radio_create);
-            radios.map(function(radio) {
-                radioAppend(listId, radio);
-            });
+    xhr.onload = function() {
+        if (xhr.status == 200) {
+            handler(xhr.responseText);
         }
     };
 
@@ -109,39 +179,4 @@ function rawRevsParse(revisions) {
     });
 
     return revs;
-}
-
-function radioAppend(element, radio) {
-    var list = document.getElementById('verList');
-    list.appendChild(radio);
-
-    return ok;
-}
-
-function radio_create(revInfos) {
-    var content = revInfos.stringify();
-    content = content.split("<br>");
-
-    var div = document.createElement("div");
-
-    var label = document.createElement("label");
-    label.setAttribute("class", "verLabel");
-
-    var content_comment = content[2];
-    if (content_comment.length > 35) {
-        content_comment = content_comment.substring(0, 35) + "...";
-        label.setAttribute("title", content[2]);
-    }
-    label.innerHTML = content[0] + "<br>" + content[1] + "<br>" + content_comment;
-
-    var radio = document.createElement("input");
-    radio.setAttribute("class", "verRadio");
-    radio.setAttribute("type", "radio");
-    radio.setAttribute("name", "verChoice");
-    radio.setAttribute("value", revInfos.sn);
-
-    div.appendChild(radio);
-    div.appendChild(label);
-
-    return div;
 }

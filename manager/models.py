@@ -21,16 +21,14 @@ class Versions(models.Model):
     def __str__(self):
         return self.vsn
 
-def infoBetweenVer(v1: str, v2: str) -> List[str]:
-    ver1 = Versions.objects.get(pk=v1) # type: ignore
-    ver2 = Versions.objects.get(pk=v2) # type: ignore
-
-    begin = rev1 = Revisions.objects.get(pk=ver1.sn) # type: ignore
-    end = rev2 = Revisions.objects.get(pk=ver2.sn) # type: ignore
+def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
+    begin = Revisions.objects.get(pk=rev1) # type: ignore
+    end = Revisions.objects.get(pk=rev2) # type: ignore
 
     if begin.dateTime > end.dateTime:
-        begin = rev2
-        end = rev1
+        tmp = begin
+        begin = end
+        end = tmp
 
     vers = Revisions.objects.filter(
         dateTime__gt=begin.dateTime,

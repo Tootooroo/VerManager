@@ -83,20 +83,35 @@ class Storage:
         Storage.__addDirToCrago(self.__crago, path)
 
     @staticmethod
+    def __trimExtension(name:str) -> str:
+        parts = name.split(".")
+
+        if len(parts) == 1:
+            return name
+        elif len(parts) > 1:
+            return ''.join(parts[0:-1])
+        else:
+            return ""
+
+    @staticmethod
     def __addDirToCrago(crago:typing.Dict[str, str], path:str) -> None:
 
         files = os.listdir(path)
         files = list(filter(lambda f: os.path.isfile(f), files))
+        files = list(map(lambda f: Storage.__trimExtension(f), files))
 
         for f in files:
             crago[f] = pathStrConcate(path, f, seperator = "/")
 
-    def create(self, ident:str) -> typing.Optional[StoChooser]:
+    def create(self, ident:str, ext:str = '') -> typing.Optional[StoChooser]:
 
         if ident in self.__crago:
             return self.open(ident)
 
         path = pathStrConcate(self.__path, ident, seperator = "/")
+        if ext != '':
+            path += "." + ext
+
         chooser = StoChooser(path)
 
         self.__crago[ident] = path

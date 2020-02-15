@@ -9,33 +9,6 @@ VerMLayout {
     grid-template-columns: repeat(20, 1fr);
 }
 
-#genForm {
-    display:grid;
-    grid-template-rows: repeat(4, 1cm);
-    grid-template-columns: repeat(5, 3cm);
-}
-
-#verLabel {
-    grid-row-start: 1;
-    grid-row-end: 2;
-    grid-column-start: 1;
-    grid-column-end: 3;
-}
-
-#verSelect {
-    grid-row-start: 2;
-    grid-row-end: 3;
-    grid-column-start: 1;
-    grid-column-end: 3;
-}
-
-#dateInput {
-    grid-row-start: 3;
-    grid-row-end: 4;
-    grid-column-start: 1;
-    grid-column-end: 3;
-}
-
 #RegisterBox {
     grid-row-start: 1;
     grid-row-end: 19;
@@ -45,7 +18,7 @@ VerMLayout {
 
 #GenerateBox {
     grid-row-start: 1;
-    grid-row-end: 8;
+    grid-row-end: 12;
     grid-column-start: 10;
     grid-column-end: 16;
 }
@@ -59,7 +32,6 @@ formLayout {
 #verList {
     overflow: auto;
     height: 500px;
-    border-style:solid;
 }
 
 body {

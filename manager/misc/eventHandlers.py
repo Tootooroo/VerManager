@@ -12,15 +12,15 @@ from manager.misc.storage import Storage, StoChooser
 from manager.misc.logger import Logger
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
-    from manager.models import infoBetweenVer, Versions
+    from manager.models import infoBetweenRev, Versions
 
-    changeLog = infoBetweenVer(log_start, log_end)
+    changeLog = infoBetweenRev(log_start, log_end)
 
     with open("./log.txt", "w") as logFile:
         for log in changeLog:
             logFile.write(log)
 
-    zipFileName = vsn + "with_log.rar"
+    zipFileName = vsn + "_with_log.rar"
 
     zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
     for aFile in ["./log.txt", filePath]:
@@ -68,8 +68,10 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
     if Task.isValidState(state) and state != Task.STATE_FINISHED:
         return None
 
+    # Close chooser
     chooser = chooserSet[taskId]
     chooser.close()
+    del chooserSet [taskId]
 
     # Pending feature
     # Store result to the target position specified in configuration file
@@ -86,13 +88,15 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
 
         extra = task.getExtra()
 
-        if not extra is None:
+        if "logFrom" in extra and "logTo" in extra:
             destFileName = packDataWithChangeLog(taskId,
                                                  chooser.path(), resultDir,
-                                                 extra['logStart'], extra['logEnd'])
+                                                 extra['logFrom'], extra['logTo'])
         else:
-            destFilePath = shutil.copy(chooser.path(), resultDir)
-            destFileName = destFilePath.split("/")[-1]
+            path = chooser.path()
+            destFileName = path.split("/")[-1] + "_without_log.rar"
+            destFilePath = shutil.copy(chooser.path(),
+                                       resultDir+"/"+destFileName)
 
     except FileNotFoundError:
         logger = eventListener.refToModule('Logger')
@@ -117,23 +121,30 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
     global chooserSet
 
-    fdSet = eventListener.taskResultFdSet
-    tid = letter.getHeader('tid')
+    import traceback
 
-    # This is the first binary letter of the task correspond to the
-    # received tid just open a file and store the relation into fdSet
-    if not tid in chooserSet:
-        sto = eventListener.refToModule('Storage')
-        chooser = sto.open(tid)
-        chooserSet[tid] = chooser
+    try:
+        fdSet = eventListener.taskResultFdSet
+        tid = letter.getHeader('tid')
 
-    chooser = chooserSet[tid]
-    content = letter.getContent('bytes')
+        # This is the first binary letter of the task correspond to the
+        # received tid just open a file and store the relation into fdSet
+        if not tid in chooserSet:
+            extension = letter.getHeader('extension')
 
-    if isinstance(content, str):
-        return None
+            sto = eventListener.refToModule('Storage')
+            chooser = sto.create(tid, extension)
+            chooserSet[tid] = chooser
 
-    chooser.store(content)
+        chooser = chooserSet[tid]
+        content = letter.getContent('bytes')
+
+        if isinstance(content, str):
+            return None
+
+        chooser.store(content)
+    except:
+        traceback.print_exc()
 
 def logHandler(eventListener: EventListener, letter: Letter) -> None:
     logger = eventListener.refToModule('Logger')

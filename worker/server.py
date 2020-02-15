@@ -32,6 +32,18 @@ class Module:
 class ModuleT(Module, StopableThread):
     pass
 
+def extensionFromPath(path:str) -> str:
+    fileName = path.split("/")[-1]
+    nameParts = fileName.split(".")
+
+    if '' in nameParts:
+        return ""
+
+    if len(nameParts) == 1:
+        return ""
+    else:
+        return nameParts[-1]
+
 class RESPONSE_TO_SERVER_DAEMON(ModuleT):
 
     def __init__(self, server, info) -> None:
@@ -220,7 +232,9 @@ class TASK_DEAL_DAEMON(ModuleT):
             # Send back to server
             with open(RESULT_PATH, 'rb') as file:
                 for line in file:
-                    binaryLetter = BinaryLetter(tid = vsn, bStr = line)
+                    extension = extensionFromPath(RESULT_PATH)
+                    binaryLetter = BinaryLetter(tid = vsn, bStr = line,
+                                                extension = extension)
                     server.transfer(binaryLetter)
 
             # Response to server to notify that the task is finished

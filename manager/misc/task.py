@@ -35,8 +35,6 @@ class Task:
         self.lastAccess = datetime.utcnow()
 
     def getExtra(self) -> Optional[Dict[str, str]]:
-        if self.__extra == {}:
-            return None
         return self.__extra
 
     def getSN(self) -> str:

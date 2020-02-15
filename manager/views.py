@@ -28,11 +28,8 @@ from .models import Revisions, Versions
 def index(request):
     return render(request, 'index.html')
 
-def verRegPage(request):
-    return render(request, 'verRegister.html')
-
-def verGenPage(request):
-    return render(request, 'verGeneration.html')
+def verManagerPage(request):
+    return render(request, 'verManager.html')
 
 def register(request):
     try:
@@ -66,12 +63,22 @@ def generation(request):
     try:
         verIdent = request.POST['verSelect']
         dateTime = request.POST['Datetime']
+        extra_info = {}
+
+        if "logFrom" in request.POST and 'logTo' in request.POST:
+            logFrom = request.POST['logFrom']
+            logTo = request.POST['logTo']
+
+            extra_info['logFrom'] = logFrom
+            extra_info['logTo'] = logTo
+
         version = Versions.objects.get(pk=verIdent)
 
         if version == None:
             return HttpResponseBadRequest()
 
-        task = Task(verIdent, version.sn, verIdent)
+        task = Task(verIdent, version.sn, verIdent, extra = extra_info)
+
         if dispatcher.dispatch(task) == False:
             return HttpResponseBadRequest()
 
@@ -100,7 +107,6 @@ def isGenerationDone(request):
 
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
-        print("F")
         dispatcher.removeTask(verIdent)
         return HttpResponseBadRequest()
 
