@@ -1,0 +1,55 @@
+<html>
+  <head>
+    <!-- Bootstrap CSS -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static "lib/node_modules/bootstrap/dist/css/bootstrap.min.css" %}">
+    <link rel="stylesheet" href="{% static "sheet.css" %}">
+
+    <title>Version Manager</title>
+  </head>
+
+  <body>
+    <h1>Version Manager</h1>
+
+    <iframe width="0" height="0" border="0" name="dummyframe" id="dummyframe" style="display: none;"></iframe>
+
+    <VerMLayout>
+
+      <div class="container-fluid shadow-lg rounded-lg" id="RegisterBox" style="margin-left: 10px; padding: 20px">
+        <form id="regForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
+          {% csrf_token %}
+          <select id="verList" class="form-control" class="border border-grey rounded" size="40"></select>
+          <p>Version<input type="text" class="form-control" name="Version"></p>
+        </form>
+        <input id="registerBtn" class="btn btn-primary" type="submit" name="register" value="Register">
+      </div>
+
+      <div class="container-fluid shadow-lg rounded-lg" id="GenerateBox" style="padding: 20px">
+        <form id="genForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
+          {% csrf_token %}
+          <label id="verLabel">Versions</label>
+          <select id="verSelect" class="form-control" name="verSelect"></select>
+          <p id="dateInput">Datetime <input type="text" class="form-control" name="Datetime"></p>
+
+          <div id="logPanel">
+            <label id="logFrom">Log From</label>
+            <select id="logFromSelect" class="form-control" name="logFrom" size="2"></select>
+            <label id="LogTo">Log To</label>
+            <select id="logToSelect" class="form-control" name="logTo" size="2"></select>
+          </div>
+
+        </form>
+        <input id="generationBtn" class="btn btn-primary" type="submit" name="generation" value="Generate">
+        <input id="deleteBtn" class="btn btn-primary" type="submit" name="generation" value="Delete">
+      </div>
+
+    </VerMLayout>
+
+    <!-- Javascript import via requireJS -->
+    <script type="module" src="{% static "main.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/jquery/dist/jquery.min.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/popperjs/core/dist/umd/popper.min.js" %}"></script>
+    <script type="module" src="{% static "lib/node_modules/bootstrap/dist/js/bootstrap.min.js" %}"></script>
+  </body>
+
+</html>
