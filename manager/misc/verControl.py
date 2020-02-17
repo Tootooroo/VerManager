@@ -38,6 +38,8 @@ class RevSync(Thread):
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
 
+        self.__project_id = cfgs.getConfig("Project_ID")
+
         if url == "" or token == "":
             return None
         # fixme: repo url and token key must not a constant just place these in
@@ -73,7 +75,8 @@ class RevSync(Thread):
         return formatDate + offset
 
     def revDBInit(self) -> bool:
-        revisions = self.gitlabRef.projects.get(34).commits.list(all=True)
+        pId = self.__project_id
+        revisions = self.gitlabRef.projects.get(pId).commits.list(all=True)
 
         # Remove old datas of revisions cause these data may out of date
         # repository may be rebased so that the structure of it is very

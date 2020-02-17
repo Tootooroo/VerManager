@@ -11,9 +11,14 @@ import typing
 from threading import Lock
 import traceback
 
-from .basic.letter import *
-from .basic.info import Info
-from .basic.type import *
+if __name__ == '__main__':
+    from basic.letter import *
+    from basic.info import Info
+    from basic.type import *
+else:
+    from .basic.letter import *
+    from .basic.info import Info
+    from .basic.type import *
 
 from multiprocessing import Pool, Queue, Manager
 from threading import Thread, Condition

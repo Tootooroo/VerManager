@@ -1,6 +1,7 @@
 h1 {
-    border-bottom: solid;
+    background-color: white;
     padding-bottom: 0.5em;
+    padding-left: 0.5em;
 }
 
 VerMLayout {
