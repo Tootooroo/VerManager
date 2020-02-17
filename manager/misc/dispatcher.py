@@ -109,16 +109,20 @@ class Dispatcher(Thread):
 
             # Is there any task in taskWait queue
             # fixme: need to setup a timeout value
-            isArrived = self.taskEvent.wait(1)
+            isArrived = self.taskEvent.wait(2)
             if not isArrived or counter % 5 == 0:
                 if counter > 10000:
                     counter = 0
+
+                counter += 1
                 continue
 
+            print("123")
             Logger.putLog(logger, "dispatcher", "Task arrived")
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
+            print(workers)
 
             if workers == []:
                 Logger.putLog(logger, "dispatcher", "No acceptable worker")
