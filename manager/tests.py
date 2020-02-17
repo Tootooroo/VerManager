@@ -253,17 +253,12 @@ class UnitTest(TestCase):
         self.assertEqual(1, wr.getNumOfWorkersInWait())
 
         time.sleep(10)
+
+        # At this time worker should reconnect to master
         self.assertEqual(0, wr.getNumOfWorkersInWait())
         self.assertEqual(2, wr.getNumOfWorkers())
-
-        time.sleep(2)
-
-        self.assertEqual(2, wr.getNumOfWorkers())
-        self.assertEqual(0, wr.getNumOfWorkersInWait())
 
         # Client Stop
-        time.sleep(5)
-
         client1.stop()
         client2.stop()
 
@@ -315,7 +310,7 @@ class UnitTest(TestCase):
             self.assertTrue(False)
 
         # Dispatch task
-        task = Task("123", "123", "123")
+        task1 = Task("123", "123", "123")
         dispatcher.dispatch(task)
 
         time.sleep(3)
@@ -342,13 +337,13 @@ class UnitTest(TestCase):
         # Now let us dispatch three more task to workers
         # if nothing wrong each of these workers should
         # in work.
-        task = Task("124", "123", "123")
+        task2 = Task("124", "123", "123")
         dispatcher.dispatch(task)
 
-        task = Task("125", "123", "123")
+        task3 = Task("125", "123", "123")
         dispatcher.dispatch(task)
 
-        task = Task("126", "123", "123")
+        task4 = Task("126", "123", "123")
         dispatcher.dispatch(task)
 
         time.sleep(5)

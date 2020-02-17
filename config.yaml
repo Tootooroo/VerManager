@@ -13,3 +13,50 @@ PrivateToken: 4mU2joxotSkzTqLPhvgu
 TimeZone: +8:00
 
 WaitingInterval: 10
+
+BUILDING_PARA:
+  GL5610:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
+  GL5610-v2:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
+  GL5610-v3:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
+  GL8900:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
+  POST:
+    group:
+      - GL5610
+      - GL5610-v2
+      - GL5610-v3
+    cmd:
+      - link_GL5610.bat
+    output:
+      - "C:\\pack.rar"
+
+BUILDING:
+  cmd:
+    - ...
+    - ...
+
+  output:
+    - ...

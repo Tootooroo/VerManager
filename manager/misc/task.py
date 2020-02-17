@@ -1,10 +1,15 @@
 # task.py
 
 from typing import *
+from functools import reduce
 from manager.misc.basic.type import *
+
+from manager.misc.build import BuildSet
 
 from datetime import datetime
 from threading import Lock
+
+from manager.misc.build import Build, BuildSet
 
 TaskState = int
 
@@ -15,7 +20,11 @@ class Task:
     STATE_FINISHED = 2
     STATE_FAILURE = 3
 
-    def __init__(self, id: str, sn:str, vsn:str, extra:Dict[str, str] = {}) -> None:
+    def __init__(self, id: str, sn:str, vsn:str,
+                 build:Optional[Build] = None,
+                 buildSet:Optional[BuildSet] = None,
+                 extra:Dict[str, str] = {}) -> None:
+
         self.taskId = id
 
         self.__sn = sn
@@ -33,6 +42,33 @@ class Task:
         self.refs = 0
 
         self.lastAccess = datetime.utcnow()
+
+        self.__build = build
+        self.__buildSet = buildSet
+
+        # List of tasks split from this task.
+        # This task is done if and only if all subtask
+        # of it are done.
+        self.__subTasks = [] # type: List['Task']
+
+    # After split this task will be a big task
+    def split(self) -> None:
+
+        if not self.isAbleToSplit():
+            return None
+
+        # First, split build set to several builds
+        builds = self.__buildSet.split() # type: ignore
+
+        f = lambda bId: Task(bId, sn = self.__sn, vsn = self.__vsn,
+                        build = builds[bId],
+                        extra = self.__extra)
+        subTasks = list( map(f, builds))
+
+        self.__subTasks = subTasks
+
+    def isAbleToSplit(self) -> bool:
+        return not self.__buildSet is None
 
     def getExtra(self) -> Optional[Dict[str, str]]:
         return self.__extra
@@ -58,16 +94,45 @@ class Task:
     def stateChange(self, state:int) -> None:
         self.state = state
 
-    def toPreState(self) -> None:
+    def toPreState(self, sub:str = "") -> None:
+        # all of it's sub tasks in prepare state
+        if self.isBigTask():
+            f = lambda acc, cur: acc.isPrepare() and cur.isPrepare()
+            isAllSubInPre = reduce(f, self.__subTasks)
+
+            if not isAllSubInPre:
+                return None
+
         self.state = Task.STATE_PREPARE
 
     def toProcState(self) -> None:
+        # At least one of it's sub task
+        # in proc state
+        if self.isBigTask():
+            inProcSubs = list(filter(lambda sub: sub.isProc(), self.__subTasks))
+            if len(inProcSubs) < 1:
+                return None
         self.state = Task.STATE_IN_PROC
 
     def toFinState(self) -> None:
+        # All of it's sub tasks in fin state
+        if self.isBigTask():
+            f = lambda acc, cur: acc.isFinished() and cur.isFinished()
+            isAllSubInFin = reduce(f, self.__subTasks)
+
+            if not isAllSubInFin:
+                return None
+
         self.state = Task.STATE_FINISHED
 
     def toFailState(self) -> None:
+        # At least on of it's sub task
+        # in fail state
+        if self.isBigTask():
+            inFailSubs = list(filter(lambda sub: sub.isFailure(), self.__subTasks))
+            if len(inFailSubs) < 1:
+                return None
+
         self.state = Task.STATE_FAILURE
 
     def setData(self, data: str) -> None:
@@ -84,6 +149,9 @@ class Task:
 
     def isFinished(self) -> bool:
         return self.state == Task.STATE_FINISHED
+
+    def isBigTask(self) -> bool:
+        return not self.__buildSet is None
 
     @staticmethod
     def isValidState(s:int) -> bool:

@@ -57,8 +57,7 @@ class Dispatcher(Thread):
             task = self.__tasks[task.id()]
             task.refs += 1
 
-            if task.taskState() == Task.STATE_IN_PROC:
-                return True
+            return True
 
         # First to find a acceptable worker
         # if found then assign task to the worker
@@ -82,7 +81,10 @@ class Dispatcher(Thread):
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
+
                 self.__tasks[task.id()] = task
+                task.refs += 1
+
                 self.taskEvent.set()
 
             return True
