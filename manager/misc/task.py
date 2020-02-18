@@ -27,6 +27,7 @@ class Task:
 
         self.taskId = id
 
+        self.__parent = None # type: Optional[Task]
         self.__sn = sn
         self.__vsn = vsn
         self.__extra = extra
@@ -51,24 +52,89 @@ class Task:
         # of it are done.
         self.__subTasks = [] # type: List['Task']
 
+        if not self.__buildSet is None:
+            self.__split()
+
     # After split this task will be a big task
-    def split(self) -> None:
+    def __split(self) -> None:
 
         if not self.isAbleToSplit():
             return None
 
         # First, split build set to several builds
-        builds = self.__buildSet.split() # type: ignore
+        builds = self.__buildSet.getBuilds() # type: ignore
 
-        f = lambda bId: Task(bId, sn = self.__sn, vsn = self.__vsn,
-                        build = builds[bId],
-                        extra = self.__extra)
-        subTasks = list( map(f, builds))
+        subTasks = list() # type: List['Task']
+
+        for b in builds:
+            t = Task(b.getIdent(), sn = self.__sn, vsn = self.__vsn,
+                     build = b,
+                     extra = self.__extra)
+            t.setParent(self)
+            subTasks.append(t)
 
         self.__subTasks = subTasks
 
+    def setBuild(self, b:Build) -> None:
+        self.__build = b
+
+    def setBuildSet(self, bs:BuildSet) -> None:
+        self.__buildSet = bs
+
+    def subTasksSpawn(self) -> None:
+        if len(self.__subTasks) > 0:
+            self.__subTasks = []
+
+        self.__split()
+
+    def isInPost(self, bId:str) -> bool:
+        pass
+
+    def getGroupOf(self, tId:str) -> Optional[List['Task']]:
+        group = [] # type: List['Task']
+
+        if not self.__buildSet is None:
+            builds = self.__buildSet.belongTo(tId)
+
+            if builds is None:
+                return None
+
+            for b in builds:
+                child = self.getChild(b.getIdent())
+
+                if child is None:
+                    return None
+
+                group.append(child)
+
+        return group
+
+    def getChildren(self) -> List['Task']:
+        return self.__subTasks
+
+    def getChild(self, cid:str) -> Optional['Task']:
+        subTasks = self.__subTasks
+
+        tasks = list(filter(lambda t: t.id() == cid, subTasks))
+        if len(tasks) == 0:
+            return None
+
+        return tasks[0]
+
+    def hasParent(self) -> bool:
+        return not self.__parent is None
+
+    def getParent(self) -> Optional['Task']:
+        return self.__parent
+
+    def setParent(self, p:'Task') -> None:
+        self.__parent = p
+
     def isAbleToSplit(self) -> bool:
         return not self.__buildSet is None
+
+    def isBindWithBuild(self) -> bool:
+        return not self.__build is None or not self.__buildSet
 
     def getExtra(self) -> Optional[Dict[str, str]]:
         return self.__extra

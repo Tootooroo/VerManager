@@ -77,6 +77,21 @@ class Dispatcher(Thread):
         return False
 
     def dispatch(self, task: Task) -> bool:
+
+        if not task.isBindWithBuild():
+            # To check taht whether the task bind with
+            # a build or BuildSet. If not bind just to
+            # bind one with it.
+            info = self.__sInst.getModule('Config')
+            build = info.getConfig("Build")
+            buildSet = info.getConfig("BuildSet")
+
+            task.setBuild(build)
+            task.setBuildSet(buildSet)
+
+            # Spawn subtasks if it's allowed
+            task.subTasksSpawn()
+
         with self.dispatchLock:
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting

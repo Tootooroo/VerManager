@@ -19,6 +19,8 @@ class ManagerConfig(AppConfig):
     name = 'manager'
 
     def ready(self):
+        return None
+
         import manager.misc.server as S
 
         if os.environ.get('RUN_MAIN') == 'true':

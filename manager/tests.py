@@ -3,7 +3,7 @@ from django.http import HttpRequest
 from django.template.loader import render_to_string
 from selenium import webdriver
 
-from manager.views import index, verRegPage
+from manager.views import index, verManagerPage
 
 from manager.misc.verControl import RevSync
 from manager.misc.workerRoom import WorkerRoom
@@ -16,7 +16,7 @@ from manager.misc.dispatcher import Dispatcher
 from manager.misc.util import spawnThread
 
 from manager.misc.server import ServerInst
-import worker.server as Client
+import worker.client as Client
 
 import time
 import unittest
@@ -49,8 +49,8 @@ class UnitTest(TestCase):
         self.assertTemplateUsed(response, 'index.html')
 
     def test_verRegister_page(self):
-        response = self.client.get('/manager/verRegister')
-        self.assertTemplateUsed(response, 'verRegister.html')
+        response = self.client.get('/manager/verManager')
+        self.assertTemplateUsed(response, 'verManager.html')
 
     def test_register_feature(self):
         response = self.client.post('/manager/verRegister/register',
@@ -157,6 +157,7 @@ class UnitTest(TestCase):
         tid = b"".join([str(x).encode() for x in range(64)])[0:64]
         letterInBytes = (1).to_bytes(2, "big") \
                         + (4).to_bytes(4, "big") \
+                        + (0).to_bytes(10, "big") \
                         + tid \
                         + (123123).to_bytes(4, "big")
         l_parsed = Letter.parse(letterInBytes)
@@ -173,6 +174,7 @@ class UnitTest(TestCase):
 
         letterInBytes_incomplete = (1).to_bytes(2, "big") \
                                 + (4).to_bytes(4, "big") \
+                                + (0).to_bytes(10, "big") \
                                 + tid \
                                 + (123123).to_bytes(3, "big")
 
@@ -227,7 +229,7 @@ class UnitTest(TestCase):
 
         self.assertEqual("123", l.getHeader('logId'))
 
-    def test_Connected(self):
+    def tes_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
         sInst.start()
@@ -271,7 +273,7 @@ class UnitTest(TestCase):
 
         self.assertEqual(0, wr.getNumOfWorkersInWait())
 
-    def test_logger(self):
+    def tes_logger(self):
 
         from manager.misc.logger import Logger
 
@@ -282,7 +284,7 @@ class UnitTest(TestCase):
         Logger.putLog(logger, "Test", "123")
 
 
-    def test_dispatcher(self):
+    def tes_dispatcher(self):
 
         # Create a server
         sInst = ServerInst("127.0.0.1", 8013, "./config.yaml")
@@ -401,6 +403,81 @@ class UnitTest(TestCase):
 
         storage.delete(fileName)
         self.assertTrue(not os.path.exists(filePath))
+
+    def test_build(self):
+        from manager.misc.basic.info import Info
+        from manager.misc.build import Build, BuildSet
+
+        info = Info("./config_test.yaml")
+
+        buildSet = info.getConfig("BuildSet")
+
+        self.assertTrue(BuildSet.isValid(buildSet))
+
+        bs = BuildSet(buildSet)
+
+        b = bs.getBuild("GL5610")
+
+        self.assertTrue("GL5610", b.getIdent())
+
+        builds = bs.getBuilds()
+        builds_id = list(map(lambda b: b.getIdent(), builds))
+        self.assertTrue('GL5610' in builds_id)
+        self.assertTrue('GL5610-v2' in builds_id)
+        self.assertTrue('GL5610-v3' in builds_id)
+        self.assertTrue('GL8900' in builds_id)
+
+        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v2'))
+        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v3'))
+
+        bs_GL8900 = bs.belongTo('GL8900')
+        self.assertTrue(len(bs_GL8900) == 1)
+        self.assertTrue(bs_GL8900[0].getIdent() == 'GL8900')
+
+    def test_task(self):
+        from manager.misc.basic.info import Info
+        from manager.misc.build import Build, BuildSet
+        from manager.misc.task import Task
+
+        info = Info("./config_test.yaml")
+
+        buildSet = info.getConfig('BuildSet')
+
+        bs = BuildSet(buildSet)
+
+        # Create a taks object
+        t = Task("VersionToto", "ABC", "VersionToto", buildSet = bs)
+
+        # Get a group which GL5610 reside in
+        groupOfGL5610 = t.getGroupOf("GL5610")
+
+        # GL5610-v2 should in this group
+        GL5610_v2 = list(filter(lambda t: t.id() == "GL5610-v2", groupOfGL5610))
+        self.assertTrue(len(GL5610_v2) == 1)
+        # Check the parent of GL5610-v2
+        self.assertTrue(GL5610_v2[0].hasParent() and GL5610_v2[0].getParent().id() == "VersionToto")
+
+        # GL5610-v3 should in this group too
+        GL5610_v3 = list(filter(lambda t: t.id() == "GL5610-v3", groupOfGL5610))
+        self.assertTrue(len(GL5610_v3) == 1)
+        # Check the parent of GL5610-v3
+        self.assertTrue(GL5610_v3[0].hasParent() and GL5610_v3[0].getParent().id() == "VersionToto")
+
+        # Get group which GL8900 reside in
+        groupOfGL8900 = t.getGroupOf("GL8900")
+        self.assertTrue(len(groupOfGL8900) == 1)
+        # Check the parent of GL8900
+        self.assertTrue(groupOfGL8900[0].id() == "GL8900", groupOfGL8900[0].getParent().id() == "VersionToto")
+
+        # Get children of the task
+        children = t.getChildren()
+        children_id = list(map(lambda t: t.id(), children))
+
+        # Check memebers
+        self.assertTrue("GL5610" in children_id)
+        self.assertTrue("GL5610-v2" in children_id)
+        self.assertTrue("GL5610-v3" in children_id)
+        self.assertTrue("GL8900" in children_id)
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')
