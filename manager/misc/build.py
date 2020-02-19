@@ -17,9 +17,8 @@ class Build:
 
         self.__bId = bId
         self.__cmds = build['cmd']
+        self.__cmdStr = ";".join(self.__cmds)
         self.__output = build['output']
-
-        self.__cmdStr = reduce(lambda compact, cmd: compact + " && " + cmd, build)
 
     def getIdent(self) -> str:
         return self.__bId
@@ -27,8 +26,11 @@ class Build:
     def getCmd(self) -> List[str]:
         return self.__cmds
 
-    def compactCmd(self) -> str:
+    def getCmdStr(self) -> str:
         return self.__cmdStr
+
+    def getOutput(self) ->  str:
+        return self.__output
 
     def length(self) -> int:
         return len(self.__cmdStr)
@@ -100,6 +102,10 @@ class BuildSet:
         builds_dict = buildSet['Builds']
 
         for bId in builds_dict:
+            build = builds_dict[bId]
+            build['RepoUrl'] = buildSet['RepoUrl']
+            build['ProjectName'] = buildSet['Projectname']
+
             builds[bId] = Build(bId, builds_dict[bId])
 
         return builds

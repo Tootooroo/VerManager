@@ -3,6 +3,7 @@
 from typing import *
 from functools import reduce
 from manager.misc.basic.type import *
+from manager.misc.basic.letter import NewLetter
 
 from manager.misc.build import BuildSet
 
@@ -218,6 +219,35 @@ class Task:
 
     def isBigTask(self) -> bool:
         return not self.__buildSet is None
+
+    def toNewTaskLetter(self) -> Optional[NewLetter]:
+
+        # Big task can't convert to letter directly
+        if self.isBigTask():
+            return None
+
+        if self.hasParent():
+            parent = self.getParent()
+            if parent is None:
+                return None
+
+            parent_id = parent.id()
+            needPost = "true"
+        else:
+            parent_id = ""
+            needPost = ""
+
+        build = self.__build
+        if build is None:
+            return None
+
+        extra = {"resultPath":build.getOutput(), "cmds":build.compactCmd()}
+
+        return NewLetter(self.id(), self.id(), self.getSN(),
+                         self.getVSN(), str(datetime.utcnow()),
+                         extra = extra,
+                         parent = parent_id,
+                         needPost = needPost)
 
     @staticmethod
     def isValidState(s:int) -> bool:

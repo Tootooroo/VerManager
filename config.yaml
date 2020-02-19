@@ -15,6 +15,9 @@ TimeZone: +8:00
 WaitingInterval: 10
 
 BuildSet:
+  RepoUrl: git@gpon.git.com:gpon/olt.git
+  ProjectName: olt
+
   Builds:
     GL5610:
         cmd:
@@ -62,6 +65,9 @@ BuildSet:
       - "C:\\pack.rar"
 
 Build:
+  RepoUrl: git@gpon.git.com:gpon/olt.git
+  ProjectName: olt
+
   cmd:
     - ...
     - ...

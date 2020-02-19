@@ -59,9 +59,23 @@ class Dispatcher(Thread):
 
             return True
 
+        task = self.__bind(task)
+
+        if task.isBigTask():
+            return self.__dispatchBigTask(task)
+
+        ret = self.__do_dispatch(task)
+        if ret is True:
+            self.__tasks[task.id()] = task
+            return ret
+
+        return False
+
+    def __do_dispatch(self, task: Task) -> bool:
+
         # First to find a acceptable worker
         # if found then assign task to the worker
-        # and __tasks otherwise append to taskWai
+        # and __tasks otherwise append to taskWait
         workers = self.__workers.getWorkerWithCond(viaOverhead)
 
         if workers != []:
@@ -71,27 +85,27 @@ class Dispatcher(Thread):
                 return False
 
             task.refs += 1
-            self.__tasks[task.id()] = task
             return True
 
         return False
 
+    def __dispatchBigTask(self, task: Task) -> bool:
+
+        ret = True
+        subTasks = task.getChildren()
+
+        for sub in subTasks:
+            if not sub.isPrepare():
+                continue
+
+            do_ret = self.__do_dispatch(task)
+
+            if do_ret is False:
+                ret = False
+
+        return ret
+
     def dispatch(self, task: Task) -> bool:
-
-        if not task.isBindWithBuild():
-            # To check taht whether the task bind with
-            # a build or BuildSet. If not bind just to
-            # bind one with it.
-            info = self.__sInst.getModule('Config')
-            build = info.getConfig("Build")
-            buildSet = info.getConfig("BuildSet")
-
-            task.setBuild(build)
-            task.setBuildSet(buildSet)
-
-            # Spawn subtasks if it's allowed
-            task.subTasksSpawn()
-
         with self.dispatchLock:
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
@@ -109,6 +123,24 @@ class Dispatcher(Thread):
         if taskId in self.__tasks:
             del self.__tasks [taskId]
         return self.dispatch(task)
+
+    def __bind(self, task:Task) -> Task:
+        if not task.isBindWithBuild():
+            # To check taht whether the task bind with
+            # a build or BuildSet. If not bind just to
+            # bind one with it.
+            info = self.__sInst.getModule('Config')
+            build = info.getConfig("Build")
+            buildSet = info.getConfig("BuildSet")
+
+            task.setBuild(build)
+            task.setBuildSet(buildSet)
+
+            # Spawn subtasks if it's allowed
+            task.subTasksSpawn()
+
+        return task
+
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
@@ -134,12 +166,10 @@ class Dispatcher(Thread):
                 counter += 1
                 continue
 
-            print("123")
             Logger.putLog(logger, "dispatcher", "Task arrived")
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
-            print(workers)
 
             if workers == []:
                 Logger.putLog(logger, "dispatcher", "No acceptable worker")

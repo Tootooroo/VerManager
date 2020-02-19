@@ -141,9 +141,10 @@ class Worker:
             raise Exception
 
         # Task assign
-        letter= NewLetter(ident = self.ident, tid = task.id(),
-                          sn = task.getSN(), vsn = task.getVSN(),
-                          datetime = str(datetime.utcnow()))
+        letter = task.toNewTaskLetter()
+        if letter is None:
+            return None
+
         self.__send(letter)
 
         # Register task into task group

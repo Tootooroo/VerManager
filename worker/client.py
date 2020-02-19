@@ -15,12 +15,15 @@ if __name__ == '__main__':
     from basic.letter import *
     from basic.info import Info
     from basic.type import *
+    from basic.util import partition
 else:
     from .basic.letter import *
     from .basic.info import Info
     from .basic.type import *
+    from .basic.util import partition
 
 from multiprocessing import Pool, Queue, Manager
+from multiprocessing.pool import AsyncResult
 from threading import Thread, Condition
 
 class DISCONN_EXCEPTION(Exception):
@@ -49,9 +52,9 @@ def extensionFromPath(path:str) -> str:
     else:
         return nameParts[-1]
 
-class RESPONSE_TO_SERVER_DAEMON(ModuleT):
+class Sender(ModuleT):
 
-    def __init__(self, server, info) -> None:
+    def __init__(self, server, info, cInst:Client) -> None:
         Thread.__init__(self)
 
         self.cond = Condition()
@@ -81,16 +84,21 @@ class RESPONSE_TO_SERVER_DAEMON(ModuleT):
                 continue
 
             while ret == Error:
-                # Waiting for <TASK_DEAL_DAEMON> reconnecting
+                # Waiting for <Receiver> reconnecting
                 time.sleep(5)
                 continue
 
-class TASK_COUNTER_MAINTAIN(ModuleT):
+class Recyler(ModuleT):
 
-    def __init__(self, t:'TASK_DEAL_DAEMON') -> None:
+    def __init__(self, cInst:Client) -> None:
         Thread.__init__(self)
-        self.tasks = t.inProcTasks
-        self.t = t
+
+        receiver = cInst.getModule('Receiver')
+        if not isinstance(receiver, Receiver):
+            raise Exception
+
+        self.tasks = receiver.inProcTasks
+        self.t = receiver
 
         self.__status = 0
 
@@ -116,9 +124,129 @@ class TASK_COUNTER_MAINTAIN(ModuleT):
             time.sleep(0.05)
 
 
-class TASK_DEAL_DAEMON(ModuleT):
 
-    def __init__(self, server, info) -> None:
+class Processor(Module):
+
+    def __init__(self, info, cInst:Client) -> None:
+        self.__max = int(info.getConfig('MAX_TASK_CAN_PROC'))
+        self.__numOfTasksInProc = 0
+        self.__cInst = cInst
+        self.__poolSize = int(info.getConfig('PROCESS_POLL_SIZE'))
+        self.__pool = Pool(self.__poolSize)
+        self.__info = info
+
+        self.__allTasks = [] # type: List[Tuple[str, AsyncResult]]
+        # Query purpose
+        self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
+
+    def maxTasksAbleToProc(self) -> int:
+        return self.__max
+
+    def tasksInProc(self) -> int:
+        return self.__numOfTasksInProc
+
+    def poolSize(self) -> int:
+        return self.__poolSize
+
+    def proc(self, reqLetter:NewLetter) -> State:
+
+        if not self.isAbleToProc():
+            return Error
+
+        tid = reqLetter.getHeader('tid')
+        if self.isReqInProc(tid):
+            return Error
+
+        s = self.__cInst.getModule("Server")
+
+        res = self.__pool.apply_async(Processor.__do_proc, (s, reqLetter, self.__info))
+        self.__numOfTasksInProc += 1
+
+        self.__allTasks.append((tid, res))
+        self.__allTasks_dict[tid] = res
+
+        return Ok
+
+    @staticmethod
+    def __do_proc(server:Server, post:Post, reqLetter:NewLetter, info:Info) -> None:
+
+        WORKER_NAME = info.getConfig('WORKER_NAME')
+
+        extra = reqLetter.getContent("extra")
+        building_cmds = extra['cmds']
+        result_path = extra['resultPath']
+
+        if platform.system() == "Windows":
+            result_path = result_path.replace("/", "\\")
+            building_cmds = result_path.replace(";", "&&")
+
+        # Notify master this task is change into in_processing state
+        response = ResponseLetter(ident = WORKER_NAME,
+                                  tid = vsn, state = Letter.RESPONSE_STATE_IN_PROC) # type: ignore
+        server.transfer(response)
+
+        # Processing
+        try:
+            repo_url = info.getConfig("REPO_URL")
+            projName = info.getConfig("PROJECT_NAME")
+
+            ret = os.system("git clone -b master " + repo_url)
+
+            os.chdir(projName)
+
+            revision = reqLetter.getContent('sn')
+            ret = os.system("git checkout -f " + revision)
+
+            version = reqLetter.getContent('vsn')
+            version_date = reqLetter.getContent('datetime')
+
+            building_cmds = building_cmds.replace("<vsn>", version)
+            building_cmds = building_cmds.replace("datetime>", version_date)
+            ret = os.system(building_cmds)
+
+            with open(result_path, "rb") as result_file:
+                vsn = reqLetter.getContent("vsn")
+                needPost = reqletter.getHeader("needPost") # type: ignore
+                target = server # type: Union[Server, Post]
+
+                isNeedPost = needPost == 'true'
+
+                if isNeedPost:
+                    target = post
+
+                for line in result_file:
+                    extension = extensionFromPath(result_path) # type: ignore
+                    binaryLetter = BinaryLetter(tid = vsn, bStr = line, # type:ignore
+                                                extension = extension)
+                    target.transfer(binaryLetter)
+
+                if not isNeedPost:
+                    response.setContent("state", Letter.RESPONSE_STATE_FINISHED)
+                    server.transfer(response)
+        except:
+            response.setContent("state", Letter.RESPONSE_STATE_FAILURE)
+            server.transfer(response)
+
+    # Remove tasks from processor and return
+    # the number of request finished
+    def recyle(self) -> int:
+        (readies, not_readies) = partition(self.__allTasks, lambda res: res[1].ready())
+        self.__allTasks = not_readies
+
+        for res in readies:
+            del self.__allTasks_dict [res[0]]
+
+        return len(readies)
+
+    def isReqInProc(self, tid:str) -> bool:
+        return tid in self.__allTasks_dict
+
+    def isAbleToProc(self) -> bool:
+        return self.tasksInProc() < self.maxTasksAbleToProc()
+
+class Receiver(ModuleT):
+
+    def __init__(self, server, info, cInst:Client) -> None:
         Thread.__init__(self)
 
         self.server = server
@@ -129,6 +257,8 @@ class TASK_DEAL_DAEMON(ModuleT):
 
         self.inProcTasks = {} # type: Dict[str, Any]
         self.__status = 0
+
+        self.__cInst = cInst
 
     def numOfTasks(self) -> int:
         return self.numOfTasksInProc
@@ -150,112 +280,36 @@ class TASK_DEAL_DAEMON(ModuleT):
 
     def run(self) -> None:
 
-        WORKER_NAME = self.info.getConfig('WORKER_NAME')
         server = self.server
+        processor = self.__cInst.getModule('Processor')
 
-        # Spawn TASK_COUNTER_MAINTAIN Thread
-        counter_maintainer = TASK_COUNTER_MAINTAIN(self)
-        counter_maintainer.start()
+        # Not Processor module
+        if not isinstance(processor, Processor):
+            raise Exception
 
         while True:
 
             if self.__status == 1:
-                counter_maintainer.stop()
                 return None
 
-            l = server.waitLetter()
+            reqLetter = server.waitLetter()
 
-            if isinstance(l, int):
+            if isinstance(reqLetter, int):
                 continue
 
-            print("Received letter:" + l.toString())
+            # print("Received letter:" + l.toString())
 
-            if not self.numOfTasksInProc < self.max:
-                # Worker is unable to accept task
-                # just response failure to server
-                letter = ResponseLetter(
-                    ident = WORKER_NAME,
-                    state = Letter.RESPONSE_STATE_FAILURE,
-                    tid = l.getContent('vsn'))
-                server.transfer(letter)
-                continue
+            processor.proc(reqLetter)
+            processor.recyle()
 
-            tid = l.getHeader('tid')
-            if tid in self.inProcTasks:
-                continue
+class Post(Module):
 
-            self.numOfTasksInProc += 1
-            res = self.pool.apply_async(TASK_DEAL_DAEMON.job, (server, l, self.info))
+    def __init__(self, address:str, port:int, info:Info, cInst:Client) -> None:
+        self.__postHost = Server(address, port, info, cInst)
 
-            self.inProcTasks[tid] = res
 
-    # Processing the assigned task and send back the result to server
-    @staticmethod
-    def job(server: 'Server', letter: typing.Any, info: Info) -> None:
-
-        REPO_URL = info.getConfig('REPO_URL')
-        PROJECT_NAME = info.getConfig('PROJECT_NAME')
-        WORKER_NAME = info.getConfig('WORKER_NAME')
-        BUILDING_CMDS = info.getConfig('BUILDING_CMDS')
-        RESULT_PATH = info.getConfig('RESULT_PATH')
-
-        if platform.system() == 'Windows':
-            RESULT_PATH = RESULT_PATH.replace("/", "\\")
-            BUILDING_CMDS = "&&".join(list(map(lambda cmd: cmd.replace("/", "\\"), BUILDING_CMDS)))
-        else:
-            # Linux platform
-            BUILDING_CMDS = ";".join(BUILDING_CMDS)
-
-        # Notify to server the worker is in processing
-        letterInProc = ResponseLetter(
-            ident = WORKER_NAME,
-            tid = letter.getContent('vsn'),
-            state = Letter.RESPONSE_STATE_IN_PROC)
-        server.transfer(letterInProc)
-
-        revision = letter.getContent('sn')
-        vsn = letter.getContent('vsn')
-        vsn_date = letter.getContent('datetime')
-
-        # Replace <vsn> and <sn> with value from server
-        BUILDING_CMDS = BUILDING_CMDS.replace("<vsn>", vsn)
-        BUILDING_CMDS = BUILDING_CMDS.replace("<datetime>", vsn_date)
-
-        # Processing
-        try:
-            # Fetch
-            ret = os.system("git clone -b master " + REPO_URL)
-
-            os.chdir(PROJECT_NAME)
-
-            # Revision checkout
-            ret = os.system("git checkout -f " + revision)
-
-            # Building
-            ret = os.system(BUILDING_CMDS)
-
-            # Send back to server
-            with open(RESULT_PATH, 'rb') as file:
-                for line in file:
-                    extension = extensionFromPath(RESULT_PATH)
-                    binaryLetter = BinaryLetter(tid = vsn, bStr = line,
-                                                extension = extension)
-                    server.transfer(binaryLetter)
-
-            # Response to server to notify that the task is finished
-            finishedLetter = ResponseLetter(ident = WORKER_NAME, tid = vsn,
-                                            state = Letter.RESPONSE_STATE_FINISHED)
-            server.transfer(finishedLetter)
-
-            # os.chdir("..")
-            # ret = os.system("rm", "-rf", PROJECT_NAME)
-
-        except:
-            traceback.print_exc()
-            letter = ResponseLetter(ident = WORKER_NAME, tid = vsn,
-                                    state = Letter.RESPONSE_STATE_FAILURE)
-            server.transfer(letter)
-            return None
+    def transfer(self, l:Letter) -> None:
+        pass
 
 class Server(Module):
 
@@ -267,7 +321,7 @@ class Server(Module):
     SOCK_TIMEOUT = 1
     SOCK_DISCONN = 2
 
-    def __init__(self, address:str, port:int, info:Info) -> None:
+    def __init__(self, address:str, port:int, info:Info, cInst:Client) -> None:
         self.info = info
 
         queueSize = info.getConfig('QUEUE_SIZE')
@@ -316,7 +370,7 @@ class Server(Module):
     # calling of this method will not transfer
     # a letter to server instance instead the
     # letter will first buffer into a queue
-    # and RESPONSE_TO_SERVER_DAEMON will deal
+    # and Sender will deal
     # with letters in queue
     def transfer(self, l) -> None:
         self.q.put(l)
@@ -469,8 +523,8 @@ class Client(Thread):
                 m.stop()
 
     def inProcTasks(self) -> List[str]:
-        taskDealer = self.getModule('TASK_DEAL_DAEMON')
-        if not isinstance(taskDealer, TASK_DEAL_DAEMON):
+        taskDealer = self.getModule('Receiver')
+        if not isinstance(taskDealer, Receiver):
             return []
 
         return taskDealer.listOfTasks_ident()
@@ -480,15 +534,14 @@ class Client(Thread):
 
     def connect(self) -> None:
         server = self.getModule('Server')
-        taskDealer = self.getModule('TASK_DEAL_DAEMON')
+        taskDealer = self.getModule('Receiver')
 
         if server is None or not isinstance(server, Server):
             return None
-        if taskDealer is None or not isinstance(taskDealer, TASK_DEAL_DAEMON):
+        if taskDealer is None or not isinstance(taskDealer, Receiver):
             return None
 
         server.connect(self.__name, taskDealer.maxNumber(), taskDealer.numOfTasks())
-
 
     def disconnect(self) -> None:
         server = self.getModule('Server')
@@ -502,7 +555,6 @@ class Client(Thread):
             return None
 
         return self.__modules[ident]
-
     def addModules(self, ident:str, m:Module) -> None:
         if ident in self.__modules:
             return None
@@ -523,23 +575,34 @@ class Client(Thread):
         max = info.getConfig('MAX_TASK_CAN_PROC')
         proc = info.getConfig('PROCESS_POOL_SIZE')
 
-        s = Server(address, port, info)
+        s = Server(address, port, info, self)
         s.connect(workerName, max, proc)
         self.__modules['Server'] = s
 
-        t1 = TASK_DEAL_DAEMON(s, info)
-        self.__modules['TASK_DEAL_DAEMON'] = t1
+        t1 = Receiver(s, info, self)
+        self.__modules['Receiver'] = t1
 
-        t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
-        self.__modules['PROCESS_POLL_SIZE'] = t2
+        t2 = Sender(s, info, self)
+        self.__modules['Sender'] = t2
 
-        modulesThread = list( filter(lambda m: isinstance(m, ModuleT), list(self.__modules.values())))
+        t3 = Recyler(self)
+        self.__modules['Recyler'] = t3
 
-        for m in modulesThread:
+        t4 = Post("127.0.0.1", 8013, info, self)
+        self.__modules['Post'] = t4
+
+        t5 = Processor(info, self)
+        self.__modules['Processor']
+
+        moduleThreads = list(
+            filter(lambda m: isinstance(m, ModuleT), list(self.__modules.values()))
+        )
+
+        for m in moduleThreads:
             if isinstance(m, ModuleT):
                 m.start()
 
-        for m in modulesThread:
+        for m in moduleThreads:
             if isinstance(m, ModuleT):
                 m.join()
 
