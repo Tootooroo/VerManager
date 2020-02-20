@@ -5,7 +5,7 @@ import os
 
 from manager.misc.basic.type import *
 
-from manager.misc.util import pathStrConcate
+from manager.misc.basic.util import pathStrConcate
 
 class STORAGE_IDENT_NOT_FOUND(Exception):
     pass

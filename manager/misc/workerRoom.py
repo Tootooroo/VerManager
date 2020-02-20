@@ -12,7 +12,7 @@ from manager.misc.worker import Worker, WorkerInitFailed
 from threading import Thread
 from queue import Queue, Empty
 
-from manager.misc.util import spawnThread
+from manager.misc.basic.util import spawnThread
 from manager.misc.logger import Logger
 
 from typing import *

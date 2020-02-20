@@ -241,12 +241,13 @@ class Task:
         if build is None:
             return None
 
-        extra = {"resultPath":build.getOutput(), "cmds":build.compactCmd()}
+        ident = self.id()
+        extra = {"resultPath":build.getOutput(), "cmds":build.getCmdStr()}
 
-        return NewLetter(self.id(), self.id(), self.getSN(),
+        return NewLetter(ident, ident, self.getSN(),
                          self.getVSN(), str(datetime.utcnow()),
-                         extra = extra,
                          parent = parent_id,
+                         extra = extra,
                          needPost = needPost)
 
     @staticmethod

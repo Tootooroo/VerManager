@@ -13,7 +13,7 @@ from manager.misc.worker import Task
 
 from manager.misc.dispatcher import Dispatcher
 
-from manager.misc.util import spawnThread
+from manager.misc.basic.util import spawnThread
 
 from manager.misc.server import ServerInst
 import worker.client as Client
@@ -478,6 +478,40 @@ class UnitTest(TestCase):
         self.assertTrue("GL5610-v2" in children_id)
         self.assertTrue("GL5610-v3" in children_id)
         self.assertTrue("GL8900" in children_id)
+
+        # Big task should unable to convert to big task
+        self.assertTrue(t.toNewTaskLetter() == None)
+
+        # Convert child to letter
+        # Format
+        # header  : '{"ident":"...", "tid":"...", "needPost":"true/false"}'
+        # content : '{"sn":"...", "vsn":"...", "datetime":"...",
+        #             "extra":{"resultPath":"...", "cmds":"..."} }"
+        v2Letter = GL5610_v2[0].toNewTaskLetter()
+
+        v2Ident = v2Letter.getHeader("ident")
+        self.assertEqual("VersionToto_GL5610-v2", v2Ident)
+
+        v2Tid = v2Letter.getHeader("tid")
+        self.assertEqual("VersionToto_GL5610-v2", v2Tid)
+
+        v2NeedPost = v2Letter.getHeader("needPost")
+        self.assertEqual("true", v2NeedPost)
+
+        v2SN = v2Letter.getContent("sn")
+        self.assertEqual("ABC", v2SN)
+
+        v2VSN = v2Letter.getContent("vsn")
+        self.assertEqual("VersionToto", v2VSN)
+
+        extra = v2Letter.getContent("extra")
+
+        resultPath = extra['resultPath']
+        cmds = extra['cmds']
+
+        self.assertEqual("...", resultPath)
+        self.assertEqual("...;...", cmds)
+
 
 if __name__ == '__main__':
     unittest.main(warnings='ignore')

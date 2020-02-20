@@ -30,7 +30,7 @@ class Build:
         return self.__cmdStr
 
     def getOutput(self) ->  str:
-        return self.__output
+        return self.__output[0]
 
     def length(self) -> int:
         return len(self.__cmdStr)
@@ -102,10 +102,6 @@ class BuildSet:
         builds_dict = buildSet['Builds']
 
         for bId in builds_dict:
-            build = builds_dict[bId]
-            build['RepoUrl'] = buildSet['RepoUrl']
-            build['ProjectName'] = buildSet['Projectname']
-
             builds[bId] = Build(bId, builds_dict[bId])
 
         return builds
