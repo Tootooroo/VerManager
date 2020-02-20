@@ -241,7 +241,6 @@ class Task:
         if build is None:
             return None
 
-        ident = self.id()
         extra = {"resultPath":build.getOutput(), "cmds":build.getCmdStr()}
 
         return NewLetter(ident, ident, self.getSN(),
