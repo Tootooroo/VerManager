@@ -48,21 +48,23 @@ BuildSet:
         - ...
 
   Posts:
-    group:
-      - GL5610
-      - GL5610-v2
-      - GL5610-v3
-    cmd:
-      - link_GL5610.bat
-    output:
-      - "C:\\pack.rar"
+    GL5610_V2_V3:
+        group:
+        - GL5610
+        - GL5610-v2
+        - GL5610-v3
+        cmd:
+        - link_GL5610.bat
+        output:
+        - "C:\\pack.rar"
 
-    group:
-      - GL8900
-    cmd:
-      - link_GL8900.bat
-    output:
-      - "C:\\pack.rar"
+    GL8900:
+        group:
+        - GL8900
+        cmd:
+        - link_GL8900.bat
+        output:
+        - "C:\\pack.rar"
 
 Build:
   RepoUrl: git@gpon.git.com:gpon/olt.git

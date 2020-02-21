@@ -1,6 +1,6 @@
 # build.py
 
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Tuple
 from functools import reduce
 
 MAX_LENGTH_OF_COMMAND = 1024
@@ -47,12 +47,12 @@ class BuildSet:
             raise BUILD_FORMAT_WRONG
 
         self.__builds = BuildSet.__split(buildSet)
-        self.__postBelong = {} # type: Dict[str, List[Build]]
+        self.__postBelong = {} # type: Dict[str, Tuple[str, List[Build]]]
         self.__postBuilds = {} # type: Dict[str, Build]
 
         self.__buildPosts(buildSet)
 
-    def belongTo(self, bId) -> Optional[List[Build]]:
+    def belongTo(self, bId) -> Optional[Tuple[str, List[Build]]]:
         if not bId in self.__postBelong:
             return None
         return self.__postBelong[bId]
@@ -120,4 +120,4 @@ class BuildSet:
 
             for bId in group:
                 buildsOfGroup = list(map(lambda bId: self.__builds[bId], group))
-                self.__postBelong[bId] = buildsOfGroup
+                self.__postBelong[bId] = (pId, buildsOfGroup)

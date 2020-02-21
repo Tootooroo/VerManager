@@ -238,15 +238,19 @@ class Task:
             needPost = ""
 
         build = self.__build
+
         if build is None:
             return None
 
         extra = {"resultPath":build.getOutput(), "cmds":build.getCmdStr()}
 
-        return NewLetter(ident, ident, self.getSN(),
+        (menu, members) = self.__buildSet.belongTo(self.id()) # type: ignore
+
+        return NewLetter(self.id(), self.getSN(),
                          self.getVSN(), str(datetime.utcnow()),
                          parent = parent_id,
                          extra = extra,
+                         menu = menu,
                          needPost = needPost)
 
     @staticmethod

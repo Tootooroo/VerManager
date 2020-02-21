@@ -8,7 +8,7 @@ from manager.misc.eventListener import EventListener, letterLog
 from manager.misc.basic.letter import *
 from manager.misc.task import Task
 
-from manager.misc.storage import Storage, StoChooser
+from manager.misc.basic.storage import Storage, StoChooser
 from manager.misc.logger import Logger
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
