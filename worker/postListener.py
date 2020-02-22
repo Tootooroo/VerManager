@@ -1,5 +1,10 @@
 # client_post.py
 
+import socket
+import tempfile
+import os
+import platform
+
 from client import Client
 from server import Server
 from post import Post
@@ -8,7 +13,7 @@ from sender import Sender
 from processor import Processor
 
 from basic.util import spawnThread
-from basic.letter import Letter
+from basic.letter import Letter, BinaryLetter
 from basic.info import Info
 from basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from basic.storage import Storage, StoChooser
@@ -16,8 +21,6 @@ from basic.storage import Storage, StoChooser
 from typing import Optional, Any, Tuple, List, Dict
 from threading import Thread, Lock
 from queue import Queue
-
-import socket
 
 ReqIdent = Tuple[str, str]
 
@@ -30,11 +33,13 @@ class PostListener(ModuleDaemon):
         self.__port = port
 
         self.__cInst = cInst
-        self.__processor = PostProcessor()
+        self.__processor = PostProcessor(cInst)
 
-    def reqAppend(self, parent:str, tid:str, stoId:str) -> None:
-        self.__processor.appendPend(parent, tid, stoId)
+    def reqAppend(self, stuff:'Stuff') -> None:
+        self.__processor.appendStuff(stuff)
 
+    def menuAppend(self, menu:'PostMenu') -> None:
+        self.__processor.appendMenu(menu)
 
     def run(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -50,9 +55,10 @@ class PostListener(ModuleDaemon):
 
 class PostMenu:
 
-    def __init__(self, depends:List[str], cmd:str) -> None:
+    def __init__(self, depends:List[str], cmd:str, output:str) -> None:
         self.__cmd = cmd
         self.__depends = {} # type: Dict[str, bool]
+        self.__output = output
 
         # Things that need by cmd
         self.__stuffs = Stuffs() # type: Stuffs
@@ -60,7 +66,7 @@ class PostMenu:
         for d in depends:
             self.__depends[d] = False
 
-    def pairDepend(self, stuff:Stuff) -> bool:
+    def stuffMatch(self, stuff:Stuff) -> bool:
         stuffName = stuff.name()
 
         if not stuffName in self.__depends:
@@ -86,6 +92,11 @@ class PostMenu:
 
         return True
 
+    def getOutput(self) -> str:
+        return self.__output
+
+    def getStuffs(self) -> List[Stuff]:
+        return self.__stuffs.toList()
 
     def isSatisfied(self) -> bool:
         return not False in list(self.__depends.values())
@@ -99,18 +110,40 @@ class Stuffs:
         self.__version = None # type: Optional[str]
         self.__stuffs = {} # type: Dict[str, Stuff]
 
+        self.__lock = Lock()
+
         self.__stuffs_list = [] # type: List[Stuff]
         self.__index = 0
         self.__len = 0
 
-    def __iter__(self) -> Stuffs:
+    def __iter__(self) -> 'Stuffs':
         return self
 
-    def __next__(self) -> Stuff:
-        index = self.__index
-        self.__index += 1
+    def __next__(self) -> 'Stuff':
+
+        with self.__lock:
+            index = self.__index
+            self.__index += 1
 
         return self.__stuffs_list[index]
+
+    def popHead(self) -> Optional['Stuff']:
+
+        self.__lock.acquire()
+
+        if self.__len > 0:
+            elem = self.__stuffs_list[0]
+        else:
+            return None
+
+        self.__stuffs_list.remove(elem)
+
+        ident = elem.name()
+        del self.__stuffs [ident]
+
+        self.__lock.release()
+
+        return elem
 
     def toList(self) -> List[Stuff]:
         return list(self.__stuffs.values())
@@ -122,9 +155,10 @@ class Stuffs:
         return self.__version
 
     def getStuff(self, stuffName:str) -> Optional['Stuff']:
-        if not stuffName in self.__stuffs:
-            return None
-        return self.__stuffs[stuffName]
+        with self.__lock:
+            if not stuffName in self.__stuffs:
+                return None
+            return self.__stuffs[stuffName]
 
     def isExists(self, stuffName:str) -> bool:
         return stuffName in self.__stuffs
@@ -132,19 +166,27 @@ class Stuffs:
     def addStuff(self, stuff:Stuff) -> None:
         stuffName = stuff.name()
 
-        # if version has been set then only stuff which
-        # version is same with self.__version can be
-        # added
-        if not self.__version is None:
-            if stuff.version() != self.__version:
+        with self.__lock:
+            # if version has been set then only stuff which
+            # version is same with self.__version can be
+            # added
+            if not self.__version is None:
+                if stuff.version() != self.__version:
+                    return None
+
+            if stuffName in self.__stuffs:
                 return None
 
-        if stuffName in self.__stuffs:
-            return None
+            self.__stuffs[stuffName] = stuff
+            self.__stuffs_list.append(stuff)
+            self.__len += 1
 
-        self.__stuffs[stuffName] = stuff
-        self.__stuffs_list.append(stuff)
-        self.__len += 1
+    def removeStuff(self, name:str) -> None:
+        with self.__lock:
+            if not name in self.__stuffs:
+                return None
+
+            del self.__stuffs [name]
 
 class Stuff:
 
@@ -177,17 +219,21 @@ class Stuff:
 
 class PostProcessor(Thread):
 
-    def __init__(self) -> None:
+    def __init__(self, cInst:Any) -> None:
         Thread.__init__(self)
+
+        self.__cInst = cInst
 
         # List of menu from server
         # after command of menu is
         # executed the menu will
         # be removed from this list
         self.__menus = [] # type: List[PostMenu]
+        self.__menus_lock = Lock()
 
         self.__stuffs = Stuffs() # type: Stuffs
-        self.__stuffs_lock = Lock()
+
+        self.__satisfiedMenus = Queue(10) # type: Queue[PostMenu]
 
         self.__reqQueue = Queue(10) # type: Queue[socket.socket]
         self.__inProcReq = [] # type: List[ReqIdent]
@@ -196,50 +242,100 @@ class PostProcessor(Thread):
 
     def run(self) -> None:
 
-        spawnThread(self.__pend_proc)
+        spawnThread(self.__menu_collect_stuffs)
 
-        lock = self.__stuffs_lock
+        menu_queue = self.__satisfiedMenus
+
+        if platform.system() == 'Windows':
+            sep = "&&"
+        else:
+            sep = ";"
 
         while True:
 
-            with self.__stuffs_lock:
-                stuffs = self.__stuffs.toList()
+            menu = menu_queue.get()
+
+            command = menu.getCmd()
+            stuffs = menu.getStuffs()
+
+            workingDir = tempfile.TemporaryDirectory()
 
             for stuff in stuffs:
-                pass
+                self.__storage.copyTo(stuff.where(), workingDir.name)
 
+            command = "cd " + workingDir.name + sep + command
 
+            os.system(command)
+
+            # Output of command should be a file
+            output = menu.getOutput()
+            if not os.path.isfile(output):
+                continue
+
+            # Cleanup
+            for stuff in stuffs:
+                self.__storage.delete(stuff.name())
+
+            server = self.__cInst.getModule('Server')
+
+            with open("output", "rb") as output_file:
+
+                for line in output_file:
+                    binaryLetter = BinaryLetter(stuff.name(), line,
+                                                menu = stuff.menu(),
+                                                extension = "rar",
+                                                parent = stuff.version())
+                    server.transfer(binaryLetter)
 
 
     def appendMenu(self, menu:PostMenu) -> None:
-        self.__menus.append(menu)
+        with self.__menus_lock:
+            self.__menus.append(menu)
 
     def appendStuff(self, stuff:Stuff) -> None:
-        with self.__stuffs_lock:
-            self.__stuffs.addStuff(stuff)
+        self.__stuffs.addStuff(stuff)
 
     # Retrive information and binary file from workers and store into __pends
-    def __pend_proc(self, args) -> None:
+    def __menu_collect_stuffs(self, args) -> None:
 
         while True:
-            sock = self.__reqQueue.get()
+            try:
+                sock = self.__reqQueue.get(timeout = 1) # type: Optional[socket.socket]
+            except:
+                sock = None
 
-            ret = self.__binary_recv(sock)
+            if sock is None:
+                stuff = self.__stuffs.popHead()
+            else:
+                stuff = self.__build_stuff(sock)
 
-            if ret is None:
-                return None
+            if stuff is None:
+                continue
 
-            version = ret[0]
-            tid = ret[1]
-            stoId = ret[2]
-            menu = ret[3]
+            isPaired = self.__menu_stuff_pair(stuff)
 
-            stuff = Stuff(version, menu, tid, stoId)
+            # fixme: add a counter to this stuff so we can remove
+            #        a stuff if it's counter's value is bigger than
+            #        a specific value.
+            if isPaired is False:
+                self.__stuffs.addStuff(stuff)
 
-            self.appendStuff(stuff)
+            # After match we need to check is there a menu which
+            # collect all stuffs of it need
+            self.__menus_lock.acquire()
+
+            for menu in self.__menus:
+                isSatisfied = menu.isSatisfied()
+
+                if isSatisfied:
+                    self.__satisfiedMenus.put(menu)
+
+            self.__menus_lock.release()
+
+
 
     # Return (tid, parent, stoId)
-    def __binary_recv(self, sock:socket.socket) -> Optional[Tuple[str, str, str, str]]:
+    def __build_stuff(self, sock:socket.socket) -> Optional[Stuff]:
 
         checkFlag = False
         storage = self.__storage
@@ -258,9 +354,9 @@ class PostProcessor(Thread):
                 return None
 
             tid = letter.getHeader("tid")
-            parent = letter.getHeader("parent")
+            version = letter.getHeader("parent")
             menu = letter.getHeader("menu")
-            stoId = PostProcessor.__stoIdGen(parent, tid)
+            stoId = PostProcessor.__stoIdGen(version, tid)
 
             if checkFlag is False:
                 checkFlag = True
@@ -289,14 +385,27 @@ class PostProcessor(Thread):
         if tid == "":
             return None
 
-        return (tid, parent, stoId, menu)
+        return Stuff(version, menu, tid, stoId)
+
+    def __menu_stuff_pair(self, stuff:Stuff) -> bool:
+        menus = self.__menus
+
+        self.__menus_lock.acquire()
+
+        for menu in menus:
+            isMatched = menu.stuffMatch(stuff)
+
+            if isMatched:
+                break
+
+        self.__menus_lock.release()
+
+        return isMatched
 
 
     @staticmethod
     def __stoIdGen(tid:str, parent:str) -> str:
         return parent+"__"+tid
-
-
 
     @staticmethod
     def __receving(sock: socket.socket) -> Optional[Letter]:

@@ -9,7 +9,7 @@ from basic.info import Info
 from basic.type import *
 from basic.util import partition
 
-from module import Module
+from basic.mmanager import Module
 
 from post import Post
 from server import Server
