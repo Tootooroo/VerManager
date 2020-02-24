@@ -2,16 +2,17 @@
 
 from typing import Any, Union
 
-from basic.info import Info
-from basic.type import *
-from basic.letter import Letter
+from .basic.info import Info
+from .basic.type import *
+from .basic.letter import Letter
+from .basic.mmanager import Module
 
-from module import Module
-from server import Server
+from .server import Server
 
 class Post(Module):
 
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
+        Module.__init__(self, "")
         self.__server = Server(address, port, info, cInst)
 
     def connect(self, workerName:str) -> State:

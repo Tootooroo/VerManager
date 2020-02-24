@@ -3,17 +3,17 @@
 import time
 
 import typing
-from module import ModuleT
-from basic.info import Info
-from basic.type import *
-from server import Server
+from .basic.mmanager import ModuleDaemon
+from .basic.info import Info
+from .basic.type import *
+from .server import Server
 
 from threading import Condition
 
-class Sender(ModuleT):
+class Sender(ModuleDaemon):
 
     def __init__(self, server:Server, info:Info, cInst:typing.Any) -> None:
-        ModuleT.__init__(self)
+        ModuleDaemon.__init__(self, "")
 
         self.cond = Condition()
         self.server = server

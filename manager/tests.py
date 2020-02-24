@@ -16,7 +16,7 @@ from manager.misc.dispatcher import Dispatcher
 from manager.misc.basic.util import spawnThread
 
 from manager.misc.server import ServerInst
-import worker.client as Client
+from worker.client import Client
 
 import time
 import unittest
@@ -44,15 +44,15 @@ class HttpRequest_:
 
 class UnitTest(TestCase):
 
-    def test_index_page(self):
+    def tes_index_page(self):
         response = self.client.get('/manager/')
         self.assertTemplateUsed(response, 'index.html')
 
-    def test_verRegister_page(self):
+    def tes_verRegister_page(self):
         response = self.client.get('/manager/verManager')
         self.assertTemplateUsed(response, 'verManager.html')
 
-    def test_register_feature(self):
+    def tes_register_feature(self):
         response = self.client.post('/manager/verRegister/register',
                                     data = { 'Version' : 'V1', 'verChoice' : 'XXXX' })
         self.assertTrue(response.status_code == 200)
@@ -124,110 +124,57 @@ class UnitTest(TestCase):
 
     def test_letter(self):
 
-        def letterTest(l):
-            self.assertEqual(Letter.NewTask, l.type_)
-            self.assertEqual(content, l.content)
-            self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
+        from manager.misc.basic.letter import NewLetter, ResponseLetter, BinaryLetter
 
-            # Content testing
-            self.assertEqual('sn', l.getContent('sn'))
-            self.assertEqual('vsn', l.getContent('vsn'))
-            self.assertEqual('123', l.getContent('datetime'))
+        # NewLetter Test
+        dateStr = str(datetime.utcnow())
+        newLetter = NewLetter("newLetter", "sn_1", "vsn_1", datetime = dateStr, menu = "Menu",
+                              parent = "123456", needPost = "true")
+        self.assertEqual("sn_1", newLetter.getContent('sn'))
+        self.assertEqual("vsn_1", newLetter.getContent('vsn'))
+        self.assertEqual(dateStr, newLetter.getContent('datetime'))
+        self.assertEqual('true', newLetter.getHeader('needPost'))
+        self.assertEqual('Menu', newLetter.getHeader('menu'))
+        self.assertEqual('123456', newLetter.getHeader('parent'))
 
-            # Header testing
-            self.assertEqual('t', l.getHeader('tid'))
-            self.assertEqual('i', l.getHeader('ident'))
+        # ResponseLetter Test
+        response = ResponseLetter("tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
+        self.assertEqual("tid_1", response.getHeader("tid"))
+        self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getContent('state'))
+        self.assertEqual("123456", response.getHeader('parent'))
 
-        header = {"ident":"i", "tid":"t"}
-        content = {"sn":"sn", "vsn":"vsn", "datetime":"123"}
-        l = Letter(Letter.NewTask, header, content)
+        # BinaryLetter Test
+        binary = BinaryLetter("tid_1", b"123456", menu = "menu", extension = "rar", parent = "123456")
+        self.assertEqual("tid_1", binary.getHeader('tid'))
+        self.assertEqual(b"123456", binary.getContent('bytes'))
+        self.assertEqual("menu", binary.getHeader('menu'))
+        self.assertEqual("123456", binary.getHeader("parent"))
+        self.assertEqual("rar", binary.getHeader('extension'))
 
-        letterTest(l)
+        binBytes = binary.binaryPack()
+        binary_parsed = Letter.parse(binBytes)
+        self.assertEqual("tid_1", binary_parsed.getHeader('tid'))
+        self.assertEqual(b"123456", binary_parsed.getContent('bytes'))
+        self.assertEqual("menu", binary_parsed.getHeader('menu'))
+        self.assertEqual("123456", binary_parsed.getHeader("parent"))
+        self.assertEqual("rar", binary_parsed.getHeader('extension'))
 
-        # Json to letter
-        l1 = Letter.json2Letter('{"type":"new", "header":{"ident":"i", "tid":"t"},"content":{"sn":"sn", "vsn":"vsn", "datetime":"123"}}')
-        letterTest(l1)
+        # MenuLetter Test
+        menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
+                                ["file1", "file2"], "/home/test/test.py")
+        self.assertEqual("version", menuLetter.getHeader('version'))
+        self.assertEqual("mid_1", menuLetter.getHeader('mid'))
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter.getContent("cmds"))
+        self.assertEqual(["file1", "file2"], menuLetter.getContent('depends'))
+        self.assertEqual("/home/test/test.py", menuLetter.getContent('output'))
 
-        # Letter parse
-        letterInBytes = l.toBytesWithLength()
-        l_parsed = Letter.parse(letterInBytes)
-        letterTest(l)
+        menuBytes = menuLetter.toBytesWithLength()
+        menuLetter_parsed = Letter.parse(menuBytes)
 
-        # Parse Binary type
-        tid = b"".join([str(x).encode() for x in range(64)])[0:64]
-        letterInBytes = (1).to_bytes(2, "big") \
-                        + (4).to_bytes(4, "big") \
-                        + (0).to_bytes(10, "big") \
-                        + tid \
-                        + (123123).to_bytes(4, "big")
-        l_parsed = Letter.parse(letterInBytes)
-
-        self.assertEqual(tid.decode(), l_parsed.getHeader('tid'))
-        self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('bytes'))
-
-        # letterBytesRemain check
-        streamComplete = (14).to_bytes(2, "big") + b'{"type":"new"}'
-        streamIncomplete = (14).to_bytes(2, "big") + b'{"type":"new"'
-
-        self.assertEqual(0, Letter.letterBytesRemain(streamComplete))
-        self.assertEqual(1, Letter.letterBytesRemain(streamIncomplete))
-
-        letterInBytes_incomplete = (1).to_bytes(2, "big") \
-                                + (4).to_bytes(4, "big") \
-                                + (0).to_bytes(10, "big") \
-                                + tid \
-                                + (123123).to_bytes(3, "big")
-
-        self.assertEqual(0, Letter.letterBytesRemain(letterInBytes))
-        self.assertEqual(1, Letter.letterBytesRemain(letterInBytes_incomplete))
-
-        # Parse testing
-
-        # NewTask Letter
-        newLetter = NewLetter(ident = "123", tid = "tid", sn = "sn", vsn = "vsn", datetime = "123")
-        l = Letter.parse(newLetter.toBytesWithLength())
-
-        self.assertEqual("123", l.getHeader('ident'))
-        self.assertEqual("tid", l.getHeader('tid'))
-        self.assertEqual("sn", l.getContent("sn"))
-        self.assertEqual("vsn", l.getContent("vsn"))
-        self.assertEqual("123", l.getContent("datetime"))
-
-        # Response Letter
-        responseLetter = ResponseLetter(ident = "ident", tid = "tid", state = "s")
-        l = Letter.parse(responseLetter.toBytesWithLength())
-
-        self.assertEqual("ident", l.getHeader("ident"))
-        self.assertEqual("tid", l.getHeader("tid"))
-        self.assertEqual("s", l.getContent("state"))
-
-        # PropertyNotify Letter
-        propLetter = PropLetter(ident = "123", max = "2", proc = "2")
-        l = Letter.parse(propLetter.toBytesWithLength())
-
-        self.assertEqual("123", l.getHeader('ident'))
-        self.assertEqual("2", l.getContent('MAX'))
-        self.assertEqual("2", l.getContent('PROC'))
-
-        # Binary Letter
-        binLetter = BinaryLetter(tid = "123", bStr = b"123")
-        l = Letter.parse(binLetter.toBytesWithLength())
-
-        self.assertEqual("123", l.getHeader('tid'))
-        self.assertEqual(b"123", l.getContent("bytes"))
-
-        # Log Letter
-        logLetter = LogLetter(logId = "123", logMsg = "123")
-        l = Letter.parse(logLetter.toBytesWithLength())
-
-        self.assertEqual("123", l.getHeader('logId'))
-        self.assertEqual("123", l.getContent('logMsg'))
-
-        # Log Register Letter
-        logRegLetter = LogRegLetter(logId = "123")
-        l = Letter.parse(logRegLetter.toBytesWithLength())
-
-        self.assertEqual("123", l.getHeader('logId'))
+        self.assertEqual("mid_1", menuLetter_parsed.getHeader('mid'))
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getContent("cmds"))
+        self.assertEqual(["file1", "file2"], menuLetter_parsed.getContent('depends'))
+        self.assertEqual("/home/test/test.py", menuLetter_parsed.getContent('output'))
 
     def tes_Connected(self):
 
@@ -273,7 +220,7 @@ class UnitTest(TestCase):
 
         self.assertEqual(0, wr.getNumOfWorkersInWait())
 
-    def tes_logger(self):
+    def test_logger(self):
 
         from manager.misc.logger import Logger
 
@@ -373,7 +320,7 @@ class UnitTest(TestCase):
     def test_storage(self):
 
         import os
-        from manager.misc.storage import Storage, StoChooser
+        from manager.misc.basic.storage import Storage, StoChooser
 
         fileName = "file"
         storage = Storage("./Storage", None)
@@ -431,8 +378,9 @@ class UnitTest(TestCase):
         self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v3'))
 
         bs_GL8900 = bs.belongTo('GL8900')
-        self.assertTrue(len(bs_GL8900) == 1)
-        self.assertTrue(bs_GL8900[0].getIdent() == 'GL8900')
+        self.assertEqual("GL8900_OEM", bs_GL8900[0])
+        self.assertTrue(len(bs_GL8900[1]) == 1)
+        self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
 
     def test_task(self):
         from manager.misc.basic.info import Info
@@ -489,11 +437,8 @@ class UnitTest(TestCase):
         #             "extra":{"resultPath":"...", "cmds":"..."} }"
         v2Letter = GL5610_v2[0].toNewTaskLetter()
 
-        v2Ident = v2Letter.getHeader("ident")
-        self.assertEqual("VersionToto_GL5610-v2", v2Ident)
-
         v2Tid = v2Letter.getHeader("tid")
-        self.assertEqual("VersionToto_GL5610-v2", v2Tid)
+        self.assertEqual("GL5610-v2", v2Tid)
 
         v2NeedPost = v2Letter.getHeader("needPost")
         self.assertEqual("true", v2NeedPost)
@@ -510,7 +455,93 @@ class UnitTest(TestCase):
         cmds = extra['cmds']
 
         self.assertEqual("...", resultPath)
-        self.assertEqual("...;...", cmds)
+        self.assertEqual(['...', '...'], cmds)
+
+    def test_postListener(self):
+
+        from manager.misc.worker import Worker
+        from worker.basic.info import Info
+        from worker.server import Server
+        from worker.basic.mmanager import MManager
+        from worker.postListener import Stuff, Stuffs, PostMenu, PostListener, PostProcessor
+
+        manager = MManager()
+
+        info = Info("./worker/config.yaml")
+
+        server = Server("127.0.0.1", 8044, info, manager)
+        manager.addModule("Server", server)
+
+        pl = PostListener("127.0.0.1", 8033, manager)
+        pl.start()
+
+        manager.addModule("PostListener", pl)
+
+        menuLetter = MenuLetter("version", "Mid", ["cd /home/aydenlin", "touch ll", "echo '123' > ll"],
+                                ["file1", "file2", "file3"],
+                                "/home/aydenlin/ll")
+        pl.menuAppend(menuLetter)
+
+        # file1
+        binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", extension = "rar", parent = "version")
+
+        time.sleep(1)
+
+        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock1.connect(("127.0.0.1", 8033))
+
+        Worker.sending(sock1, binaryLetter)
+        Worker.sending(sock1, binaryLetter_last)
+
+        sock1.close()
+
+        # file2
+        binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", extension = "rar", parent = "version")
+
+        time.sleep(1)
+
+        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock1.connect(("127.0.0.1", 8033))
+
+        Worker.sending(sock1, binaryLetter)
+        Worker.sending(sock1, binaryLetter_last)
+
+        sock1.close()
+
+        # file3
+        binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", extension = "rar", parent = "version")
+
+        time.sleep(1)
+
+        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock1.connect(("127.0.0.1", 8033))
+
+        Worker.sending(sock1, binaryLetter)
+        Worker.sending(sock1, binaryLetter_last)
+
+        sock1.close()
+
+
+        time.sleep(5)
+
+        # Binary letter from postListener
+        bin_letter = server.responseRetrive()
+        self.assertTrue(not bin_letter is None)
+        self.assertEqual(b'123\n', bin_letter.getContent('bytes'))
+        self.assertEqual("rar", bin_letter.getHeader('extension'))
+        self.assertEqual("Mid", bin_letter.getHeader("menu"))
+        self.assertEqual("version", bin_letter.getHeader("parent"))
+
+        # Response letter from postListener
+        response_letter = server.responseRetrive()
+        self.assertTrue(not response_letter is None)
+        self.assertEqual("Mid", response_letter.getHeader('tid'))
+        self.assertEqual("version", response_letter.getHeader('parent'))
+
+        time.sleep(10)
 
 
 if __name__ == '__main__':

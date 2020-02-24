@@ -17,7 +17,7 @@ from manager.misc.eventHandlers import responseHandler, binaryHandler, logHandle
 
 from manager.misc.logger import Logger
 
-from manager.misc.storage import Storage
+from manager.misc.basic.storage import Storage
 
 from manager.misc.exceptions import INVALID_CONFIGURATIONS
 

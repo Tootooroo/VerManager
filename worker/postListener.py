@@ -5,18 +5,18 @@ import tempfile
 import os
 import platform
 
-from client import Client
-from server import Server
-from post import Post
-from receiver import Receiver
-from sender import Sender
-from processor import Processor
+from .client import Client
+from .server import Server
+from .post import Post
+from .receiver import Receiver
+from .sender import Sender
+from .processor import Processor
 
-from basic.util import spawnThread
-from basic.letter import Letter, BinaryLetter
-from basic.info import Info
-from basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
-from basic.storage import Storage, StoChooser
+from .basic.util import spawnThread
+from .basic.letter import Letter, BinaryLetter, MenuLetter, ResponseLetter
+from .basic.info import Info
+from .basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
+from .basic.storage import Storage, StoChooser
 
 from typing import Optional, Any, Tuple, List, Dict
 from threading import Thread, Lock
@@ -38,7 +38,12 @@ class PostListener(ModuleDaemon):
     def reqAppend(self, stuff:'Stuff') -> None:
         self.__processor.appendStuff(stuff)
 
-    def menuAppend(self, menu:'PostMenu') -> None:
+    def menuAppend(self, menuLetter:'MenuLetter') -> None:
+        menu = PostMenu(menuLetter.getHeader('version'),
+                        menuLetter.getHeader('mid'),
+                        menuLetter.getContent('depends'),
+                        menuLetter.getContent('cmds'),
+                        menuLetter.getContent('output'))
         self.__processor.appendMenu(menu)
 
     def run(self) -> None:
@@ -53,34 +58,41 @@ class PostListener(ModuleDaemon):
 
             self.__processor.req(wSock)
 
+    def stop(self) -> None:
+        pass
+
 class PostMenu:
 
-    def __init__(self, depends:List[str], cmd:str, output:str) -> None:
+    def __init__(self, version:str, ident:str, depends:List[str], cmd:List[str], output:str) -> None:
+        self.__version = version
+        self.__ident = ident
         self.__cmd = cmd
         self.__depends = {} # type: Dict[str, bool]
         self.__output = output
 
         # Things that need by cmd
         self.__stuffs = Stuffs() # type: Stuffs
+        self.__stuffs.setVersion(version)
 
         for d in depends:
             self.__depends[d] = False
 
-    def stuffMatch(self, stuff:Stuff) -> bool:
+    def getVersion(self) -> str:
+        return self.__version
+
+    def getIdent(self) -> str:
+        return self.__ident
+
+    def stuffMatch(self, stuff:'Stuff') -> bool:
         stuffName = stuff.name()
 
         if not stuffName in self.__depends:
             return False
 
-        versionOfStuffs = self.__stuffs.getVersion()
         version = stuff.version()
 
-        # Setup version to stuffs
-        if versionOfStuffs is None:
-            self.__stuffs.setVersion(version)
-
         # Version not paired
-        if versionOfStuffs != version:
+        if self.__version != version:
             return False
 
         # Already exists
@@ -95,13 +107,13 @@ class PostMenu:
     def getOutput(self) -> str:
         return self.__output
 
-    def getStuffs(self) -> List[Stuff]:
+    def getStuffs(self) -> List['Stuff']:
         return self.__stuffs.toList()
 
     def isSatisfied(self) -> bool:
         return not False in list(self.__depends.values())
 
-    def getCmd(self) -> str:
+    def getCmd(self) -> List[str]:
         return self.__cmd
 
 class Stuffs:
@@ -134,6 +146,7 @@ class Stuffs:
         if self.__len > 0:
             elem = self.__stuffs_list[0]
         else:
+            self.__lock.release()
             return None
 
         self.__stuffs_list.remove(elem)
@@ -141,11 +154,13 @@ class Stuffs:
         ident = elem.name()
         del self.__stuffs [ident]
 
+        self.__len -= 1
+
         self.__lock.release()
 
         return elem
 
-    def toList(self) -> List[Stuff]:
+    def toList(self) -> List['Stuff']:
         return list(self.__stuffs.values())
 
     def setVersion(self, version:str) -> None:
@@ -163,7 +178,7 @@ class Stuffs:
     def isExists(self, stuffName:str) -> bool:
         return stuffName in self.__stuffs
 
-    def addStuff(self, stuff:Stuff) -> None:
+    def addStuff(self, stuff:'Stuff') -> None:
         stuffName = stuff.name()
 
         with self.__lock:
@@ -187,6 +202,7 @@ class Stuffs:
                 return None
 
             del self.__stuffs [name]
+            self.__len -= 1
 
 class Stuff:
 
@@ -244,7 +260,7 @@ class PostProcessor(Thread):
 
         spawnThread(self.__menu_collect_stuffs)
 
-        menu_queue = self.__satisfiedMenus
+        statisfied_menus = self.__satisfiedMenus
 
         if platform.system() == 'Windows':
             sep = "&&"
@@ -253,7 +269,7 @@ class PostProcessor(Thread):
 
         while True:
 
-            menu = menu_queue.get()
+            menu = statisfied_menus.get()
 
             command = menu.getCmd()
             stuffs = menu.getStuffs()
@@ -263,9 +279,14 @@ class PostProcessor(Thread):
             for stuff in stuffs:
                 self.__storage.copyTo(stuff.where(), workingDir.name)
 
-            command = "cd " + workingDir.name + sep + command
+            command.insert(0, "cd " + workingDir.name)
 
-            os.system(command)
+            if platform.system() == 'Windows':
+                command_str = "&&".join(command)
+            else:
+                command_str = ";".join(command)
+
+            os.system(command_str)
 
             # Output of command should be a file
             output = menu.getOutput()
@@ -278,7 +299,7 @@ class PostProcessor(Thread):
 
             server = self.__cInst.getModule('Server')
 
-            with open("output", "rb") as output_file:
+            with open(output, "rb") as output_file:
 
                 for line in output_file:
                     binaryLetter = BinaryLetter(stuff.name(), line,
@@ -286,6 +307,12 @@ class PostProcessor(Thread):
                                                 extension = "rar",
                                                 parent = stuff.version())
                     server.transfer(binaryLetter)
+
+            # Transfer fin letter after binary
+            finLetter = ResponseLetter(menu.getIdent(), Letter.RESPONSE_STATE_FINISHED,
+                                       menu.getVersion())
+
+            server.transfer(finLetter)
 
 
     def appendMenu(self, menu:PostMenu) -> None:
@@ -296,7 +323,7 @@ class PostProcessor(Thread):
         self.__stuffs.addStuff(stuff)
 
     # Retrive information and binary file from workers and store into __pends
-    def __menu_collect_stuffs(self, args) -> None:
+    def __menu_collect_stuffs(self, args = None) -> None:
 
         while True:
             try:
@@ -343,19 +370,25 @@ class PostProcessor(Thread):
 
         tid = ""
 
+        letter = None # type: Optional[Letter]
+
         while True:
             try:
                 letter = self.__receving(sock)
             except:
                 break
 
-            # if parse error
             if letter is None:
                 return None
 
-            tid = letter.getHeader("tid")
+            # if parse error
+            content = letter.getContent('bytes')
+
+            # the last binary letter
+            if content == "":
+                break;
+
             version = letter.getHeader("parent")
-            menu = letter.getHeader("menu")
             stoId = PostProcessor.__stoIdGen(version, tid)
 
             if checkFlag is False:
@@ -381,6 +414,12 @@ class PostProcessor(Thread):
                 return None
 
             chooser.store(content) # type: ignore
+
+        if letter is None:
+            return None
+
+        tid = letter.getHeader("tid")
+        menu = letter.getHeader("menu")
 
         if tid == "":
             return None

@@ -17,7 +17,6 @@ class Build:
 
         self.__bId = bId
         self.__cmds = build['cmd']
-        self.__cmdStr = ";".join(self.__cmds)
         self.__output = build['output']
 
     def getIdent(self) -> str:
@@ -27,13 +26,13 @@ class Build:
         return self.__cmds
 
     def getCmdStr(self) -> str:
-        return self.__cmdStr
+        return str(self.__cmds).replace("'", "\"")
 
     def getOutput(self) ->  str:
         return self.__output[0]
 
     def length(self) -> int:
-        return len(self.__cmdStr)
+        return len(self.__cmds)
 
     @staticmethod
     def isValid(build:Dict) -> bool:

@@ -2,18 +2,18 @@
 
 from typing import Any, Dict, List
 
-from module import ModuleT
-from server import Server
-from processor import Processor
+from .basic.mmanager import ModuleDaemon
+from .server import Server
+from .processor import Processor
 
-from basic.info import Info
+from .basic.info import Info
 
 from multiprocessing import Pool
 
-class Receiver(ModuleT):
+class Receiver(ModuleDaemon):
 
     def __init__(self, server:Server, info:Info, cInst:Any) -> None:
-        ModuleT.__init__(self)
+        ModuleDaemon.__init__(self, "")
 
         self.server = server
         self.max = int(info.getConfig('MAX_TASK_CAN_PROC'))
@@ -62,8 +62,6 @@ class Receiver(ModuleT):
 
             if isinstance(reqLetter, int):
                 continue
-
-            # print("Received letter:" + l.toString())
 
             processor.proc(reqLetter)
             processor.recyle()

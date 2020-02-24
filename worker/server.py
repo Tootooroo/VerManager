@@ -3,13 +3,13 @@
 import socket
 import time
 
-from module import Module
+from .basic.mmanager import Module
 
-from basic.letter import Letter, PropLetter, BinaryLetter
-from basic.info import Info
-from basic.type import *
+from .basic.letter import Letter, PropLetter, BinaryLetter
+from .basic.info import Info
+from .basic.type import *
 
-from typing import Any, Union
+from typing import Any, Union, Optional
 from multiprocessing import Manager
 
 class DISCONN_EXCEPTION(Exception):
@@ -82,6 +82,12 @@ class Server(Module):
     def transfer_step(self, timeout:int = None) -> int:
         response = self.q.get(timeout = timeout)
         return self.__send(response, retry = 3)
+
+    def responseRetrive(self) -> Optional[Letter]:
+        try:
+            return self.q.get(timeout = 1)
+        except:
+            return None
 
     def reconnectUntil(self, workerName:str, max:int, proc:int, timeout:int = None) -> State:
         ret = Error

@@ -8,24 +8,17 @@ import typing
 
 import traceback
 
-if __name__ == '__main__':
-    from basic.letter import *
-    from basic.info import Info
-    from basic.type import *
-    from basic.util import partition
-else:
-    from .basic.letter import *
-    from .basic.info import Info
-    from .basic.type import *
-    from .basic.util import partition
+from .basic.letter import *
+from .basic.info import Info
+from .basic.type import *
+from .basic.util import partition
+from .basic.mmanager import MManager, ModuleDaemon, Module
 
-from basic.mmanager import MManager, ModuleDaemon, Module
-
-from processor import Processor
-from sender import Sender
-from receiver import Receiver
-from server import Server
-from post import Post
+from .processor import Processor
+from .sender import Sender
+from .receiver import Receiver
+from .server import Server
+from .post import Post
 
 def extensionFromPath(path:str) -> str:
     fileName = path.split("/")[-1]
@@ -54,8 +47,7 @@ def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
         building_cmds = result_path.replace(";", "&&")
 
     # Notify master this task is change into in_processing state
-    response = ResponseLetter(ident = WORKER_NAME,
-                                tid = tid, state = Letter.RESPONSE_STATE_IN_PROC)
+    response = ResponseLetter(tid = tid, state = Letter.RESPONSE_STATE_IN_PROC)
     server.transfer(response)
 
     # Processing

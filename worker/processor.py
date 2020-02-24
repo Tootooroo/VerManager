@@ -4,15 +4,15 @@ from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool
 from multiprocessing.pool import AsyncResult
 
-from basic.letter import Letter, NewLetter
-from basic.info import Info
-from basic.type import *
-from basic.util import partition
+from .basic.letter import Letter, NewLetter
+from .basic.info import Info
+from .basic.type import *
+from .basic.util import partition
 
-from basic.mmanager import Module
+from .basic.mmanager import Module
 
-from post import Post
-from server import Server
+from .post import Post
+from .server import Server
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 

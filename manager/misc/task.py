@@ -100,7 +100,9 @@ class Task:
             if builds is None:
                 return None
 
-            for b in builds:
+            builds_list = builds[1]
+
+            for b in builds_list:
                 child = self.getChild(b.getIdent())
 
                 if child is None:
@@ -242,9 +244,11 @@ class Task:
         if build is None:
             return None
 
-        extra = {"resultPath":build.getOutput(), "cmds":build.getCmdStr()}
+        extra = {"resultPath":build.getOutput(), "cmds":build.getCmd()}
+        menu = ""
 
-        (menu, members) = self.__buildSet.belongTo(self.id()) # type: ignore
+        if not self.__buildSet is None:
+            (menu, members) = self.__buildSet.belongTo(self.id()) # type: ignore
 
         return NewLetter(self.id(), self.getSN(),
                          self.getVSN(), str(datetime.utcnow()),
