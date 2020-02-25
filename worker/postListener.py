@@ -4,19 +4,16 @@ import socket
 import tempfile
 import os
 import platform
-
-from .client import Client
-from .server import Server
-from .post import Post
-from .receiver import Receiver
-from .sender import Sender
-from .processor import Processor
+import time
+import select
+import traceback
 
 from .basic.util import spawnThread
 from .basic.letter import Letter, BinaryLetter, MenuLetter, ResponseLetter
 from .basic.info import Info
 from .basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from .basic.storage import Storage, StoChooser
+from .basic.type import *
 
 from typing import Optional, Any, Tuple, List, Dict
 from threading import Thread, Lock
@@ -56,10 +53,67 @@ class PostListener(ModuleDaemon):
         while True:
             (wSock, addr) = s.accept()
 
+            print(wSock)
+
+            wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+
             self.__processor.req(wSock)
 
     def stop(self) -> None:
         pass
+
+class PostProvider(Module):
+
+    def __init__(self, address:str, port:int) -> None:
+        self.__address = address
+        self.__port = port
+        self.__sock = None # type: Optional[socket.socket]
+
+    def connectToListener(self, retry:int = 0) -> None:
+
+        if not self.__sock is None:
+            return None
+
+        sock = self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        while retry > 0:
+
+            try:
+                sock.connect((self.__address, self.__port))
+            except:
+                time.sleep(1)
+                retry -= 1
+
+            break
+
+    def reconnect(self, retry:int = 0) -> None:
+        if self.__sock is None:
+            return None
+
+        self.connectToListener(retry)
+
+    def disconnect(self) -> None:
+        if not self.__sock is None:
+            self.__sock.close()
+            self.__sock = None
+
+    def provide(self, bin:BinaryLetter) -> State:
+
+        if self.__sock is None:
+            return Error
+
+        byteStr = bin.toBytesWithLength()
+
+        if not byteStr is None:
+            try:
+                self.__sock.send(byteStr)
+            except:
+                return Error
+            return Ok
+
 
 class PostMenu:
 
@@ -251,7 +305,7 @@ class PostProcessor(Thread):
 
         self.__satisfiedMenus = Queue(10) # type: Queue[PostMenu]
 
-        self.__reqQueue = Queue(10) # type: Queue[socket.socket]
+        self.__providers = select.poll()
         self.__inProcReq = [] # type: List[ReqIdent]
         self.__storage = Storage("./PostStorage", None)
         self.__chooserSet = {} # type: Dict[str, StoChooser]
@@ -326,15 +380,18 @@ class PostProcessor(Thread):
     def __menu_collect_stuffs(self, args = None) -> None:
 
         while True:
-            try:
-                sock = self.__reqQueue.get(timeout = 1) # type: Optional[socket.socket]
-            except:
-                sock = None
+            providers = self.__providers.poll(1000)
 
-            if sock is None:
-                stuff = self.__stuffs.popHead()
-            else:
-                stuff = self.__build_stuff(sock)
+            # Build stuffs from binary from providers
+            for fd, event in providers:
+                print(fd)
+                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+                sock.setblocking(False)
+
+                self.__build_stuff(sock)
+
+            # Pair stuffs with menus
+            stuff = self.__stuffs.popHead()
 
             if stuff is None:
                 continue
@@ -360,9 +417,8 @@ class PostProcessor(Thread):
             self.__menus_lock.release()
 
 
-
     # Return (tid, parent, stoId)
-    def __build_stuff(self, sock:socket.socket) -> Optional[Stuff]:
+    def __build_stuff(self, sock:socket.socket) -> None:
 
         checkFlag = False
         storage = self.__storage
@@ -374,6 +430,7 @@ class PostProcessor(Thread):
 
         while True:
             try:
+                # Note: sock is a nonblock socket
                 letter = self.__receving(sock)
             except:
                 break
@@ -384,12 +441,18 @@ class PostProcessor(Thread):
             # if parse error
             content = letter.getContent('bytes')
 
-            # the last binary letter
-            if content == "":
-                break;
-
             version = letter.getHeader("parent")
             stoId = PostProcessor.__stoIdGen(version, tid)
+
+            # the last binary letter
+            if content == "":
+                self.__chooserSet[stoId].close()
+
+                tid = letter.getHeader("tid")
+                menu = letter.getHeader("menu")
+
+                self.__stuffs.addStuff(Stuff(version, menu, tid, stoId))
+
 
             if checkFlag is False:
                 checkFlag = True
@@ -410,21 +473,8 @@ class PostProcessor(Thread):
 
             content = letter.getContent('bytes')
 
-            if isinstance(content, str):
-                return None
-
-            chooser.store(content) # type: ignore
-
-        if letter is None:
-            return None
-
-        tid = letter.getHeader("tid")
-        menu = letter.getHeader("menu")
-
-        if tid == "":
-            return None
-
-        return Stuff(version, menu, tid, stoId)
+            if isinstance(content, bytes) and not chooser is None:
+                chooser.store(content)
 
     def __menu_stuff_pair(self, stuff:Stuff) -> bool:
         menus = self.__menus
@@ -462,4 +512,4 @@ class PostProcessor(Thread):
         return Letter.parse(content)
 
     def req(self, sock:socket.socket) -> None:
-        self.__reqQueue.put(sock)
+        self.__providers.register(sock.fileno(), select.POLLIN)

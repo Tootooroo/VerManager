@@ -91,7 +91,6 @@ def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
         response.setContent("state", Letter.RESPONSE_STATE_FAILURE)
         server.transfer(response)
 
-
 class Client:
 
     def __init__(self, mAddress:str, mPort:int, cfgPath:str, name:str = "") -> None:
@@ -136,6 +135,9 @@ class Client:
             return None
 
         server.disconnect()
+
+    def addModule(self, m:Module) -> None:
+        self.__manager.addModule(m.getName(), m)
 
     def getModule(self, ident:str) -> Optional[Module]:
         return self.__manager.getModule("ident")

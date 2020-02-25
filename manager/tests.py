@@ -176,6 +176,23 @@ class UnitTest(TestCase):
         self.assertEqual(["file1", "file2"], menuLetter_parsed.getContent('depends'))
         self.assertEqual("/home/test/test.py", menuLetter_parsed.getContent('output'))
 
+        # commandLetter Test
+        commandLetter = CommandLetter("cmd_type", "T", "extra_information", content = {"1":"1"})
+
+        self.assertEqual("cmd_type", commandLetter.getHeader("type"))
+        self.assertEqual("T", commandLetter.getHeader("target"))
+        self.assertEqual("extra_information", commandLetter.getHeader("extra"))
+        self.assertEqual({"1":"1"}, commandLetter.getContent("content"))
+
+        commandLetter_bytes = commandLetter.toBytesWithLength()
+        commandLetter_parsed = Letter.parse(commandLetter_bytes)
+
+        self.assertEqual("cmd_type", commandLetter_parsed.getHeader("type"))
+        self.assertEqual("T", commandLetter_parsed.getHeader("target"))
+        self.assertEqual("extra_information", commandLetter_parsed.getHeader("extra"))
+        self.assertEqual({"1":"1"}, commandLetter_parsed.getContent("content"))
+
+
     def tes_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
@@ -240,10 +257,10 @@ class UnitTest(TestCase):
         time.sleep(1)
 
         # Create workers
-        client1 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W1")
-        client2 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W2")
-        client3 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W3")
-        client4 = Client.Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W4")
+        client1 = Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W1")
+        client2 = Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W2")
+        client3 = Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W3")
+        client4 = Client("127.0.0.1", 8013, "./worker/config.yaml", name = "W4")
 
         workers = [client1, client2, client3, client4]
 
@@ -486,46 +503,33 @@ class UnitTest(TestCase):
         binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        time.sleep(1)
-
         sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock1.connect(("127.0.0.1", 8033))
 
         Worker.sending(sock1, binaryLetter)
         Worker.sending(sock1, binaryLetter_last)
-
-        sock1.close()
 
         # file2
         binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        time.sleep(1)
+        sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock2.connect(("127.0.0.1", 8033))
 
-        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock1.connect(("127.0.0.1", 8033))
-
-        Worker.sending(sock1, binaryLetter)
-        Worker.sending(sock1, binaryLetter_last)
-
-        sock1.close()
+        Worker.sending(sock2, binaryLetter)
+        Worker.sending(sock2, binaryLetter_last)
 
         # file3
         binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        time.sleep(1)
+        #sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #sock3.connect(("127.0.0.1", 8033))
 
-        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock1.connect(("127.0.0.1", 8033))
+        #Worker.sending(sock3, binaryLetter)
+        #Worker.sending(sock3, binaryLetter_last)
 
-        Worker.sending(sock1, binaryLetter)
-        Worker.sending(sock1, binaryLetter_last)
-
-        sock1.close()
-
-
-        time.sleep(5)
+        time.sleep(20)
 
         # Binary letter from postListener
         bin_letter = server.responseRetrive()

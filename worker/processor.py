@@ -4,7 +4,7 @@ from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool
 from multiprocessing.pool import AsyncResult
 
-from .basic.letter import Letter, NewLetter
+from .basic.letter import Letter, NewLetter, CommandLetter
 from .basic.info import Info
 from .basic.type import *
 from .basic.util import partition
@@ -13,8 +13,11 @@ from .basic.mmanager import Module
 
 from .post import Post
 from .server import Server
+from .postListener import PostListener, PostProvider
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
+
+CommandHandler = Callable[[CommandLetter, Info, Any], State]
 
 class Processor(Module):
 
@@ -46,7 +49,45 @@ class Processor(Module):
     def setProcedure(self, procedure:Callable[[Server, Letter, Info], None]) -> None:
         self.__procedure = procedure
 
-    def proc(self, reqLetter:Letter) -> State:
+    def proc(self, reqLetter:Letter) -> None:
+
+        if isinstance(reqLetter, CommandLetter):
+            self.proc_command(reqLetter)
+        elif isinstance(reqLetter, NewLetter):
+            self.proc_newtask(reqLetter)
+
+    def proc_command(self, cmdLetter:CommandLetter) -> State:
+        cmdType = cmdLetter.cmdType()
+        handler = cmdHandlers[cmdType]
+
+        return handler(cmdLetter, self.__info, self.__cInst)
+
+    @staticmethod
+    def proc_command_config(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+
+        extra = cmdLetter.extra()
+        content = cmdLetter.cmdContent()
+
+        if extra == "Post":
+            role = content['role']
+            address = content['address']
+            port = int(content['port'])
+
+            if role == "Listener":
+                pl = PostListener(address, port, cInst)
+                pl.start()
+
+                cInst.addModule(pl)
+            elif role == "Provider":
+                provider = PostProvider(address, port)
+                provider.connectToListener()
+
+                cInst.addModule(provider)
+            return Ok
+
+        return Error
+
+    def proc_newtask(self, reqLetter:NewLetter) -> State:
 
         if not self.isAbleToProc():
             return Error
@@ -70,6 +111,9 @@ class Processor(Module):
 
         return Ok
 
+    def command_proc(self, letter:Letter) -> State:
+        pass
+
     # Remove tasks from processor and return
     # the number of request finished
     def recyle(self) -> int:
@@ -89,3 +133,8 @@ class Processor(Module):
 
     def isAbleToProc(self) -> bool:
         return self.tasksInProc() < self.maxTasksAbleToProc()
+
+
+cmdHandlers = {
+    CommandLetter.COMMAND_CONFIG : Processor.proc_command_config
+}
