@@ -10,7 +10,6 @@ from .basic.mmanager import Module
 from .server import Server
 
 class Post(Module):
-
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
         Module.__init__(self, "")
         self.__server = Server(address, port, info, cInst)

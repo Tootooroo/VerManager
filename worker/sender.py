@@ -30,7 +30,6 @@ class Sender(ModuleDaemon):
         cond.acquire()
 
         while True:
-
             if self.__status == 1:
                 self.__status = 2
                 cond.release()

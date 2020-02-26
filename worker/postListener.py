@@ -15,11 +15,14 @@ from .basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from .basic.storage import Storage, StoChooser
 from .basic.type import *
 
-from typing import Optional, Any, Tuple, List, Dict
+from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
 from queue import Queue
 
 ReqIdent = Tuple[str, str]
+
+class DISCONN(Exception):
+    pass
 
 class PostListener(ModuleDaemon):
 
@@ -53,8 +56,7 @@ class PostListener(ModuleDaemon):
         while True:
             (wSock, addr) = s.accept()
 
-            print(wSock)
-
+            wSock.setblocking(False)
             wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
@@ -140,7 +142,7 @@ class PostMenu:
     def stuffMatch(self, stuff:'Stuff') -> bool:
         stuffName = stuff.name()
 
-        if not stuffName in self.__depends:
+        if stuffName not in self.__depends:
             return False
 
         version = stuff.version()
@@ -149,9 +151,8 @@ class PostMenu:
         if self.__version != version:
             return False
 
-        # Already exists
-        if self.__stuffs.isExists(stuffName):
-            return False
+        # This stuff must not exists in this menu
+        assert(not self.__stuffs.isExists(stuffName))
 
         self.__stuffs.addStuff(stuff)
         self.__depends[stuffName] = True
@@ -294,6 +295,8 @@ class PostProcessor(Thread):
 
         self.__cInst = cInst
 
+        self.__socks = {} # type: Dict[int, socket.socket]
+
         # List of menu from server
         # after command of menu is
         # executed the menu will
@@ -340,6 +343,9 @@ class PostProcessor(Thread):
             else:
                 command_str = ";".join(command)
 
+            # Need a way to stop commands
+            # with os.system() we are unable to
+            # stop commands
             os.system(command_str)
 
             # Output of command should be a file
@@ -384,10 +390,7 @@ class PostProcessor(Thread):
 
             # Build stuffs from binary from providers
             for fd, event in providers:
-                print(fd)
-                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                sock.setblocking(False)
-
+                sock = self.__socks[fd]
                 self.__build_stuff(sock)
 
             # Pair stuffs with menus
@@ -420,7 +423,6 @@ class PostProcessor(Thread):
     # Return (tid, parent, stoId)
     def __build_stuff(self, sock:socket.socket) -> None:
 
-        checkFlag = False
         storage = self.__storage
         chooser = None # type: Optional[StoChooser]
 
@@ -430,37 +432,37 @@ class PostProcessor(Thread):
 
         while True:
             try:
-                # Note: sock is a nonblock socket
                 letter = self.__receving(sock)
-            except:
+            except DISCONN:
+                self.__rmSock(sock)
                 break
+            except BlockingIOError as e:
+                if e.errno == 11:
+                    break
 
+            # if parse error
             if letter is None:
                 return None
 
-            # if parse error
             content = letter.getContent('bytes')
-
+            tid = letter.getHeader('tid')
             version = letter.getHeader("parent")
-            stoId = PostProcessor.__stoIdGen(version, tid)
+            stoId = PostProcessor.__stoIdGen(tid, version)
 
             # the last binary letter
-            if content == "":
+            if content == b"":
                 self.__chooserSet[stoId].close()
+                del self.__chooserSet [stoId]
 
                 tid = letter.getHeader("tid")
                 menu = letter.getHeader("menu")
 
                 self.__stuffs.addStuff(Stuff(version, menu, tid, stoId))
 
+                continue
 
-            if checkFlag is False:
-                checkFlag = True
 
-                # There should no several same tasks be processed
-                # by VersionManager at a time.
-                if storage.isExists(stoId):
-                    storage.delete(stoId)
+            if stoId not in self.__chooserSet:
 
                 # Create a file in storage
                 extension = letter.getHeader("extension")
@@ -471,9 +473,9 @@ class PostProcessor(Thread):
 
                 self.__chooserSet[stoId] = chooser
 
-            content = letter.getContent('bytes')
+            chooser = self.__chooserSet[stoId]
 
-            if isinstance(content, bytes) and not chooser is None:
+            if isinstance(content, bytes) and chooser is not None:
                 chooser.store(content)
 
     def __menu_stuff_pair(self, stuff:Stuff) -> bool:
@@ -504,12 +506,42 @@ class PostProcessor(Thread):
         while remain > 0:
             chunk = sock.recv(remain)
             if chunk == b'':
-                raise Exception
+                raise DISCONN
 
             content += chunk
             remain = Letter.letterBytesRemain(content)
 
         return Letter.parse(content)
 
+    def __addSock(self, sock:socket.socket) -> State:
+
+        fd = sock.fileno()
+
+        if fd in self.__socks:
+            return Error
+
+        self.__socks[fd] = sock
+        self.__providers.register(fd, select.POLLIN)
+
+        return Ok
+
+    def __rmSock(self, descriptor:Union[socket.socket, int]) -> State:
+
+        fd = 0
+
+        if isinstance(descriptor, socket.socket):
+            fd = descriptor.fileno()
+        else:
+            fd = descriptor
+
+        if not fd in self.__socks:
+            return Error
+
+        del self.__socks [fd]
+        self.__providers.unregister(fd)
+
+        return Ok
+
+
     def req(self, sock:socket.socket) -> None:
-        self.__providers.register(sock.fileno(), select.POLLIN)
+        self.__addSock(sock)

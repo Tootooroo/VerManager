@@ -1,7 +1,5 @@
 # receiver.py
 
-from typing import Any, Dict, List
-
 from .basic.mmanager import ModuleDaemon
 from .server import Server
 from .processor import Processor
@@ -9,6 +7,8 @@ from .processor import Processor
 from .basic.info import Info
 
 from multiprocessing import Pool
+
+from typing import Any, Dict, List
 
 class Receiver(ModuleDaemon):
 
@@ -20,10 +20,8 @@ class Receiver(ModuleDaemon):
         self.numOfTasksInProc = 0
         self.pool = Pool( int(info.getConfig('PROCESS_POOL_SIZE')) )
         self.info = info
-
         self.inProcTasks = {} # type: Dict[str, Any]
         self.__status = 0
-
         self.__cInst = cInst
 
     def numOfTasks(self) -> int:

@@ -4,15 +4,12 @@
 import sys
 import os
 import platform
-import typing
 
-import traceback
+from typing import Union, List, Optional
 
-from .basic.letter import *
+from .basic.letter import Letter, ResponseLetter, BinaryLetter
 from .basic.info import Info
-from .basic.type import *
-from .basic.util import partition
-from .basic.mmanager import MManager, ModuleDaemon, Module
+from .basic.mmanager import MManager, Module
 
 from .processor import Processor
 from .sender import Sender
@@ -20,7 +17,8 @@ from .receiver import Receiver
 from .server import Server
 from .post import Post
 
-def extensionFromPath(path:str) -> str:
+
+def extensionFromPath(path: str) -> str:
     fileName = path.split("/")[-1]
     nameParts = fileName.split(".")
 
@@ -32,9 +30,10 @@ def extensionFromPath(path:str) -> str:
     else:
         return nameParts[-1]
 
-def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
 
-    WORKER_NAME = info.getConfig('WORKER_NAME')
+def do_proc(server: 'Server', post: 'Post',
+            reqLetter: Letter,
+            info: Info) -> None:
 
     extra = reqLetter.getContent("extra")
     building_cmds = extra['cmds']
@@ -47,7 +46,7 @@ def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
         building_cmds = result_path.replace(";", "&&")
 
     # Notify master this task is change into in_processing state
-    response = ResponseLetter(tid = tid, state = Letter.RESPONSE_STATE_IN_PROC)
+    response = ResponseLetter(tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
     server.transfer(response)
 
     # Processing
@@ -55,24 +54,28 @@ def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
         repo_url = info.getConfig("REPO_URL")
         projName = info.getConfig("PROJECT_NAME")
 
-        ret = os.system("git clone -b master " + repo_url)
+        # Get repo
+        os.system("git clone -b master " + repo_url)
 
         os.chdir(projName)
 
         revision = reqLetter.getContent('sn')
-        ret = os.system("git checkout -f " + revision)
+
+        # Checkout to specific revision
+        os.system("git checkout -f " + revision)
 
         version = reqLetter.getContent('vsn')
         version_date = reqLetter.getContent('datetime')
 
         building_cmds = building_cmds.replace("<vsn>", version)
         building_cmds = building_cmds.replace("datetime>", version_date)
-        ret = os.system(building_cmds)
+
+        # Run commands
+        os.system(building_cmds)
 
         with open(result_path, "rb") as result_file:
-            vsn = reqLetter.getContent("vsn")
             needPost = reqLetter.getHeader("needPost")
-            target = server # type: Union[Server, Post]
+            target = server  # type: Union[Server, Post]
 
             isNeedPost = needPost == 'true'
 
@@ -81,19 +84,22 @@ def do_proc(server:'Server', post:'Post', reqLetter:Letter, info:Info) -> None:
 
             for line in result_file:
                 extension = extensionFromPath(result_path)
-                binaryLetter = BinaryLetter(tid = tid, bStr = line,
-                                            extension = extension)
+                binaryLetter = BinaryLetter(tid=tid, bStr=line,
+                                            extension=extension)
                 target.transfer(binaryLetter)
 
             response.setContent("state", Letter.RESPONSE_STATE_FINISHED)
             target.transfer(response)
-    except:
+    except Exception:
         response.setContent("state", Letter.RESPONSE_STATE_FAILURE)
         server.transfer(response)
 
+
 class Client:
 
-    def __init__(self, mAddress:str, mPort:int, cfgPath:str, name:str = "") -> None:
+    def __init__(self, mAddress: str,
+                 mPort: int, cfgPath: str,
+                 name: str = "") -> None:
 
         self.__cfgPath = cfgPath
 
@@ -127,7 +133,8 @@ class Client:
         if taskDealer is None or not isinstance(taskDealer, Receiver):
             return None
 
-        server.connect(self.__name, taskDealer.maxNumber(), taskDealer.numOfTasks())
+        server.connect(self.__name, taskDealer.maxNumber(),
+                       taskDealer.numOfTasks())
 
     def disconnect(self) -> None:
         server = self.getModule('Server')
@@ -136,10 +143,10 @@ class Client:
 
         server.disconnect()
 
-    def addModule(self, m:Module) -> None:
+    def addModule(self, m: Module) -> None:
         self.__manager.addModule(m.getName(), m)
 
-    def getModule(self, ident:str) -> Optional[Module]:
+    def getModule(self, ident: str) -> Optional[Module]:
         return self.__manager.getModule("ident")
 
     def init(self) -> None:
@@ -169,10 +176,11 @@ class Client:
         m3 = Post("127.0.0.1", 8013, info, self)
         self.__manager.addModule("Post", m3)
 
-        m4 = Processor(info, self, procedure = do_proc)
+        m4 = Processor(info, self, procedure=do_proc)
         self.__manager.addModule("Processor", m4)
 
         self.__manager.startAll()
+
 
 if __name__ == '__main__':
     configPath = sys.argv[1]

@@ -21,10 +21,10 @@ from worker.client import Client
 import time
 import unittest
 import socket
-from threading import Thread
-from multiprocessing import Process
 
 # Create your tests here.
+
+
 class FunctionalTest(TestCase):
     def setUp(self):
         self.browser = webdriver.Firefox()
@@ -37,10 +37,12 @@ class FunctionalTest(TestCase):
 #        self.assertEqual('GPON Team Site', self.browser.title)
 #        self.fail('Test finish')
 
+
 class HttpRequest_:
     def __init__(self):
         self.headers = {}
         self.body = ""
+
 
 class UnitTest(TestCase):
 
@@ -83,8 +85,6 @@ class UnitTest(TestCase):
                            }\
                          }'
 
-        import json
-
         from manager.views import newRev
         newRev(request)
 
@@ -102,7 +102,7 @@ class UnitTest(TestCase):
             self.assertEqual("2019-05-08 17:39:08+00:00", str(rev.dateTime))
 
             self.assertTrue(True)
-        except:
+        except Exception:
             self.assertTrue(False)
 
     def test_info(self):
@@ -124,12 +124,16 @@ class UnitTest(TestCase):
 
     def test_letter(self):
 
-        from manager.misc.basic.letter import NewLetter, ResponseLetter, BinaryLetter
+        from manager.misc.basic.letter import NewLetter, \
+            ResponseLetter, BinaryLetter
+
+        from datetime import datetime
 
         # NewLetter Test
         dateStr = str(datetime.utcnow())
-        newLetter = NewLetter("newLetter", "sn_1", "vsn_1", datetime = dateStr, menu = "Menu",
-                              parent = "123456", needPost = "true")
+        newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
+                              datetime=dateStr, menu="Menu",
+                              parent="123456", needPost="true")
         self.assertEqual("sn_1", newLetter.getContent('sn'))
         self.assertEqual("vsn_1", newLetter.getContent('vsn'))
         self.assertEqual(dateStr, newLetter.getContent('datetime'))
@@ -246,7 +250,6 @@ class UnitTest(TestCase):
 
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
-
 
     def tes_dispatcher(self):
 
@@ -476,11 +479,12 @@ class UnitTest(TestCase):
 
     def test_postListener(self):
 
+        from manager.misc.basic.letter import MenuLetter, BinaryLetter
         from manager.misc.worker import Worker
         from worker.basic.info import Info
         from worker.server import Server
         from worker.basic.mmanager import MManager
-        from worker.postListener import Stuff, Stuffs, PostMenu, PostListener, PostProcessor
+        from worker.postListener import PostListener
 
         manager = MManager()
 
@@ -494,7 +498,12 @@ class UnitTest(TestCase):
 
         manager.addModule("PostListener", pl)
 
-        menuLetter = MenuLetter("version", "Mid", ["cd /home/aydenlin", "touch ll", "echo '123' > ll"],
+        menuLetter = MenuLetter("version", "Mid",
+
+                                ["cd /home/aydenlin",
+                                 "touch ll",
+                                 "echo '123' > ll"],
+
                                 ["file1", "file2", "file3"],
                                 "/home/aydenlin/ll")
         pl.menuAppend(menuLetter)
@@ -523,17 +532,17 @@ class UnitTest(TestCase):
         binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        #sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #sock3.connect(("127.0.0.1", 8033))
+        sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock3.connect(("127.0.0.1", 8033))
 
-        #Worker.sending(sock3, binaryLetter)
-        #Worker.sending(sock3, binaryLetter_last)
+        Worker.sending(sock3, binaryLetter)
+        Worker.sending(sock3, binaryLetter_last)
 
-        time.sleep(20)
+        time.sleep(3)
 
         # Binary letter from postListener
         bin_letter = server.responseRetrive()
-        self.assertTrue(not bin_letter is None)
+        self.assertTrue(bin_letter is not None)
         self.assertEqual(b'123\n', bin_letter.getContent('bytes'))
         self.assertEqual("rar", bin_letter.getHeader('extension'))
         self.assertEqual("Mid", bin_letter.getHeader("menu"))
@@ -541,11 +550,9 @@ class UnitTest(TestCase):
 
         # Response letter from postListener
         response_letter = server.responseRetrive()
-        self.assertTrue(not response_letter is None)
+        self.assertTrue(response_letter is not None)
         self.assertEqual("Mid", response_letter.getHeader('tid'))
         self.assertEqual("version", response_letter.getHeader('parent'))
-
-        time.sleep(10)
 
 
 if __name__ == '__main__':

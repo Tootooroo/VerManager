@@ -31,6 +31,7 @@ class Build:
     def getOutput(self) ->  str:
         return self.__output[0]
 
+
     def length(self) -> int:
         return len(self.__cmds)
 
@@ -41,7 +42,6 @@ class Build:
 class BuildSet:
 
     def __init__(self, buildSet:Dict) -> None:
-
         if not BuildSet.isValid(buildSet):
             raise BUILD_FORMAT_WRONG
 
