@@ -351,8 +351,10 @@ class PostProcessor(Thread):
 
         if platform.system() == 'Windows':
             sep = "&&"
+            path_sep = "\\"
         else:
             sep = ";"
+            path_sep = "/"
 
         while True:
 
@@ -368,10 +370,7 @@ class PostProcessor(Thread):
 
             command.insert(0, "cd " + workingDir.name)
 
-            if platform.system() == 'Windows':
-                command_str = "&&".join(command)
-            else:
-                command_str = ";".join(command)
+            command_str = sep.join(command)
 
             # Need a way to stop commands
             # with os.system() we are unable to
@@ -394,7 +393,7 @@ class PostProcessor(Thread):
                 for line in output_file:
                     binaryLetter = BinaryLetter(stuff.name(), line,
                                                 menu = stuff.menu(),
-                                                extension = "rar",
+                                                fileName = output.split(path_sep)[-1],
                                                 parent = stuff.version())
                     server.transfer(binaryLetter)
 

@@ -17,19 +17,6 @@ from .receiver import Receiver
 from .server import Server
 from .post import Post
 
-def extensionFromPath(path: str) -> str:
-    fileName = path.split("/")[-1]
-    nameParts = fileName.split(".")
-
-    if '' in nameParts:
-        return ""
-
-    if len(nameParts) == 1:
-        return ""
-    else:
-        return nameParts[-1]
-
-
 def do_proc(server: 'Server', post: 'Post',
             reqLetter: Letter,
             info: Info) -> None:
@@ -81,10 +68,14 @@ def do_proc(server: 'Server', post: 'Post',
             if isNeedPost:
                 target = post
 
+            if platform.system() is 'Windows':
+                sep = "\\"
+            else:
+                sep = "/"
             for line in result_file:
-                extension = extensionFromPath(result_path)
+                fileName = result_path.split(sep)[-1]
                 binaryLetter = BinaryLetter(tid=tid, bStr=line,
-                                            extension=extension)
+                                            fileName=fileName)
                 target.transfer(binaryLetter)
 
             response.setContent("state", Letter.RESPONSE_STATE_FINISHED)

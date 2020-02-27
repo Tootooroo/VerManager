@@ -148,12 +148,12 @@ class UnitTest(TestCase):
         self.assertEqual("123456", response.getHeader('parent'))
 
         # BinaryLetter Test
-        binary = BinaryLetter("tid_1", b"123456", menu = "menu", extension = "rar", parent = "123456")
+        binary = BinaryLetter("tid_1", b"123456", menu = "menu", fileName = "rar", parent = "123456")
         self.assertEqual("tid_1", binary.getHeader('tid'))
         self.assertEqual(b"123456", binary.getContent('bytes'))
         self.assertEqual("menu", binary.getHeader('menu'))
         self.assertEqual("123456", binary.getHeader("parent"))
-        self.assertEqual("rar", binary.getHeader('extension'))
+        self.assertEqual("rar", binary.getHeader('fileName'))
 
         binBytes = binary.binaryPack()
         binary_parsed = Letter.parse(binBytes)
@@ -161,7 +161,7 @@ class UnitTest(TestCase):
         self.assertEqual(b"123456", binary_parsed.getContent('bytes'))
         self.assertEqual("menu", binary_parsed.getHeader('menu'))
         self.assertEqual("123456", binary_parsed.getHeader("parent"))
-        self.assertEqual("rar", binary_parsed.getHeader('extension'))
+        self.assertEqual("rar", binary_parsed.getHeader('fileName'))
 
         # MenuLetter Test
         menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
@@ -477,7 +477,7 @@ class UnitTest(TestCase):
         self.assertEqual("...", resultPath)
         self.assertEqual(['...', '...'], cmds)
 
-    def test_postListener(self):
+    def tes_postListener(self):
 
         from manager.basic.letter import MenuLetter, BinaryLetter
         from manager.master.worker import Worker

@@ -37,10 +37,10 @@ class Task:
 
         # This field will be set by EventListener while
         # the task is complete by worker and transfer
-        # totally
+        # back totally.
         self.data = ""
 
-        # Indicate that the number of client request to the task
+        # Indicate that the number of request to the task
         self.refs = 0
 
         self.lastAccess = datetime.utcnow()

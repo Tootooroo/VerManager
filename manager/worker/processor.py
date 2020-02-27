@@ -17,10 +17,9 @@ from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
 
-from ..basic.commands import Command, PostConfigCmd, CMD_CONFIG_TYPE, CMD_POST_SUBTYPE
+from ..basic.commands import Command, PostConfigCmd, CMD_POST_TYPE
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
-
 CommandHandler = Callable[[CommandLetter, Info, Any], State]
 
 class Processor(Module):
@@ -72,12 +71,7 @@ class Processor(Module):
         if type not in cmdHandlers:
             return Error
 
-        handlers = cmdHandlers[type]
-
-        if subType not in handlers:
-            return Error
-
-        handler = handlers[subType]
+        handler = cmdHandlers[type]
 
         return handler(cmdLetter, self.__info, self.__cInst)
 
@@ -175,5 +169,5 @@ class Processor(Module):
 
 
 cmdHandlers = {
-    CMD_CONFIG_TYPE: {CMD_POST_SUBTYPE: Processor.post_config}
-} # type: Dict[str, Dict[str, CommandHandler]]
+    CMD_POST_TYPE: Processor.post_config
+} # type: Dict[str, CommandHandler]

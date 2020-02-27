@@ -9,18 +9,14 @@ class toLetter_need_implemented(Exception):
 class fromLetter_need_implemented(Exception):
     pass
 
-# Command Type definitions
-CMD_CONFIG_TYPE = "cmd"
-
 # Command subType definitions
-CMD_POST_SUBTYPE = "post"
+CMD_POST_TYPE = "post"
 
 
 class Command:
 
-    def __init__(self, type:str, subType:str, target:str = "", content:Dict = {}) -> None:
+    def __init__(self, type:str, target:str = "", content:Dict = {}) -> None:
         self.type = type
-        self.subType = subType
         self.content = content
         self.target = target
 
@@ -41,7 +37,7 @@ class PostConfigCmd(Command):
         global CMD_CONFIG_TYPE, CMD_POST_SUBTYPE
 
         content = {'address':address, 'port':str(port), 'role':role}
-        Command.__init__(self, CMD_CONFIG_TYPE, CMD_POST_SUBTYPE, content = content)
+        Command.__init__(self, CMD_POST_TYPE, content = content)
 
     def address(self) -> Tuple[str, int]:
         address = self.content['address']
@@ -53,7 +49,7 @@ class PostConfigCmd(Command):
         return self.content['role']
 
     def toLetter(self) -> CommandLetter:
-        cmdLetter = CommandLetter(self.type, extra = self.subType, content = self.content)
+        cmdLetter = CommandLetter(self.type, content = self.content)
 
         return cmdLetter
 

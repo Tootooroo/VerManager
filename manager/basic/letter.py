@@ -95,8 +95,8 @@ class Letter:
     PropertyNotify = 'notify'
 
     # Format of binary letter in a stream
-    # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | Ext (10 Bytes)
-    # | TaskId (64Bytes) :: String | Parent (30 Bytes) :: String
+    # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | fileName (32 Bytes)
+    # | TaskId (64Bytes) :: String | Parent (64 Bytes) :: String
     # | Menu (30 Bytes) :: String | Content |
     # Format of BinaryFile letter
     # Type    : 'binary'
@@ -116,7 +116,7 @@ class Letter:
     # content : "{}"
     LogRegister = 'logRegister'
 
-    BINARY_HEADER_LEN = 174
+    BINARY_HEADER_LEN = 196
     BINARY_MIN_HEADER_LEN = 6
 
     MAX_LEN = 512
@@ -366,25 +366,25 @@ class PropLetter(Letter):
 class BinaryLetter(Letter):
 
     def __init__(self, tid:str, bStr:bytes, menu:str = "",
-                 extension:str = "", parent:str = "",
+                 fileName:str = "", parent:str = "",
                  last:str = "false") -> None:
 
         Letter.__init__(
             self,
             Letter.BinaryFile,
-            {"tid":tid, "extension":extension, "parent":parent, "menu":menu},
+            {"tid":tid, "fileName":fileName, "parent":parent, "menu":menu},
             {"bytes":bStr}
         )
 
     @staticmethod
     def parse(s:bytes) -> Optional['BinaryLetter']:
-        extension = s[6:16].decode().replace(" ", "")
-        tid = s[16:80].decode().replace(" ", "")
-        parent = s[80:144].decode().replace(" ", "")
-        menu = s[144:174].decode().replace(" ", "")
-        content = s[174:]
+        fileName = s[6:38].decode().replace(" ", "")
+        tid = s[38:102].decode().replace(" ", "")
+        parent = s[102:166].decode().replace(" ", "")
+        menu = s[166:196].decode().replace(" ", "")
+        content = s[196:]
 
-        return BinaryLetter(tid, content, menu, extension, parent = parent)
+        return BinaryLetter(tid, content, menu, fileName, parent = parent)
 
     def toBytesWithLength(self) -> bytes:
 
@@ -397,7 +397,7 @@ class BinaryLetter(Letter):
 
     def binaryPack(self) -> Optional[bytes]:
         tid = self.getHeader('tid')
-        extension = self.getHeader('extension')
+        fileName = self.getHeader('fileName')
         content = self.getContent("bytes")
         parent = self.getHeader('parent')
         menu = self.getHeader('menu')
@@ -407,15 +407,15 @@ class BinaryLetter(Letter):
 
         tid_field = b"".join([" ".encode() for x in range(64 - len(tid))]) + tid.encode()
         parent_field = b"".join([" ".encode() for x in range(64 - len(parent))]) + parent.encode()
-        ext_field = b"".join([" ".encode() for x in range(10 - len(extension))]) + extension.encode()
+        name_field = b"".join([" ".encode() for x in range(32 - len(fileName))]) + fileName.encode()
         menu_field = b"".join([" ".encode() for x in range(30 - len(menu))]) + menu.encode()
 
         # Safe here content must not str and must a bytes
-        # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | Ext (10 Bytes) | TaskId (64Bytes) :: String
+        # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | Ext (32 Bytes) | TaskId (64Bytes) :: String
         # | Parent(64 Bytes) :: String | Menu (30 Bytes) :: String | Content :: Bytes |
         packet = (1).to_bytes(2, "big") + \
                  (len(content)).to_bytes(4, "big") + \
-                 ext_field + \
+                 name_field + \
                  tid_field + \
                  parent_field + \
                  menu_field + \
