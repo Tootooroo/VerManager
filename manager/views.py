@@ -10,15 +10,15 @@ from functools import reduce
 from django.shortcuts import render
 from django.template import RequestContext
 
-from .misc.verControl import RevSync
-from .misc.dispatcher import Dispatcher
-from .misc.worker import Task
+from .master.verControl import RevSync
+from .master.dispatcher import Dispatcher
+from .master.worker import Task
 
-from .misc.basic.type import *
+from .basic.type import *
 
 from datetime import datetime
 
-import manager.misc.server as S
+import manager.master.server as S
 import traceback
 
 # Models

@@ -5,18 +5,18 @@ from selenium import webdriver
 
 from manager.views import index, verManagerPage
 
-from manager.misc.verControl import RevSync
-from manager.misc.workerRoom import WorkerRoom
-from manager.misc.basic.letter import *
-from manager.misc.eventListener import EventListener
-from manager.misc.worker import Task
+from manager.master.verControl import RevSync
+from manager.master.workerRoom import WorkerRoom
+from manager.basic.letter import *
+from manager.master.eventListener import EventListener
+from manager.master.worker import Task
 
-from manager.misc.dispatcher import Dispatcher
+from manager.master.dispatcher import Dispatcher
 
-from manager.misc.basic.util import spawnThread
+from manager.basic.util import spawnThread
 
-from manager.misc.server import ServerInst
-from worker.client import Client
+from manager.master.server import ServerInst
+from manager.worker.client import Client
 
 import time
 import unittest
@@ -60,8 +60,8 @@ class UnitTest(TestCase):
         self.assertTrue(response.status_code == 200)
 
     def tes_new_rev(self):
-        import manager.misc.components as Components
-        from manager.misc.basic.info import Info
+        import manager.master.components as Components
+        from manager.basic.info import Info
         Components.config = Info("./config.yaml")
 
         revSyncner = RevSync()
@@ -106,7 +106,7 @@ class UnitTest(TestCase):
             self.assertTrue(False)
 
     def test_info(self):
-        from manager.misc.basic.info import Info
+        from manager.basic.info import Info
 
         cfgs = Info("./config.yaml")
 
@@ -124,7 +124,7 @@ class UnitTest(TestCase):
 
     def test_letter(self):
 
-        from manager.misc.basic.letter import NewLetter, \
+        from manager.basic.letter import NewLetter, \
             ResponseLetter, BinaryLetter
 
         from datetime import datetime
@@ -243,7 +243,7 @@ class UnitTest(TestCase):
 
     def test_logger(self):
 
-        from manager.misc.logger import Logger
+        from manager.master.logger import Logger
 
         logger = Logger("./logger")
         logger.start()
@@ -340,7 +340,7 @@ class UnitTest(TestCase):
     def test_storage(self):
 
         import os
-        from manager.misc.basic.storage import Storage, StoChooser
+        from manager.basic.storage import Storage, StoChooser
 
         fileName = "file"
         storage = Storage("./Storage", None)
@@ -372,8 +372,8 @@ class UnitTest(TestCase):
         self.assertTrue(not os.path.exists(filePath))
 
     def test_build(self):
-        from manager.misc.basic.info import Info
-        from manager.misc.build import Build, BuildSet
+        from manager.basic.info import Info
+        from manager.master.build import Build, BuildSet
 
         info = Info("./config_test.yaml")
 
@@ -403,9 +403,9 @@ class UnitTest(TestCase):
         self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
 
     def test_task(self):
-        from manager.misc.basic.info import Info
-        from manager.misc.build import Build, BuildSet
-        from manager.misc.task import Task
+        from manager.basic.info import Info
+        from manager.master.build import Build, BuildSet
+        from manager.master.task import Task
 
         info = Info("./config_test.yaml")
 
@@ -479,16 +479,16 @@ class UnitTest(TestCase):
 
     def test_postListener(self):
 
-        from manager.misc.basic.letter import MenuLetter, BinaryLetter
-        from manager.misc.worker import Worker
-        from worker.basic.info import Info
-        from worker.server import Server
-        from worker.basic.mmanager import MManager
-        from worker.postListener import PostListener
+        from manager.basic.letter import MenuLetter, BinaryLetter
+        from manager.master.worker import Worker
+        from manager.basic.info import Info
+        from manager.worker.server import Server
+        from manager.basic.mmanager import MManager
+        from manager.worker.postListener import PostListener, PostProvider
 
         manager = MManager()
 
-        info = Info("./worker/config.yaml")
+        info = Info("./manager/worker/config.yaml")
 
         server = Server("127.0.0.1", 8044, info, manager)
         manager.addModule("Server", server)
@@ -508,35 +508,32 @@ class UnitTest(TestCase):
                                 "/home/aydenlin/ll")
         pl.menuAppend(menuLetter)
 
+        time.sleep(1)
+
         # file1
         binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        sock1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock1.connect(("127.0.0.1", 8033))
-
-        Worker.sending(sock1, binaryLetter)
-        Worker.sending(sock1, binaryLetter_last)
+        provider_1 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_1.provide(binaryLetter)
+        provider_1.provide(binaryLetter_last)
 
         # file2
         binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock2.connect(("127.0.0.1", 8033))
-
-        Worker.sending(sock2, binaryLetter)
-        Worker.sending(sock2, binaryLetter_last)
+        provider_2 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_2.provide(binaryLetter)
+        provider_2.provide(binaryLetter_last)
 
         # file3
         binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", extension = "rar", parent = "version")
         binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", extension = "rar", parent = "version")
 
-        sock3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock3.connect(("127.0.0.1", 8033))
+        provider_3 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_3.provide(binaryLetter)
+        provider_3.provide(binaryLetter_last)
 
-        Worker.sending(sock3, binaryLetter)
-        Worker.sending(sock3, binaryLetter_last)
 
         time.sleep(3)
 

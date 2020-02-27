@@ -30,9 +30,9 @@ def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
         begin = end
         end = tmp
 
-    vers = Revisions.objects.filter(
+    vers = Revisions.objects.filter( #type: ignore
         dateTime__gt=begin.dateTime,
-        dateTime__lte=end.dateTime) # type: ignore
+        dateTime__lte=end.dateTime)
 
     # Mapping vers into vers's comment informations
     comments = list(map(lambda ver: ver.comment, vers))
