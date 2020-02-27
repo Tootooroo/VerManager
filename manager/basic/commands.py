@@ -11,8 +11,6 @@ class fromLetter_need_implemented(Exception):
 
 # Command Type definitions
 CMD_CONFIG_TYPE = "cmd"
-CMD_STOP_TYPE = "stop"
-CMD_CANCEL_TYPE = "cancel"
 
 # Command subType definitions
 CMD_POST_SUBTYPE = "post"
