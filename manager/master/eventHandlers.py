@@ -8,8 +8,13 @@ from manager.master.eventListener import EventListener, letterLog
 from manager.basic.letter import *
 from manager.master.task import Task
 
+from manager.basic.commands import PostConfigCmd
 from manager.basic.storage import Storage, StoChooser
 from manager.master.logger import Logger
+
+from manager.master.workerRoom import WorkerRoom
+from manager.master.workerRoom import M_NAME as WORKER_ROOM_MOD_NAME
+from manager.master.postElection import PostManager, Role_Listener
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
     from manager.models import infoBetweenRev, Versions
@@ -160,3 +165,17 @@ def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
 
     logId = letter.getHeader('logId')
     logger.log_register(logId)
+
+def postHandler(eventListener:EventListener, letter: Letter) -> None:
+
+    if not isinstance(letter, CmdResponseLetter):
+        return None
+
+    pManager = eventListener.refToModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
+    assert(isinstance(pManager, PostManager))
+
+    workerName = letter.getIdent()
+    role = letter.getExtra('role')
+
+    if role is PostConfigCmd.ROLE_LISTENER:
+        pManager.setRole(workerName, Role_Listener)

@@ -3,11 +3,11 @@
 import socket
 import zipfile
 import select
-from threading import Thread
 
 from typing import *
-from manager.master.exceptions import *
 
+from manager.master.exceptions import *
+from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker, Task
 from manager.basic.type import *
 from manager.master.workerRoom import WorkerRoom
@@ -15,19 +15,21 @@ from manager.basic.letter import Letter
 
 import traceback
 
+M_NAME = "EventListener"
+
 # Constant
 letterLog = "letterLog"
 
 Handler = Callable[['EventListener', Letter], None]
 
-class EventListener(Thread):
+class EventListener(ModuleDaemon):
 
     def __init__(self, workerRoom: WorkerRoom, inst:Any) -> None:
-        global letterLog
+        global letterLog, M_NAME
 
         self.__sInst = inst
 
-        Thread.__init__(self)
+        ModuleDaemon.__init__(self, M_NAME)
         self.entries = select.poll()
         self.workers = workerRoom
         self.numOfEntries = 0

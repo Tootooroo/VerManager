@@ -3,19 +3,25 @@
 # Maintain connection with workers
 
 import socket
+from datetime import datetime
 
 from threading import Lock
 
 from manager.basic.type import *
 from manager.master.worker import Worker, WorkerInitFailed
 
-from threading import Thread
+from manager.basic.mmanager import ModuleDaemon
+
 from queue import Queue, Empty
 
 from manager.basic.util import spawnThread
 from manager.master.logger import Logger
 
+from manager.master.postElection import PostManager
+
 from typing import *
+
+M_NAME = "WorkerRoom"
 
 # Type alias
 EVENT_TYPE = int
@@ -25,7 +31,9 @@ filterFunc = Callable[[List[Worker]], List[Worker]]
 # Constant
 wrLog = "wrLog"
 
-class WorkerRoom(Thread):
+class WorkerRoom(ModuleDaemon):
+
+    STABLE_INTERVAL = 10
 
     WAITING_INTERVAL = 300
 
@@ -34,7 +42,9 @@ class WorkerRoom(Thread):
     EVENT_WAITING = 2
 
     def __init__(self, host:str, port:int, sInst:Any) -> None:
-        Thread.__init__(self)
+        global M_NAME
+
+        ModuleDaemon.__init__(self, M_NAME)
 
         configs = sInst.getModule('Config')
 
@@ -49,12 +59,12 @@ class WorkerRoom(Thread):
         self.syncLock = Lock()
 
         # __workers is a collection of workers in online state
-        self.__workers = {}         # type: Dict[str, Worker]
+        self.__workers = {}  # type: Dict[str, Worker]
 
         # __workers_waiting is a collection of workers in waiting state
         # if a worker which in this collection exceed WAIT limit it will
         # be removed
-        self.__workers_waiting = {} # type: Dict[str, Worker]
+        self.__workers_waiting = {}  # type: Dict[str, Worker]
         self.numOfWorkers = 0
 
         self.__eventQueue = Queue(256) # type: Queue
@@ -72,6 +82,10 @@ class WorkerRoom(Thread):
         if self.__WAITING_INTERVAL == "":
             self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
+        self.__pManager = PostManager([], lambda w1, w2: w1)
+
+        self.__lastChangedPoint = datetime.utcnow()
+
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.__host, self.__port))
@@ -88,6 +102,7 @@ class WorkerRoom(Thread):
             (workersocket, address) = self.sock.accept()
             Logger.putLog(logger, wrLog, "A new connection(" + str(address) + ") has been accepted")
 
+            # Keepalive setting
             workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
@@ -95,7 +110,7 @@ class WorkerRoom(Thread):
             Logger.putLog(logger, wrLog, "Socket options set up")
 
             try:
-                acceptedWorker = Worker(workersocket)
+                acceptedWorker = Worker(workersocket, address)
                 acceptedWorker.active()
 
                 ident = acceptedWorker.getIdent()
@@ -136,8 +151,12 @@ class WorkerRoom(Thread):
             self.addWorker(acceptedWorker)
             list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)) # type: ignore
 
+    def isStable(self) -> bool:
+        diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
+        return diff >= WorkerRoom.STABLE_INTERVAL
 
-    # While eventlistener notify that a worker is disconnected
+
+    # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
     # minutes if the workers is still disconnected then change
     # it's state into disconnected and wait several seconds

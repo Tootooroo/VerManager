@@ -11,12 +11,12 @@ from manager.models import Revisions
 from django.http import HttpRequest
 import re
 import queue
-import gitlab
+import gitlab  # type: ignore
 
 import json
 
 from django.dispatch import receiver
-from django.db.backends.signals import connection_created
+from django.db.backends.signals import connection_created  # type: ignore
 
 import traceback
 
@@ -82,7 +82,7 @@ class RevSync(Thread):
         # repository may be rebased so that the structure of it is very
         # different with datas in database so just remove these data and
         # load from server again
-        Revisions.objects.all().delete()
+        Revisions.objects.all().delete()  # type: ignore
 
         # Fill revisions just retrived into model
         config = self.__sInst.getModule('Config')
@@ -97,7 +97,7 @@ class RevSync(Thread):
         return True
 
     def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
-        headers = request.headers
+        headers = request.headers  # type: ignore
 
         if not 'X-Gitlab-Event' in headers:
             print("X-Gitlab-Event not found")
@@ -108,7 +108,7 @@ class RevSync(Thread):
             event = headers['X-Gitlab-Event']
 
             if contentType == 'application/json' and event == 'Merge Request Hook':
-                body = json.loads(request.body)
+                body = json.loads(request.body) # type: ignore
                 state = body['object_attributes']['state']
 
                 if state == 'merged':

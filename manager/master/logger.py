@@ -1,23 +1,26 @@
 # logger.py
 
 from datetime import datetime
-
+from queue import Queue
 from typing import *
+
+from manager.basic.mmanager import ModuleDaemon
 from manager.basic.letter import Letter
 from manager.basic.type import *
 
-from queue import Queue
-from threading import Thread
 
 import os
+
+M_NAME ="Logger"
 
 LOG_ID = str
 LOG_MSG = str
 
-class Logger(Thread):
+class Logger(ModuleDaemon):
 
     def __init__(self, path: str) -> None:
-        Thread.__init__(self)
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.logPath = path
         self.logQueue = Queue(32) # type: Queue[Tuple[LOG_ID, LOG_MSG]]

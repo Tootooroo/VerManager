@@ -5,8 +5,10 @@ from typing import Generic, TypeVar
 from yaml import load, SafeLoader
 from functools import reduce
 
+from manager.basic.mmanager import Module
+
 # Abstruction of configuration file
-class Info:
+class Info(Module):
 
     def __init__(self, cfgPath: str) -> None:
         with open(cfgPath, "r") as f:

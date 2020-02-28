@@ -15,6 +15,7 @@ from threading import Thread, Lock
 
 from manager.basic.letter import Letter, NewLetter
 from manager.basic.type import Ok, Error
+from manager.basic.commands import Command
 
 class WorkerInitFailed(Exception):
     pass
@@ -27,8 +28,9 @@ class Worker:
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: socket.socket, address:Tuple[str, int]) -> None:
         self.sock = sock
+        self.address = address
         self.max = 0
         self.inProcTask = TaskGroup()
         self.ident = ""
@@ -103,6 +105,9 @@ class Worker:
         self.state = s
         self.__clock = datetime.utcnow()
 
+    def getAddress(self) -> Tuple[str, int]:
+        return self.address
+
     def getIdent(self) -> str:
         return self.ident
 
@@ -135,6 +140,10 @@ class Worker:
 
     def numOfTaskProc(self) -> int:
         return self.inProcTask.numOfTasks()
+
+    def control(self, cmd:Command) -> None:
+        letter = cmd.toLetter()
+        self.__send(letter)
 
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():

@@ -15,7 +15,7 @@ from manager.master.dispatcher import Dispatcher
 
 from manager.basic.util import spawnThread
 
-from manager.master.server import ServerInst
+from manager.master.master import ServerInst
 from manager.worker.client import Client
 
 import time
@@ -134,68 +134,88 @@ class UnitTest(TestCase):
         newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
                               datetime=dateStr, menu="Menu",
                               parent="123456", needPost="true")
-        self.assertEqual("sn_1", newLetter.getContent('sn'))
-        self.assertEqual("vsn_1", newLetter.getContent('vsn'))
-        self.assertEqual(dateStr, newLetter.getContent('datetime'))
-        self.assertEqual('true', newLetter.getHeader('needPost'))
-        self.assertEqual('Menu', newLetter.getHeader('menu'))
-        self.assertEqual('123456', newLetter.getHeader('parent'))
+        self.assertEqual("sn_1", newLetter.getSN())
+        self.assertEqual("vsn_1", newLetter.getVSN())
+        self.assertEqual(dateStr, newLetter.getDatetime())
+        self.assertEqual('true', newLetter.needPost())
+        self.assertEqual('Menu', newLetter.getMenu())
+        self.assertEqual('123456', newLetter.getParent())
 
         # ResponseLetter Test
         response = ResponseLetter("tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
-        self.assertEqual("tid_1", response.getHeader("tid"))
-        self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getContent('state'))
-        self.assertEqual("123456", response.getHeader('parent'))
+        self.assertEqual("tid_1", response.getTid())
+        self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getState())
+        self.assertEqual("123456", response.getParent())
 
         # BinaryLetter Test
         binary = BinaryLetter("tid_1", b"123456", menu = "menu", fileName = "rar", parent = "123456")
-        self.assertEqual("tid_1", binary.getHeader('tid'))
-        self.assertEqual(b"123456", binary.getContent('bytes'))
-        self.assertEqual("menu", binary.getHeader('menu'))
-        self.assertEqual("123456", binary.getHeader("parent"))
-        self.assertEqual("rar", binary.getHeader('fileName'))
+        self.assertEqual("tid_1", binary.getTid())
+        self.assertEqual(b"123456", binary.getBytes())
+        self.assertEqual("menu", binary.getMenu())
+        self.assertEqual("123456", binary.getParent())
+        self.assertEqual("rar", binary.getFileName())
 
         binBytes = binary.binaryPack()
         binary_parsed = Letter.parse(binBytes)
-        self.assertEqual("tid_1", binary_parsed.getHeader('tid'))
-        self.assertEqual(b"123456", binary_parsed.getContent('bytes'))
-        self.assertEqual("menu", binary_parsed.getHeader('menu'))
-        self.assertEqual("123456", binary_parsed.getHeader("parent"))
-        self.assertEqual("rar", binary_parsed.getHeader('fileName'))
+        self.assertEqual("tid_1", binary_parsed.getTid())
+        self.assertEqual(b"123456", binary_parsed.getBytes())
+        self.assertEqual("menu", binary_parsed.getMenu())
+        self.assertEqual("123456", binary_parsed.getParent())
+        self.assertEqual("rar", binary_parsed.getFileName())
 
         # MenuLetter Test
         menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
                                 ["file1", "file2"], "/home/test/test.py")
-        self.assertEqual("version", menuLetter.getHeader('version'))
-        self.assertEqual("mid_1", menuLetter.getHeader('mid'))
-        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter.getContent("cmds"))
-        self.assertEqual(["file1", "file2"], menuLetter.getContent('depends'))
-        self.assertEqual("/home/test/test.py", menuLetter.getContent('output'))
+        self.assertEqual("version", menuLetter.getVersion())
+        self.assertEqual("mid_1", menuLetter.getMenuId())
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter.getCmds())
+        self.assertEqual(["file1", "file2"], menuLetter.getDepends())
+        self.assertEqual("/home/test/test.py", menuLetter.getOutput())
 
         menuBytes = menuLetter.toBytesWithLength()
         menuLetter_parsed = Letter.parse(menuBytes)
 
-        self.assertEqual("mid_1", menuLetter_parsed.getHeader('mid'))
-        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getContent("cmds"))
-        self.assertEqual(["file1", "file2"], menuLetter_parsed.getContent('depends'))
-        self.assertEqual("/home/test/test.py", menuLetter_parsed.getContent('output'))
+        self.assertEqual("version", menuLetter_parsed.getVersion())
+        self.assertEqual("mid_1", menuLetter_parsed.getMenuId())
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getCmds())
+        self.assertEqual(["file1", "file2"], menuLetter_parsed.getDepends())
+        self.assertEqual("/home/test/test.py", menuLetter_parsed.getOutput())
 
         # commandLetter Test
         commandLetter = CommandLetter("cmd_type", "T", "extra_information", content = {"1":"1"})
 
-        self.assertEqual("cmd_type", commandLetter.getHeader("type"))
-        self.assertEqual("T", commandLetter.getHeader("target"))
-        self.assertEqual("extra_information", commandLetter.getHeader("extra"))
-        self.assertEqual({"1":"1"}, commandLetter.getContent("content"))
+        self.assertEqual("cmd_type", commandLetter.getType())
+        self.assertEqual("T", commandLetter.getTarget())
+        self.assertEqual("extra_information", commandLetter.getExtra())
+        self.assertEqual({"1":"1"}, commandLetter.content_())
 
         commandLetter_bytes = commandLetter.toBytesWithLength()
         commandLetter_parsed = Letter.parse(commandLetter_bytes)
 
-        self.assertEqual("cmd_type", commandLetter_parsed.getHeader("type"))
-        self.assertEqual("T", commandLetter_parsed.getHeader("target"))
-        self.assertEqual("extra_information", commandLetter_parsed.getHeader("extra"))
-        self.assertEqual({"1":"1"}, commandLetter_parsed.getContent("content"))
+        self.assertEqual("cmd_type", commandLetter_parsed.getType())
+        self.assertEqual("T", commandLetter_parsed.getTarget())
+        self.assertEqual("extra_information", commandLetter_parsed.getExtra())
+        self.assertEqual({"1":"1"}, commandLetter_parsed.content_())
 
+        # CmdResponseLetter Test
+        cmdResponseLetter = CmdResponseLetter("wIdent", "post",
+                                              CmdResponseLetter.STATE_SUCCESS, reason = "NN",
+                                              target = "tt")
+
+        self.assertEqual("wIdent", cmdResponseLetter.getIdent())
+        self.assertEqual("post", cmdResponseLetter.getType())
+        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdResponseLetter.getState())
+        self.assertEqual("NN", cmdResponseLetter.getReason())
+        self.assertEqual("tt", cmdResponseLetter.getTarget())
+
+        cmdRBytes = cmdResponseLetter.toBytesWithLength()
+        cmdRLetter_parsed = Letter.parse(cmdRBytes)
+
+        self.assertEqual("wIdent", cmdRLetter_parsed.getIdent())
+        self.assertEqual("post", cmdRLetter_parsed.getType())
+        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdRLetter_parsed.getState())
+        self.assertEqual("NN", cmdRLetter_parsed.getReason())
+        self.assertEqual("tt", cmdRLetter_parsed.getTarget())
 
     def tes_Connected(self):
 

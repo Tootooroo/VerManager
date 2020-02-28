@@ -43,8 +43,8 @@ class ServerInst:
     def getModule(self, m:str) -> Optional[Module]:
         return self.__mmanager.getModule(m)
 
-    def addModule(self, m:str, mod:Module) -> State:
-        return self.__mmanager.addModule(m, mod)
+    def addModule(self, mod:Module) -> State:
+        return self.__mmanager.addModule(mod)
 
     def modules(self) -> List[Module]:
         return self.__mmanager.getAllModules()
@@ -57,24 +57,24 @@ class ServerInst:
         if not info.validityChecking(predicates):
             raise INVALID_CONFIGURATIONS
 
-        self.addModule('Config', info)
+        self.addModule(info)
 
         workerRoom = WorkerRoom(self.__address, self.__port, self)
-        self.addModule('WorkerRoom', workerRoom)
+        self.addModule(workerRoom)
 
         dispatcher = Dispatcher(workerRoom, self)
-        self.addModule('Dispatcher', dispatcher)
+        self.addModule(dispatcher)
 
         eventListener = EventListener(workerRoom, self)
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
-        self.addModule('EventListener', eventListener)
+        self.addModule(eventListener)
 
         logger = Logger("./logger")
-        self.addModule('Logger', logger)
+        self.addModule(logger)
 
         storage = Storage(info.getConfig('Storage'), self)
-        self.addModule('Storage', storage)
+        self.addModule(storage)
 
         revSyncner = RevSync(self)
 

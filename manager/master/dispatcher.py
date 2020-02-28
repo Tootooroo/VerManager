@@ -5,10 +5,13 @@
 
 import time
 
+M_NAME = "Dispatcher"
+
 from typing import *
 from functools import reduce
 
-from threading import Thread, Lock, Event
+from threading import Lock, Event
+from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.type import *
 from manager.master.task import TaskState, Task
@@ -20,10 +23,11 @@ from datetime import datetime
 
 from manager.master.logger import Logger
 
-class Dispatcher(Thread):
+class Dispatcher(ModuleDaemon):
 
     def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
-        Thread.__init__(self)
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.__sInst = inst
 

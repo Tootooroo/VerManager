@@ -6,6 +6,7 @@ import platform
 import shutil
 import traceback
 
+from .mmanager import Module
 from manager.basic.type import *
 from manager.basic.util import pathStrConcate
 
@@ -73,14 +74,14 @@ class StoChooser:
         fd.seek(0, 0)
 
 
-class Storage:
+class Storage(Module):
 
     def __init__(self, path:str, inst:typing.Any) -> None:
 
+        Module.__init__(self, "")
+
         self.__sInst = inst
-
         self.__crago = {} # type: typing.Dict[str, str]
-
         self.__num = 0
 
         # Need to check that is the path valid

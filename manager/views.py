@@ -18,7 +18,7 @@ from .basic.type import *
 
 from datetime import datetime
 
-import manager.master.server as S
+import manager.master.master as S
 import traceback
 
 # Models

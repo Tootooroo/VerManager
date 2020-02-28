@@ -71,6 +71,12 @@ class Letter:
     # (3) Config -- Informations that guid worker how to configure itself
     Command = 'command'
 
+    # Format of Command response letter
+    # Type    : "cmdResponse"
+    # Header  : "{"ident":"WorkerName", "type":"cmdType", "state":"...", "target":"..."}"
+    # Content : "{}"
+    CmdResponse = "cmdResponse"
+
     # Format of TaskCancel letter
     # Type    : 'cancel'
     # header  : '{"tid":"...", "parent":"..."}'
@@ -281,6 +287,30 @@ class NewLetter(Letter):
             extra = content['extra'],
             needPost = header['needPost'])
 
+    def getTid(self) -> str:
+        return self.getHeader('tid')
+
+    def getParent(self) -> str:
+        return self.getHeader('parent')
+
+    def needPost(self) -> str:
+        return self.getHeader('needPost')
+
+    def getMenu(self) -> str:
+        return self.getHeader('menu')
+
+    def getSN(self) -> str:
+        return self.getContent('sn')
+
+    def getVSN(self) -> str:
+        return self.getContent('vsn')
+
+    def getDatetime(self) -> str:
+        return self.getContent('datetime')
+
+    def getExtra(self) -> str:
+        return self.getContent('extra')
+
 CmdType = int
 CmdSubType = int
 
@@ -300,6 +330,59 @@ class CommandLetter(Letter):
 
         return CommandLetter(header['type'], header['target'], header['extra'], content['content'])
 
+    def getType(self) -> str:
+        return self.getHeader('type')
+
+    def getTarget(self) -> str:
+        return self.getHeader('target')
+
+    def getExtra(self) -> str:
+        return self.getHeader('extra')
+
+    def content_(self) -> str:
+        return self.getContent('content')
+
+class CmdResponseLetter(Letter):
+
+    STATE_SUCCESS = "s"
+    STATE_FAILED  = "f"
+
+    def __init__(self, wIdent:str, type:str, state:str, reason:str = "", target:str = "",
+                 extra:Dict[str, str] = {})  -> None:
+        Letter.__init__(self, Letter.CmdResponse,
+                        {"ident":wIdent, "type":type, "state":state, "target":target},
+                        {"reason":reason, "extra":extra})
+
+    @staticmethod
+    def parse(s:bytes) -> Optional['CmdResponseLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.CmdResponse:
+            return None
+
+        return CmdResponseLetter(header['ident'], header['type'], header['state'],
+                                 target = header['target'],
+                                 reason = content['reason'],
+                                 extra = content['extra'])
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getType(self) -> str:
+        return self.getHeader('type')
+
+    def getState(self) -> str:
+        return self.getHeader('state')
+
+    def getReason(self) -> str:
+        return self.getContent('reason')
+
+    def getTarget(self) -> str:
+        return self.getHeader('target')
+
+    def getExtra(self, key:str) -> str:
+        return self.getContent('extra')[key]
+
 class MenuLetter(Letter):
 
     def __init__(self, ver:str, mid:str, cmds:List[str], depends:List[str], output:str) -> None:
@@ -315,7 +398,20 @@ class MenuLetter(Letter):
 
         return MenuLetter(header['version'], header['mid'], content['cmds'], content['depends'], content['output'])
 
+    def getVersion(self) -> str:
+        return self.getHeader("version")
 
+    def getMenuId(self) -> str:
+        return self.getHeader('mid')
+
+    def getCmds(self) -> List[str]:
+        return self.getContent('cmds')
+
+    def getDepends(self) -> List[str]:
+        return self.getContent('depends')
+
+    def getOutput(self) -> str:
+        return self.getContent('output')
 
 class ResponseLetter(Letter):
 
@@ -340,6 +436,15 @@ class ResponseLetter(Letter):
             parent = header['parent']
         )
 
+    def getTid(self) -> str:
+        return self.getHeader('tid')
+
+    def getParent(self) -> str:
+        return self.getHeader('parent')
+
+    def getState(self) -> str:
+        return self.getContent('state')
+
 class PropLetter(Letter):
 
     def __init__(self, ident:str, max:str, proc:str) -> None:
@@ -362,6 +467,15 @@ class PropLetter(Letter):
             max = content['MAX'],
             proc = content['PROC']
         )
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getMax(self) -> str:
+        return self.getContent('MAX')
+
+    def getProc(self) -> str:
+        return self.getContent('PROC')
 
 class BinaryLetter(Letter):
 
@@ -424,6 +538,22 @@ class BinaryLetter(Letter):
         return packet
 
 
+    def getTid(self) -> str:
+        return self.getHeader('tid')
+
+    def getFileName(self) -> str:
+        return self.getHeader('fileName')
+
+    def getParent(self) -> str:
+        return self.getHeader('parent')
+
+    def getMenu(self) -> str:
+        return self.getHeader('menu')
+
+    def getBytes(self) -> str:
+        return self.getContent('bytes')
+
+
 class LogLetter(Letter):
 
     def __init__(self, ident:str, logId:str, logMsg:str) -> None:
@@ -447,6 +577,15 @@ class LogLetter(Letter):
             logMsg = content['logMsg']
         )
 
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getLogId(self) -> str:
+        return self.getHeader('logId')
+
+    def getLogMsg(self) -> str:
+        return self.getContent('logMsg')
+
 class LogRegLetter(Letter):
 
     def __init__(self, ident:str, logId:str) -> None:
@@ -468,6 +607,12 @@ class LogRegLetter(Letter):
             logId = header['logId']
         )
 
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getLogId(self) -> str:
+        return self.getHeader('logId')
+
 validityMethods = {
     Letter.NewTask        :newTaskLetterValidity,
     Letter.Response       :responseLetterValidity,
@@ -476,7 +621,8 @@ validityMethods = {
     Letter.Log            :logLetterValidity,
     Letter.LogRegister    :logRegisterLetterValidity,
     Letter.NewMenu        :lambda letter: True,
-    Letter.Command        :lambda letter: True
+    Letter.Command        :lambda letter: True,
+    Letter.CmdResponse    :lambda letter: True
 } # type: Dict[str, Callable]
 
 parseMethods = {
@@ -487,5 +633,6 @@ parseMethods = {
     Letter.Log            :LogLetter,
     Letter.LogRegister    :LogRegLetter,
     Letter.NewMenu        :MenuLetter,
-    Letter.Command        :CommandLetter
+    Letter.Command        :CommandLetter,
+    Letter.CmdResponse    :CmdResponseLetter
 } # type: Any

@@ -64,7 +64,9 @@ class MManager:
         (alives, dies) = partition(self.__modules, lambda m: m.is_alive())
         return dies
 
-    def addModule(self, mName:ModuleName, m:Module) -> State:
+    def addModule(self, m:Module) -> State:
+        mName = m.getName()
+
         if self.isModuleExists(mName):
             return Error
 
