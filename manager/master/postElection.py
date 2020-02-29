@@ -1,14 +1,16 @@
 # postelection.py
 
 from functools import reduce
+from queue import Queue
 
+from manager.basic.letter import CmdResponseLetter
 from manager.basic.commands import PostConfigCmd
 from manager.basic.type import Ok, Error, State
 from manager.master.worker import Worker
 from typing import List, Dict, Optional, Callable, Iterator, Any
 
 PostRole = int
-ElectMeasureRtn = Callable[[Worker, Worker], Worker]
+ElectProtocolRtn = Callable[['ElectGroup', Any], None]
 
 Role_Listener = 0  # type: PostRole
 Role_Provider = 1  # type: PostRole
@@ -99,29 +101,46 @@ class ElectGroup:
 
         return providers
 
+    def getProvider(self, ident:str) -> Optional[Worker]:
+        if ident not in self.__providers:
+            return None
+
+        return self.__providers[ident]
+
     def isExists(self, ident:str) -> bool:
         return ident in self.__providers
 
-class PostElectMethod:
+class PostElectProtocol:
 
-    def __init__(self, measure:ElectMeasureRtn) -> None:
-        self.__mMethod = measure
+    def __init__(self) -> None:
+        self.__isInit = False
+        self.__group = None # type: Optional[ElectGroup]
+        self.__msgQueue = Queue(256) # type: Queue[CmdResponseLetter]
 
-    def electListener(self, group:ElectGroup) -> Optional[Worker]:
-        if group.numOfWorkers == 0:
-            return None
+    def setGroup(self, group:ElectGroup) -> None:
+        self.__group = group
 
-        listener = reduce(self.__mMethod, group)
-        return listener
+    def step(self) -> State:
+        raise Exception
 
-    def setMeasureMethod(self, measure:ElectMeasureRtn) -> None:
-        self.__mMethod = measure
+    def init(self) -> State:
+        raise Exception
+
+    def terminate(self) -> State:
+        raise Exception
+
+    def msgTransfer(self, l:CmdResponseLetter) -> None:
+        self.__msgQueue.put(l)
+
+    def waitMsg(self) -> CmdResponseLetter:
+        return self.__msgQueue.get()
 
 class PostManager:
 
-    def __init__(self, workers:List[Worker], measure:ElectMeasureRtn) -> None:
-        self.__eGroup = ElectGroup()
-        self.__eMethod = PostElectMethod(measure)
+    def __init__(self, workers:List[Worker], proto:PostElectProtocol) -> None:
+
+        self.__eGroup = ElectGroup(workers)
+        self.__eProtocol = proto
 
     def removeWorker(self, ident:str) -> State:
         return self.__eGroup.removeWorker(ident)
@@ -129,33 +148,30 @@ class PostManager:
     def addWorker(self, w:Worker) -> State:
         return self.__eGroup.addWorker(w)
 
-    def isNeedReelect(self) -> Optional[Worker]:
-        listener = self.__eGroup.getListener()
-        listener_new = None # type: Optional[Worker]
-
-        # Listener in ElectGroup will be set to None if
-        # election has never happended or listener is
-        # lost connection with master.
-        if listener is None:
-            listener_new = self.__eMethod.electListener(self.__eGroup)
-            return listener_new
-
-        listener_new = self.__eMethod.electListener(self.__eGroup)
-
-        if listener is not listener_new:
-            return listener_new
-
-        return None
+    def processing(self) -> None:
+        pass
 
     def setRole(self, ident:str, role:PostRole) -> State:
         return self.__eGroup.setRole(ident, role)
+
+    def proto_init(self) -> State:
+        pass
+
+    def proto_step(self) -> State:
+        pass
+
+    def proto_msg_transfer(self, l:CmdResponseLetter) -> None:
+        self.__eProtocol.msgTransfer(l)
+
+    def proto_terminate(self) -> State:
+        pass
 
     # Note: We have never change state of ElectGroup. Worker's role
     #       will be seted via event handler when response of PostConfigCmd
     #       is arrived
     def elect(self) -> State:
         # Elect a listener
-        listener = self.__eMethod.electListener(self.__eGroup)
+        listener = None
 
         # Elect failed
         if listener is None:

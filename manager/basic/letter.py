@@ -85,7 +85,7 @@ class Letter:
 
     # Format of Response letter
     # Type    : 'response'
-    # header  : '{"tid":"...", "parent":"..."}
+    # header  : '{"ident":"...", "tid":"...", "parent":"..."}
     # content : '{"state":"..."}
     Response = 'response'
 
@@ -415,11 +415,11 @@ class MenuLetter(Letter):
 
 class ResponseLetter(Letter):
 
-    def __init__(self, tid:str, state:str, parent:str = "") -> None:
+    def __init__(self, ident:str, tid:str, state:str, parent:str = "") -> None:
         Letter.__init__(
             self,
             Letter.Response,
-            {"tid":tid, "parent":parent},
+            {"ident":ident, "tid":tid, "parent":parent},
             {"state":state}
         )
 
@@ -431,10 +431,14 @@ class ResponseLetter(Letter):
             return None
 
         return ResponseLetter(
+            ident = header['ident'],
             tid = header['tid'],
             state = content['state'],
             parent = header['parent']
         )
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
 
     def getTid(self) -> str:
         return self.getHeader('tid')

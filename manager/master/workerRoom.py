@@ -17,7 +17,8 @@ from queue import Queue, Empty
 from manager.basic.util import spawnThread
 from manager.master.logger import Logger
 
-from manager.master.postElection import PostManager
+from manager.master.postElectProtos import RandomElectProtocol
+from manager.master.postElection import PostManager, PostElectProtocol
 
 from typing import *
 
@@ -82,9 +83,10 @@ class WorkerRoom(ModuleDaemon):
         if self.__WAITING_INTERVAL == "":
             self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
-        self.__pManager = PostManager([], lambda w1, w2: w1)
+        self.__pManager = PostManager([], RandomElectProtocol())
 
         self.__lastChangedPoint = datetime.utcnow()
+        self.__stableThres = WorkerRoom.STABLE_INTERVAL
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -155,6 +157,11 @@ class WorkerRoom(ModuleDaemon):
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
         return diff >= WorkerRoom.STABLE_INTERVAL
 
+    def setStableThres(self, thres:int) -> None:
+        self.__stableThres = thres
+
+    def __changePoint(self) -> None:
+        self.__lastChangedPoint = datetime.utcnow()
 
     # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
@@ -168,6 +175,11 @@ class WorkerRoom(ModuleDaemon):
         while True:
             self.__waiting_worker_update()
             self.__waiting_worker_processing(self.__workers_waiting)
+
+            self.__postProcessing()
+
+    def __postProcessing(self) -> None:
+        pass
 
     def __waiting_worker_update(self) -> None:
         logger = self.__serverInst.getModule('Logger')
@@ -266,6 +278,7 @@ class WorkerRoom(ModuleDaemon):
 
             self.__workers[ident] = w
             self.numOfWorkers += 1
+            self.__changePoint()
 
             return Ok
 
@@ -288,6 +301,7 @@ class WorkerRoom(ModuleDaemon):
 
             del self.__workers [ident]
             self.numOfWorkers -= 1
+            self.__changePoint()
 
         return Ok
 

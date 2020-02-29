@@ -45,7 +45,7 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    workers = eventListener.refToModule('WorkerRoom')
+    workers = eventListener.getModule('WorkerRoom')
     worker = workers.getWorker(ident)
 
     if worker is None:
@@ -82,10 +82,10 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
     try:
-        cfgs = eventListener.refToModule('Config')
+        cfgs = eventListener.getModule('Config')
         resultDir = cfgs.getConfig("ResultDir")
 
-        dispatcher = eventListener.refToModule('Dispatcher')
+        dispatcher = eventListener.getModule('Dispatcher')
 
         task = dispatcher.getTask(taskId)
         if task is None:
@@ -104,10 +104,10 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
                                        resultDir+"/"+destFileName)
 
     except FileNotFoundError:
-        logger = eventListener.refToModule('Logger')
+        logger = eventListener.getModule('Logger')
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
-    workers = eventListener.refToModule('WorkerRoom')
+    workers = eventListener.getModule('WorkerRoom')
     worker = workers.getWorker(ident)
 
     if worker is None:
@@ -118,7 +118,7 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
     if task is None:
         return None
 
-    config = eventListener.refToModule('Config')
+    config = eventListener.getModule('Config')
     url = config.getConfig('GitlabUr')
     task.setData(url + "/static/" + destFileName)
 
@@ -137,7 +137,7 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         if not tid in chooserSet:
             extension = letter.getHeader('extension')
 
-            sto = eventListener.refToModule('Storage')
+            sto = eventListener.getModule('Storage')
             chooser = sto.create(tid, extension)
             chooserSet[tid] = chooser
 
@@ -152,7 +152,7 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         traceback.print_exc()
 
 def logHandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = eventListener.refToModule('Logger')
+    logger = eventListener.getModule('Logger')
 
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
@@ -161,7 +161,7 @@ def logHandler(eventListener: EventListener, letter: Letter) -> None:
         Logger.putLog(logger, logId, logMsg)
 
 def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = eventListener.refToModule('Logger')
+    logger = eventListener.getModule('Logger')
 
     logId = letter.getHeader('logId')
     logger.log_register(logId)
@@ -171,7 +171,7 @@ def postHandler(eventListener:EventListener, letter: Letter) -> None:
     if not isinstance(letter, CmdResponseLetter):
         return None
 
-    pManager = eventListener.refToModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
+    pManager = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
     assert(isinstance(pManager, PostManager))
 
     workerName = letter.getIdent()

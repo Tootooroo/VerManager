@@ -40,7 +40,7 @@ class EventListener(ModuleDaemon):
         # {tid:fd}
         self.taskResultFdSet = {} # type: Dict[str, BinaryIO]
 
-    def refToModule(self, m:str) -> Any:
+    def getModule(self, m:str) -> Any:
         return self.__sInst.getModule(m)
 
     def registerEvent(self, eventType: str, handler: Handler) -> None:
@@ -63,7 +63,7 @@ class EventListener(ModuleDaemon):
         self.entries.register(sock.fileno(), select.POLLIN)
 
     def fdUnregister(self, ident: str) -> None:
-        workers = self.refToModule('WorkerRoom')
+        workers = self.getModule('WorkerRoom')
         worker = workers.getWorker()
 
         if not worker is None:

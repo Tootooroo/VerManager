@@ -33,6 +33,9 @@ class Task:
         self.__vsn = vsn
         self.__extra = extra
 
+        # Files that relate to this task
+        self.__files = None  # type: Optional[BinaryIO]
+
         self.state = Task.STATE_PREPARE
 
         # This field will be set by EventListener while
@@ -221,6 +224,9 @@ class Task:
 
     def isBigTask(self) -> bool:
         return not self.__buildSet is None
+
+    def file(self) -> Optional[BinaryIO]:
+        return self.__files
 
     def toNewTaskLetter(self) -> Optional[NewLetter]:
 
