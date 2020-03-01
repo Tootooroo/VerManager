@@ -17,10 +17,12 @@ from .receiver import Receiver
 from .server import Server
 from .post import Post
 
+
 def do_proc(server: 'Server', post: 'Post',
             reqLetter: Letter,
             info: Info) -> None:
 
+    workerName = info.getConfig('WORKER_NAME')
     extra = reqLetter.getContent("extra")
     building_cmds = extra['cmds']
     result_path = extra['resultPath']
@@ -32,10 +34,10 @@ def do_proc(server: 'Server', post: 'Post',
         building_cmds = result_path.replace(";", "&&")
 
     # Notify master this task is change into in_processing state
-    response = ResponseLetter(tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
+    response = ResponseLetter(ident=workerName, tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
     server.transfer(response)
 
-    # Processing
+    # rocessing
     try:
         repo_url = info.getConfig("REPO_URL")
         projName = info.getConfig("PROJECT_NAME")
@@ -68,7 +70,7 @@ def do_proc(server: 'Server', post: 'Post',
             if isNeedPost:
                 target = post
 
-            if platform.system() is 'Windows':
+            if platform.system() == 'Windows':
                 sep = "\\"
             else:
                 sep = "/"
@@ -134,7 +136,7 @@ class Client:
         server.disconnect()
 
     def addModule(self, m: Module) -> None:
-        self.__manager.addModule(m.getName(), m)
+        self.__manager.addModule(m)
 
     def getModule(self, ident: str) -> Optional[Module]:
         return self.__manager.getModule("ident")
@@ -155,16 +157,16 @@ class Client:
 
         s = Server(address, port, info, self)
         s.connect(workerName, max, proc)
-        self.__manager.addModule("server", s)
+        self.__manager.addModule(s)
 
         m1 = Receiver(s, info, self)
-        self.__manager.addModule("Receiver", m1)
+        self.__manager.addModule(m1)
 
         m2 = Sender(s, info, self)
-        self.__manager.addModule("Sender", m2)
+        self.__manager.addModule(m2)
 
         m3 = Processor(info, self, procedure=do_proc)
-        self.__manager.addModule("Processor", m3)
+        self.__manager.addModule(m3)
 
         self.__manager.startAll()
 

@@ -2,46 +2,43 @@
 #
 # How to communicate with worker ?
 
-import socket
 import json
 
-import typing
-from typing import *
+from typing import Optional, Dict, \
+    Any, List, Union, Tuple, Callable
 
-from datetime import datetime
-
-def newTaskLetterValidity(letter: 'Letter') -> bool:
+def newTaskLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('sn') != "" and \
                letter.getContent('vsn') != ""
 
     return isHValid and isCValid
 
-def responseLetterValidity(letter: 'Letter') -> bool:
+def responseLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('state') != ""
 
     return isHValid and isCValid
 
-def propertyLetterValidity(letter: 'Letter') -> bool:
+def propertyLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('ident') != ""
     isCValid = letter.getContent('MAX') != "" and letter.getContent('PROC') != ""
 
     return isHValid and isCValid
 
-def binaryLetterValidity(letter: 'Letter') -> bool:
+def binaryLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('tid') != ""
     isCValid = letter.getContent('bytes') != ""
 
     return isHValid and isCValid
 
-def logLetterValidity(letter: 'Letter') -> bool:
+def logLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
     isCValid = letter.getContent('logMsg') != ""
 
     return isHValid and isCValid
 
-def logRegisterLetterValidity(letter: 'Letter') -> bool:
+def logRegisterLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
 
     return isHValid
@@ -49,21 +46,21 @@ def logRegisterLetterValidity(letter: 'Letter') -> bool:
 class Letter:
 
     # Format of NewTask letter
-    # Type    : 'new'
-    # header  : '{"tid":"...", "parent":"...", "needPost":"true/false", "menu":"..."}'
-    # content : '{"sn":"...", "vsn":"...", "datetime":"...", "extra":{...}}"
+    # Type    :  'new'
+    # header  :  '{"tid": "...", "parent": "...", "needPost": "true/false", "menu": "..."}'
+    # content :  '{"sn": "...", "vsn": "...", "datetime": "...", "extra": {...}}"
     NewTask = 'new'
 
     # Format of Menu letter
-    # Type    : "menu"
-    # header  : "{"mid":"..."}"
-    # content : "{"cmds":"[...]", "depends":"[...]", "output":"..."}"
+    # Type    :  "menu"
+    # header  :  "{"mid": "..."}"
+    # content :  "{"cmds": "[...]", "depends": "[...]", "output": "..."}"
     NewMenu = 'menu'
 
     # Format of Command letter
-    # Type    : "command"
-    # header  : "{"type":"...", "target":"...", "extra":"..."}"
-    # content : "{"content":"..."}"
+    # Type    :  "command"
+    # header  :  "{"type": "...", "target": "...", "extra": "..."}"
+    # content :  "{"content": "..."}"
     #
     # Type:
     # (1) Stop -- stop worker process
@@ -72,21 +69,21 @@ class Letter:
     Command = 'command'
 
     # Format of Command response letter
-    # Type    : "cmdResponse"
-    # Header  : "{"ident":"WorkerName", "type":"cmdType", "state":"...", "target":"..."}"
-    # Content : "{}"
+    # Type    :  "cmdResponse"
+    # Header  :  "{"ident": "WorkerName", "type": "cmdType", "state": "...", "target": "..."}"
+    # Content :  "{}"
     CmdResponse = "cmdResponse"
 
     # Format of TaskCancel letter
-    # Type    : 'cancel'
-    # header  : '{"tid":"...", "parent":"..."}'
-    # content : '{}'
+    # Type    :  'cancel'
+    # header  :  '{"tid": "...", "parent": "..."}'
+    # content :  '{}'
     TaskCancel = 'cancel'
 
     # Format of Response letter
-    # Type    : 'response'
-    # header  : '{"ident":"...", "tid":"...", "parent":"..."}
-    # content : '{"state":"..."}
+    # Type    :  'response'
+    # header  :  '{"ident": "...", "tid": "...", "parent": "..."}
+    # content :  '{"state": "..."}
     Response = 'response'
 
     RESPONSE_STATE_PREPARE = "0"
@@ -95,31 +92,31 @@ class Letter:
     RESPONSE_STATE_FAILURE = "3"
 
     # Format of PrpertyNotify letter
-    # Type    : 'notify'
-    # header  : '{"ident":"..."}'
-    # content : '{"MAX":"...", "PROC":"..."}'
+    # Type    :  'notify'
+    # header  :  '{"ident": "..."}'
+    # content :  '{"MAX": "...", "PROC": "..."}'
     PropertyNotify = 'notify'
 
     # Format of binary letter in a stream
-    # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | fileName (32 Bytes)
-    # | TaskId (64Bytes) :: String | Parent (64 Bytes) :: String
-    # | Menu (30 Bytes) :: String | Content |
+    # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | fileName (32 Bytes)
+    # | TaskId (64Bytes) : :  String | Parent (64 Bytes) : :  String
+    # | Menu (30 Bytes) : :  String | Content |
     # Format of BinaryFile letter
-    # Type    : 'binary'
-    # header  : '{"tid":"...", "parent":"..."}'
-    # content : "{"bytes":b"..."}"
+    # Type    :  'binary'
+    # header  :  '{"tid": "...", "parent": "..."}'
+    # content :  "{"bytes": b"..."}"
     BinaryFile = 'binary'
 
     # Format of log letter
-    # Type : 'log'
-    # header : '{"ident":"...", "logId":"..."}'
-    # content: '{"logMsg":"..."}'
+    # Type :  'log'
+    # header :  '{"ident": "...", "logId": "..."}'
+    # content:  '{"logMsg": "..."}'
     Log = 'log'
 
     # Format of LogRegister letter
-    # Type    : 'LogRegister'
-    # header  : '{"ident":"...", "logId"}'
-    # content : "{}"
+    # Type    :  'LogRegister'
+    # header  :  '{"ident": "...", "logId"}'
+    # content :  "{}"
     LogRegister = 'logRegister'
 
     BINARY_HEADER_LEN = 196
@@ -127,11 +124,11 @@ class Letter:
 
     MAX_LEN = 512
 
-    format = '{"type":"%s", "header":%s, "content":%s}'
+    format = '{"type": "%s", "header": %s, "content": %s}'
 
-    def __init__(self, type_: str,
-                 header: Dict[str, str] = {},
-                 content: Dict[str, Any] = {}) -> None:
+    def __init__(self, type_:  str,
+                 header:  Dict[str, str] = {},
+                 content:  Dict[str, Any] = {}) -> None:
 
         self.type_ = type_
 
@@ -162,36 +159,36 @@ class Letter:
         return len(bStr).to_bytes(2, "big") + bStr
 
     @staticmethod
-    def json2Letter(s: str) -> 'Letter':
+    def json2Letter(s:  str) -> 'Letter':
         dict_ = None
 
         begin = s.find('{')
-        dict_ = json.loads(s[begin:])
+        dict_ = json.loads(s[begin: ])
 
         return Letter(dict_['type'], dict_['header'], dict_['content'])
 
     def typeOfLetter(self) -> str:
         return self.type_
 
-    def getHeader(self, key: str) -> str:
+    def getHeader(self, key:  str) -> str:
         if key in self.header:
             return self.header[key]
         else:
             return ""
 
-    def addToHeader(self, key: str, value: str) -> None:
+    def addToHeader(self, key:  str, value:  str) -> None:
         self.header[key] = value
 
-    def setHeader(self, key:str, value:str) -> None:
+    def setHeader(self, key: str, value: str) -> None:
         self.header[key] = value
 
-    def setContent(self, key:str, value:Union[str, bytes]) -> None:
+    def setContent(self, key: str, value: Union[str, bytes]) -> None:
         self.content[key] = value
 
-    def addToContent(self, key: str, value: str) -> None:
+    def addToContent(self, key:  str, value:  str) -> None:
         self.content[key] = value
 
-    def getContent(self, key: str) -> Any:
+    def getContent(self, key:  str) -> Any:
         if key in self.content:
             return self.content[key]
         else:
@@ -199,33 +196,33 @@ class Letter:
 
     # If a letter is received completely return 0 otherwise return the remaining bytes
     @staticmethod
-    def letterBytesRemain(s: bytes) -> int:
+    def letterBytesRemain(s:  bytes) -> int:
         # Need at least BINARY_MIN_HEADER_LEN bytes to parse
         if len(s) < Letter.BINARY_MIN_HEADER_LEN:
             return Letter.MAX_LEN
 
-        if int.from_bytes(s[:2], "big") == 1:
-            length = int.from_bytes(s[2:6], "big")
+        if int.from_bytes(s[: 2], "big") == 1:
+            length = int.from_bytes(s[2: 6], "big")
             return length - (len(s) - Letter.BINARY_HEADER_LEN)
         else:
-            length = int.from_bytes(s[:2], "big")
+            length = int.from_bytes(s[: 2], "big")
             return length - (len(s) - 2)
 
     @staticmethod
-    def parse(s : bytes) -> Optional['Letter']:
+    def parse(s :  bytes) -> Optional['Letter']:
         # Need at least BINARY_MIN_HEADER_LEN bytes to parse
         if len(s) < Letter.BINARY_MIN_HEADER_LEN:
             return None
 
         # To check that is BinaryFile type or another
-        if int.from_bytes(s[:2], "big") == 1:
+        if int.from_bytes(s[: 2], "big") == 1:
             return BinaryLetter.parse(s)
         else:
             return Letter.__parse(s)
 
     @staticmethod
-    def __parse(s: bytes) -> Optional['Letter']:
-        letter = s[2:].decode()
+    def __parse(s:  bytes) -> Optional['Letter']:
+        letter = s[2: ].decode()
         dict_ = json.loads(letter)
 
         type_ = dict_['type']
@@ -244,8 +241,8 @@ class Letter:
     def propNotify_IDENT(self) -> str:
         return self.header['ident']
 
-def bytesDivide(s:bytes) -> Tuple:
-    letter = s[2:].decode()
+def bytesDivide(s: bytes) -> Tuple:
+    letter = s[2: ].decode()
     dict_ = json.loads(letter)
 
     type_ = dict_['type']
@@ -256,21 +253,21 @@ def bytesDivide(s:bytes) -> Tuple:
 
 class NewLetter(Letter):
 
-    def __init__(self, tid:str, sn:str,
-                 vsn:str, datetime:str,
-                 menu:str = "",
-                 parent:str = "",
-                 extra:Dict = {},
-                 needPost:str = "") -> None:
+    def __init__(self, tid: str, sn: str,
+                 vsn: str, datetime: str,
+                 menu: str = "",
+                 parent: str = "",
+                 extra: Dict = {},
+                 needPost: str = "") -> None:
         Letter.__init__(
             self,
             Letter.NewTask,
-            {"tid":tid, "parent":parent, "needPost":needPost, "menu":menu},
-            {"sn":sn, "vsn":vsn, "datetime":datetime, "extra":extra}
+            {"tid": tid, "parent": parent, "needPost": needPost, "menu": menu},
+            {"sn": sn, "vsn": vsn, "datetime": datetime, "extra": extra}
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['NewLetter']:
+    def parse(s: bytes) -> Optional['NewLetter']:
 
         (type_, header, content) = bytesDivide(s)
 
@@ -316,13 +313,13 @@ CmdSubType = int
 
 class CommandLetter(Letter):
 
-    def __init__(self, type:str, target:str = "", extra:str = "", content:Dict[str, str] = {}) -> None:
+    def __init__(self, type: str, target: str = "", extra: str = "", content: Dict[str, str] = {}) -> None:
         Letter.__init__(self, Letter.Command,
-                        {"type":type, "target":target, "extra":extra},
-                        {"content":content})
+                        {"type": type, "target": target, "extra": extra},
+                        {"content": content})
 
     @staticmethod
-    def parse(s:bytes) -> Optional['CommandLetter']:
+    def parse(s: bytes) -> Optional['CommandLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Command:
@@ -347,14 +344,14 @@ class CmdResponseLetter(Letter):
     STATE_SUCCESS = "s"
     STATE_FAILED  = "f"
 
-    def __init__(self, wIdent:str, type:str, state:str, reason:str = "", target:str = "",
-                 extra:Dict[str, str] = {})  -> None:
+    def __init__(self, wIdent: str, type: str, state: str, reason: str = "", target: str = "",
+                 extra: Dict[str, str] = {})  -> None:
         Letter.__init__(self, Letter.CmdResponse,
-                        {"ident":wIdent, "type":type, "state":state, "target":target},
-                        {"reason":reason, "extra":extra})
+                        {"ident": wIdent, "type": type, "state": state, "target": target},
+                        {"reason": reason, "extra": extra})
 
     @staticmethod
-    def parse(s:bytes) -> Optional['CmdResponseLetter']:
+    def parse(s: bytes) -> Optional['CmdResponseLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.CmdResponse:
@@ -380,17 +377,17 @@ class CmdResponseLetter(Letter):
     def getTarget(self) -> str:
         return self.getHeader('target')
 
-    def getExtra(self, key:str) -> str:
+    def getExtra(self, key: str) -> str:
         return self.getContent('extra')[key]
 
 class MenuLetter(Letter):
 
-    def __init__(self, ver:str, mid:str, cmds:List[str], depends:List[str], output:str) -> None:
-        Letter.__init__(self, Letter.NewMenu, {"mid":mid, "version":ver},
-                        {"cmds":cmds, "depends":depends, "output":output})
+    def __init__(self, ver: str, mid: str, cmds: List[str], depends: List[str], output: str) -> None:
+        Letter.__init__(self, Letter.NewMenu, {"mid": mid, "version": ver},
+                        {"cmds": cmds, "depends": depends, "output": output})
 
     @staticmethod
-    def parse(s:bytes) -> Optional['MenuLetter']:
+    def parse(s: bytes) -> Optional['MenuLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.NewMenu:
@@ -415,16 +412,16 @@ class MenuLetter(Letter):
 
 class ResponseLetter(Letter):
 
-    def __init__(self, ident:str, tid:str, state:str, parent:str = "") -> None:
+    def __init__(self, ident: str, tid: str, state: str, parent: str = "") -> None:
         Letter.__init__(
             self,
             Letter.Response,
-            {"ident":ident, "tid":tid, "parent":parent},
-            {"state":state}
+            {"ident": ident, "tid": tid, "parent": parent},
+            {"state": state}
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['ResponseLetter']:
+    def parse(s: bytes) -> Optional['ResponseLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Response:
@@ -451,16 +448,16 @@ class ResponseLetter(Letter):
 
 class PropLetter(Letter):
 
-    def __init__(self, ident:str, max:str, proc:str) -> None:
+    def __init__(self, ident: str, max: str, proc: str) -> None:
         Letter.__init__(
             self,
             Letter.PropertyNotify,
-            {"ident":ident},
-            {"MAX":max, "PROC":proc}
+            {"ident": ident},
+            {"MAX": max, "PROC": proc}
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['PropLetter']:
+    def parse(s: bytes) -> Optional['PropLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.PropertyNotify:
@@ -483,24 +480,24 @@ class PropLetter(Letter):
 
 class BinaryLetter(Letter):
 
-    def __init__(self, tid:str, bStr:bytes, menu:str = "",
-                 fileName:str = "", parent:str = "",
-                 last:str = "false") -> None:
+    def __init__(self, tid: str, bStr: bytes, menu: str = "",
+                 fileName: str = "", parent: str = "",
+                 last: str = "false") -> None:
 
         Letter.__init__(
             self,
             Letter.BinaryFile,
-            {"tid":tid, "fileName":fileName, "parent":parent, "menu":menu},
-            {"bytes":bStr}
+            {"tid": tid, "fileName": fileName, "parent": parent, "menu": menu},
+            {"bytes": bStr}
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['BinaryLetter']:
-        fileName = s[6:38].decode().replace(" ", "")
-        tid = s[38:102].decode().replace(" ", "")
-        parent = s[102:166].decode().replace(" ", "")
-        menu = s[166:196].decode().replace(" ", "")
-        content = s[196:]
+    def parse(s: bytes) -> Optional['BinaryLetter']:
+        fileName = s[6: 38].decode().replace(" ", "")
+        tid = s[38: 102].decode().replace(" ", "")
+        parent = s[102: 166].decode().replace(" ", "")
+        menu = s[166: 196].decode().replace(" ", "")
+        content = s[196: ]
 
         return BinaryLetter(tid, content, menu, fileName, parent = parent)
 
@@ -529,8 +526,8 @@ class BinaryLetter(Letter):
         menu_field = b"".join([" ".encode() for x in range(30 - len(menu))]) + menu.encode()
 
         # Safe here content must not str and must a bytes
-        # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int | Ext (32 Bytes) | TaskId (64Bytes) :: String
-        # | Parent(64 Bytes) :: String | Menu (30 Bytes) :: String | Content :: Bytes |
+        # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String
+        # | Parent(64 Bytes) : :  String | Menu (30 Bytes) : :  String | Content : :  Bytes |
         packet = (1).to_bytes(2, "big") + \
                  (len(content)).to_bytes(4, "big") + \
                  name_field + \
@@ -560,16 +557,16 @@ class BinaryLetter(Letter):
 
 class LogLetter(Letter):
 
-    def __init__(self, ident:str, logId:str, logMsg:str) -> None:
+    def __init__(self, ident: str, logId: str, logMsg: str) -> None:
         Letter.__init__(
             self,
             Letter.Log,
-            {"ident":ident, "logId":logId},
-            {"logMsg":logMsg}
+            {"ident": ident, "logId": logId},
+            {"logMsg": logMsg}
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['LogLetter']:
+    def parse(s: bytes) -> Optional['LogLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Log:
@@ -592,15 +589,15 @@ class LogLetter(Letter):
 
 class LogRegLetter(Letter):
 
-    def __init__(self, ident:str, logId:str) -> None:
+    def __init__(self, ident: str, logId: str) -> None:
         Letter.__init__(
             self,
             Letter.LogRegister,
-            {"ident":ident, "logId":logId},
+            {"ident": ident, "logId": logId},
         )
 
     @staticmethod
-    def parse(s:bytes) -> Optional['LogRegLetter']:
+    def parse(s: bytes) -> Optional['LogRegLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if  type_ != Letter.LogRegister:
@@ -618,25 +615,25 @@ class LogRegLetter(Letter):
         return self.getHeader('logId')
 
 validityMethods = {
-    Letter.NewTask        :newTaskLetterValidity,
-    Letter.Response       :responseLetterValidity,
-    Letter.PropertyNotify :propertyLetterValidity,
-    Letter.BinaryFile     :binaryLetterValidity,
-    Letter.Log            :logLetterValidity,
-    Letter.LogRegister    :logRegisterLetterValidity,
-    Letter.NewMenu        :lambda letter: True,
-    Letter.Command        :lambda letter: True,
-    Letter.CmdResponse    :lambda letter: True
-} # type: Dict[str, Callable]
+    Letter.NewTask        : newTaskLetterValidity,
+    Letter.Response       : responseLetterValidity,
+    Letter.PropertyNotify : propertyLetterValidity,
+    Letter.BinaryFile     : binaryLetterValidity,
+    Letter.Log            : logLetterValidity,
+    Letter.LogRegister    : logRegisterLetterValidity,
+    Letter.NewMenu        : lambda letter:  True,
+    Letter.Command        : lambda letter:  True,
+    Letter.CmdResponse    : lambda letter:  True
+} # type:  Dict[str, Callable]
 
 parseMethods = {
-    Letter.NewTask        :NewLetter,
-    Letter.Response       :ResponseLetter,
-    Letter.PropertyNotify :PropLetter,
-    Letter.BinaryFile     :BinaryLetter,
-    Letter.Log            :LogLetter,
-    Letter.LogRegister    :LogRegLetter,
-    Letter.NewMenu        :MenuLetter,
-    Letter.Command        :CommandLetter,
-    Letter.CmdResponse    :CmdResponseLetter
-} # type: Any
+    Letter.NewTask        : NewLetter,
+    Letter.Response       : ResponseLetter,
+    Letter.PropertyNotify : PropLetter,
+    Letter.BinaryFile     : BinaryLetter,
+    Letter.Log            : LogLetter,
+    Letter.LogRegister    : LogRegLetter,
+    Letter.NewMenu        : MenuLetter,
+    Letter.Command        : CommandLetter,
+    Letter.CmdResponse    : CmdResponseLetter
+} # type:  Any

@@ -109,6 +109,17 @@ class RandomElectProtocol(PostElectProtocol):
     def terminate(self) -> State:
         pass
 
-    @staticmethod
-    def __random_elect(w1:Worker, w2:Worker) -> Worker:
-        pass
+    def __random_elect(self, w1:Worker, w2:Worker) -> Worker:
+        ident_w1 = w1.getIdent()
+        ident_w2 = w2.getIdent()
+
+        # both w1 and w2 in blacklist
+        w1_black = ident_w1 in self.__blackList
+        w2_black = ident_w2 in self.__blackList
+
+        if (w1_black and w2_black) or (not w1_black and not w2_black):
+            return w1
+        elif w1_black:
+            return w2
+        else:
+            return w1
