@@ -99,9 +99,8 @@ class RandomElectProtocol(PostElectProtocol):
         if listener is not None:
             return Ok
 
-        self.__isInit = False
-
         # Reinit
+        self.__isInit = False
         self.init()
 
         return Ok

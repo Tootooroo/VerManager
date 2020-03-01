@@ -4,10 +4,11 @@
 # provide communication interface to another module
 
 import socket
-import typing
 import select
 
-from .task import *
+from typing import Tuple
+
+from .task import Task, TaskGroup, Optional, List, Dict
 from datetime import datetime, timedelta
 
 from functools import reduce
@@ -17,8 +18,7 @@ from manager.basic.letter import Letter, NewLetter
 from manager.basic.type import Ok, Error
 from manager.basic.commands import Command
 
-class WorkerInitFailed(Exception):
-    pass
+class WorkerInitFailed(Exception): pass
 
 WorkerState = int
 

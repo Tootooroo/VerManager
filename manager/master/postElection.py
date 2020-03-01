@@ -165,34 +165,3 @@ class PostManager:
 
     def proto_terminate(self) -> State:
         pass
-
-    # Note: We have never change state of ElectGroup. Worker's role
-    #       will be seted via event handler when response of PostConfigCmd
-    #       is arrived
-    def elect(self) -> State:
-        # Elect a listener
-        listener = None
-
-        # Elect failed
-        if listener is None:
-            return Error
-
-        providers = self.__eGroup.getProviders()
-
-        self.__eGroup.setRole(listener.getIdent(), Role_Listener)
-
-        (host, port) = listener.getAddress()
-
-        cmd_set_listener = PostConfigCmd(host, port, PostConfigCmd.ROLE_LISTENER)
-        listener.control(cmd_set_listener)
-
-        # In situation that there is only one worker connect to master.
-        if len(providers) == 0:
-            return Ok
-
-        cmd_set_provider = PostConfigCmd(host, port, PostConfigCmd.ROLE_PROVIDER)
-
-        for w in providers:
-            w.control(cmd_set_provider)
-
-        return Ok
