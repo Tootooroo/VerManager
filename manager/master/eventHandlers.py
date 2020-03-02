@@ -171,11 +171,5 @@ def postHandler(eventListener:EventListener, letter: Letter) -> None:
     if not isinstance(letter, CmdResponseLetter):
         return None
 
-    pManager = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
-    assert(isinstance(pManager, PostManager))
-
-    workerName = letter.getIdent()
-    role = letter.getExtra('role')
-
-    if role is PostConfigCmd.ROLE_LISTENER:
-        pManager.setRole(workerName, Role_Listener)
+    wr = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
+    wr.msgToPostManager(letter)

@@ -17,12 +17,11 @@ class RandomElectProtocol(PostElectProtocol):
 
     def __init__(self) -> None:
         PostElectProtocol.__init__(self)
-
         self.__blackList = [] # type: List[str]
 
     def init(self) -> State:
         # __group maybe None because WorkerRoom is in instable status
-        if self.__group is None:
+        if self.group is None:
             return Error
 
         ret = Error
@@ -34,16 +33,16 @@ class RandomElectProtocol(PostElectProtocol):
             if ret is Error:
                 self.__blackList.append(ident)
 
-                if len(self.__blackList) == self.__group.numOfWorkers():
+                if len(self.__blackList) == self.group.numOfWorkers():
                     return Error
 
         # Broadcast configuration to providers
-        listener = self.__group.getListener()
+        listener = self.group.getListener()
         assert(listener is not None)
 
         (host, port) = listener.getAddress()
 
-        providers = self.__group.getProviders()
+        providers = self.group.getProviders()
 
         cmd_set_provider = PostConfigCmd(host, port, PostConfigCmd.ROLE_PROVIDER)
 
@@ -55,21 +54,24 @@ class RandomElectProtocol(PostElectProtocol):
             if l.getState() is CmdResponseLetter.STATE_FAILED:
                 pass
 
-        self.__isInit = True
+        self.isInit = True
 
         return Ok
 
     def __elect_listener(self) -> Tuple[State, str]:
 
-        if self.__group is None:
+        if self.group is None:
             return (Ok, "")
 
-        listener = reduce(self.__random_elect, self.__group)
+        listener = reduce(self.__random_elect, self.group)
+
+        if listener in self.__blackList:
+            return (Error, "")
 
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
-        providers = self.__group.getProviders()
+        providers = self.group.getProviders()
 
         (host, port) = listener.getAddress()
 
@@ -78,22 +80,27 @@ class RandomElectProtocol(PostElectProtocol):
         listener.control(cmd_set_listener)
         l = self.waitMsg()
 
-        state = l.getState()
+        ident = l.getIdent()
+        if ident != listener.getIdent():
+            return (Error, listener.getIdent())
 
+        state = l.getState()
         if state == CmdResponseLetter.STATE_FAILED:
             return (Error, l.getIdent())
+
+        self.group.setRole(ident, Role_Listener)
 
         return (Ok, l.getIdent())
 
 
     def step(self) -> State:
 
-        if self.__isInit is False:
+        if self.isInit is False:
             return Error
 
-        assert(self.__group is not None)
+        assert(self.group is not None)
 
-        listener = self.__group.getListener()
+        listener = self.group.getListener()
 
         # Listener is still valid
         if listener is not None:

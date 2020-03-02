@@ -7,10 +7,15 @@ from functools import reduce
 
 from manager.basic.mmanager import Module
 
+M_NAME = "Info"
+
 # Abstruction of configuration file
 class Info(Module):
 
     def __init__(self, cfgPath: str) -> None:
+        global M_NAME
+
+        Module.__init__(self, M_NAME)
         with open(cfgPath, "r") as f:
             self.__config = load(f, Loader=SafeLoader)
 

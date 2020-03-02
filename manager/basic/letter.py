@@ -316,7 +316,7 @@ class CommandLetter(Letter):
     def __init__(self, type: str, target: str = "", extra: str = "", content: Dict[str, str] = {}) -> None:
         Letter.__init__(self, Letter.Command,
                         {"type": type, "target": target, "extra": extra},
-                        {"content": content})
+                        content)
 
     @staticmethod
     def parse(s: bytes) -> Optional['CommandLetter']:
@@ -325,7 +325,7 @@ class CommandLetter(Letter):
         if type_ != Letter.Command:
             return None
 
-        return CommandLetter(header['type'], header['target'], header['extra'], content['content'])
+        return CommandLetter(header['type'], header['target'], header['extra'], content)
 
     def getType(self) -> str:
         return self.getHeader('type')
@@ -336,8 +336,8 @@ class CommandLetter(Letter):
     def getExtra(self) -> str:
         return self.getHeader('extra')
 
-    def content_(self) -> str:
-        return self.getContent('content')
+    def content_(self, key:str) -> str:
+        return self.getContent(key)
 
 class CmdResponseLetter(Letter):
 
@@ -393,7 +393,8 @@ class MenuLetter(Letter):
         if type_ != Letter.NewMenu:
             return None
 
-        return MenuLetter(header['version'], header['mid'], content['cmds'], content['depends'], content['output'])
+        return MenuLetter(header['version'], header['mid'],
+                          content['cmds'], content['depends'], content['output'])
 
     def getVersion(self) -> str:
         return self.getHeader("version")
@@ -554,6 +555,8 @@ class BinaryLetter(Letter):
     def getBytes(self) -> str:
         return self.getContent('bytes')
 
+    def setBytes(self, b:bytes) -> None:
+        self.setContent('bytes', b)
 
 class LogLetter(Letter):
 

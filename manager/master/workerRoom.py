@@ -20,7 +20,12 @@ from manager.master.logger import Logger
 from manager.master.postElectProtos import RandomElectProtocol
 from manager.master.postElection import PostManager, PostElectProtocol
 
+from manager.basic.letter import CmdResponseLetter
+
 from typing import *
+
+from manager.basic.info import M_NAME as INFO_M_NAME
+from manager.master.logger import M_NAME as LOGGER_M_NAME
 
 M_NAME = "WorkerRoom"
 
@@ -47,7 +52,7 @@ class WorkerRoom(ModuleDaemon):
 
         ModuleDaemon.__init__(self, M_NAME)
 
-        configs = sInst.getModule('Config')
+        configs = sInst.getModule(INFO_M_NAME)
 
         self.__serverInst = sInst
 
@@ -83,6 +88,7 @@ class WorkerRoom(ModuleDaemon):
         if self.__WAITING_INTERVAL == "":
             self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
+        self.__isPManager_init = False
         self.__pManager = PostManager([], RandomElectProtocol())
 
         self.__lastChangedPoint = datetime.utcnow()
@@ -97,7 +103,7 @@ class WorkerRoom(ModuleDaemon):
         maintainer = spawnThread(lambda wr: wr.maintain(), self)
 
         global wrLog
-        logger = self.__serverInst.getModule('Logger')
+        logger = self.__serverInst.getModule(LOGGER_M_NAME)
         logger.log_register(wrLog)
 
         while True:
@@ -140,6 +146,9 @@ class WorkerRoom(ModuleDaemon):
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
 
+                self.__pManager.addWorker(workerInWait)
+                self.__changePoint()
+
                 list(map(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)) # type: ignore
 
                 Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
@@ -151,6 +160,10 @@ class WorkerRoom(ModuleDaemon):
             self.syncLock.release()
 
             self.addWorker(acceptedWorker)
+
+            self.__pManager.addWorker(acceptedWorker)
+            self.__changePoint()
+
             list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)) # type: ignore
 
     def isStable(self) -> bool:
@@ -162,6 +175,15 @@ class WorkerRoom(ModuleDaemon):
 
     def __changePoint(self) -> None:
         self.__lastChangedPoint = datetime.utcnow()
+
+    def msgToPostManager(self, l:CmdResponseLetter) -> None:
+        self.__pManager.proto_msg_transfer(l)
+
+    def postRelations(self) -> Tuple[str, List[str]]:
+        return self.__pManager.relations()
+
+    def postListener(self) -> Optional[Worker]:
+        return self.__pManager.getListener()
 
     # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
@@ -179,10 +201,23 @@ class WorkerRoom(ModuleDaemon):
             self.__postProcessing()
 
     def __postProcessing(self) -> None:
-        pass
+
+        if not self.isStable():
+            return None
+
+        # Init postManager
+        if self.getNumOfWorkers() > 0 and self.__isPManager_init == False:
+            self.__pManager.proto_init()
+            self.__isPManager_init = True
+
+            return None
+
+        # Stepping
+        if self.__isPManager_init:
+            self.__pManager.proto_step()
 
     def __waiting_worker_update(self) -> None:
-        logger = self.__serverInst.getModule('Logger')
+        logger = self.__serverInst.getModule(LOGGER_M_NAME)
 
         try:
             (eventType, index) = self.__eventQueue.get(timeout=1)
@@ -209,13 +244,16 @@ class WorkerRoom(ModuleDaemon):
             worker.setState(Worker.STATE_WAITING)
             self.removeWorker(ident)
 
+            self.__pManager.removeWorker(ident)
+            self.__changePoint()
+
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
 
             list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)) # type: ignore
 
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
-        logger = self.__serverInst.getModule('Logger')
+        logger = self.__serverInst.getModule(LOGGER_M_NAME)
 
         workers_list = list(workers.values())
 

@@ -19,7 +19,13 @@ from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
 from queue import Queue
 
+from manager.worker.server import M_NAME as SERVER_M_NAME
+
 ReqIdent = Tuple[str, str]
+
+M_NAME = "PostListener"
+
+M_NAME_Provider = "PostProvider"
 
 class DISCONN(Exception):
     pass
@@ -27,7 +33,8 @@ class DISCONN(Exception):
 class PostListener(ModuleDaemon):
 
     def __init__(self, address:str, port:int, cInst:Any) -> None:
-        ModuleDaemon.__init__(self, "")
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.__address = address
         self.__port = port
@@ -70,6 +77,9 @@ class PostListener(ModuleDaemon):
 class PostProvider(Module):
 
     def __init__(self, address:str, port:int, connect:bool = False) -> None:
+        global M_NAME_Provider
+
+        Module.__init__(self, M_NAME_Provider)
         self.__address = address
         self.__port = port
         self.__sock = None # type: Optional[socket.socket]
@@ -386,7 +396,7 @@ class PostProcessor(Thread):
             for stuff in stuffs:
                 self.__storage.delete(stuff.name())
 
-            server = self.__cInst.getModule('Server')
+            server = self.__cInst.getModule(SERVER_M_NAME)
 
             with open(output, "rb") as output_file:
 

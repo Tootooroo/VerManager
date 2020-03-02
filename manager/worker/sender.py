@@ -10,10 +10,13 @@ from .server import Server
 
 from threading import Condition
 
+M_NAME = "Sender"
+
 class Sender(ModuleDaemon):
 
     def __init__(self, server:Server, info:Info, cInst:typing.Any) -> None:
-        ModuleDaemon.__init__(self, "")
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.cond = Condition()
         self.server = server

@@ -142,7 +142,8 @@ class UnitTest(TestCase):
         self.assertEqual('123456', newLetter.getParent())
 
         # ResponseLetter Test
-        response = ResponseLetter("tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
+        response = ResponseLetter("ident", "tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
+        self.assertEqual("ident", response.getIdent())
         self.assertEqual("tid_1", response.getTid())
         self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getState())
         self.assertEqual("123456", response.getParent())
@@ -187,7 +188,7 @@ class UnitTest(TestCase):
         self.assertEqual("cmd_type", commandLetter.getType())
         self.assertEqual("T", commandLetter.getTarget())
         self.assertEqual("extra_information", commandLetter.getExtra())
-        self.assertEqual({"1":"1"}, commandLetter.content_())
+        self.assertEqual("1", commandLetter.content_("1"))
 
         commandLetter_bytes = commandLetter.toBytesWithLength()
         commandLetter_parsed = Letter.parse(commandLetter_bytes)
@@ -195,7 +196,7 @@ class UnitTest(TestCase):
         self.assertEqual("cmd_type", commandLetter_parsed.getType())
         self.assertEqual("T", commandLetter_parsed.getTarget())
         self.assertEqual("extra_information", commandLetter_parsed.getExtra())
-        self.assertEqual({"1":"1"}, commandLetter_parsed.content_())
+        self.assertEqual("1", commandLetter_parsed.content_("1"))
 
         # CmdResponseLetter Test
         cmdResponseLetter = CmdResponseLetter("wIdent", "post",
@@ -217,45 +218,54 @@ class UnitTest(TestCase):
         self.assertEqual("NN", cmdRLetter_parsed.getReason())
         self.assertEqual("tt", cmdRLetter_parsed.getTarget())
 
-    def tes_Connected(self):
+    def test_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
         sInst.start()
         time.sleep(1)
 
-        client1 = Client.Client("127.0.0.1", 8012, "./worker/config.yaml", name = "W1")
+        client1 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W1")
         client1.start()
 
-        client2 = Client.Client("127.0.0.1", 8012, "./worker/config.yaml", name = "W2")
+        client2 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W2")
         client2.start()
+
+        client3 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W3")
+        client3.start()
 
         time.sleep(2)
 
         wr = sInst.getModule('WorkerRoom')
-        self.assertEqual(2, wr.getNumOfWorkers())
+        self.assertEqual(3, wr.getNumOfWorkers())
+
+        time.sleep(15)
+        print(wr.postRelations())
 
         # Reconnect tests case
         client1.disconnect()
 
         # After client1 disconnect there should be one
         # worker in wait queue
-        time.sleep(1)
+        time.sleep(3)
+
         self.assertEqual(1, wr.getNumOfWorkersInWait())
 
         time.sleep(10)
 
         # At this time worker should reconnect to master
         self.assertEqual(0, wr.getNumOfWorkersInWait())
-        self.assertEqual(2, wr.getNumOfWorkers())
+        self.assertEqual(3, wr.getNumOfWorkers())
 
         # Client Stop
         client1.stop()
         client2.stop()
+        client3.stop()
 
         time.sleep(3)
 
-        self.assertEqual(1, client1.status())
-        self.assertEqual(1, client2.status())
+        self.assertTrue(client1.isStop())
+        self.assertTrue(client2.isStop())
+        self.assertTrue(client3.isStop())
 
         time.sleep(10)
 

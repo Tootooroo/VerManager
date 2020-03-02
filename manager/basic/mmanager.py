@@ -108,3 +108,10 @@ class MManager:
         for mod in allMods:
             if isinstance(mod, ModuleDaemon):
                 mod.stop()
+
+    def join(self) -> None:
+        allMods = self.getAllModules()
+
+        for mod in allMods:
+            if isinstance(mod, ModuleDaemon):
+                mod.join()

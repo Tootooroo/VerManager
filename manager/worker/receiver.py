@@ -10,10 +10,15 @@ from multiprocessing import Pool
 
 from typing import Any, Dict, List
 
+from manager.worker.processor import M_NAME as PROCESSOR_M_NAME
+
+M_NAME = "Recevier"
+
 class Receiver(ModuleDaemon):
 
     def __init__(self, server:Server, info:Info, cInst:Any) -> None:
-        ModuleDaemon.__init__(self, "")
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.server = server
         self.max = int(info.getConfig('MAX_TASK_CAN_PROC'))
@@ -45,7 +50,7 @@ class Receiver(ModuleDaemon):
     def run(self) -> None:
 
         server = self.server
-        processor = self.__cInst.getModule('Processor')
+        processor = self.__cInst.getModule(PROCESSOR_M_NAME)
 
         # Not Processor module
         if not isinstance(processor, Processor):

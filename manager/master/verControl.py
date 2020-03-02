@@ -18,6 +18,8 @@ import json
 from django.dispatch import receiver
 from django.db.backends.signals import connection_created  # type: ignore
 
+from manager.basic.info import M_NAME as INFO_M_NAME
+
 import traceback
 
 revSyncner = None
@@ -34,7 +36,7 @@ class RevSync(Thread):
 
         self.__sInst = sInst
 
-        cfgs = sInst.getModule('Config')
+        cfgs = sInst.getModule(INFO_M_NAME)
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
 

@@ -3,6 +3,8 @@
 from typing import Dict, List, Union, Optional, Tuple
 from functools import reduce
 
+from manager.basic.letter import MenuLetter
+
 MAX_LENGTH_OF_COMMAND = 1024
 
 class BUILD_FORMAT_WRONG(Exception):
@@ -31,13 +33,44 @@ class Build:
     def getOutput(self) ->  str:
         return self.__output[0]
 
-
     def length(self) -> int:
         return len(self.__cmds)
 
     @staticmethod
     def isValid(build:Dict) -> bool:
         return 'cmd' in build and 'output' in build
+
+class Post:
+
+    def __init__(self, version:str, ident:str, members:List[str], build:Build) -> None:
+        self.__version = version
+        self.__ident = ident
+        self.__build = build
+        self.__members = members
+
+    def getIdent(self) -> str:
+        return self.__ident
+
+    def getVersion(self) -> str:
+        return self.__version
+
+    def setVersion(self, ver:str) -> None:
+        self.__version = ver
+
+    def getMembers(self) -> List[str]:
+        return self.__members
+
+    def getBuild(self) -> Build:
+        return self.__build
+
+    def toMenuLetter(self) -> MenuLetter:
+        cmds = self.__build.getCmd()
+        output = self.__build.getOutput()
+        mLetter = MenuLetter(self.__version, self.__ident, cmds,
+                             self.__members, output)
+
+        return mLetter
+
 
 class BuildSet:
 
@@ -47,7 +80,7 @@ class BuildSet:
 
         self.__builds = BuildSet.__split(buildSet)
         self.__postBelong = {} # type: Dict[str, Tuple[str, List[Build]]]
-        self.__postBuilds = {} # type: Dict[str, Build]
+        self.__posts = {} # type: Dict[str, Post]
 
         self.__buildPosts(buildSet)
 
@@ -55,6 +88,9 @@ class BuildSet:
         if not bId in self.__postBelong:
             return None
         return self.__postBelong[bId]
+
+    def getPosts(self) -> List[Post]:
+        return list(self.__posts.values())
 
     def getBuilds(self) -> List[Build]:
         return list(self.__builds.values())
@@ -111,7 +147,9 @@ class BuildSet:
         # Build a dict to store post and their post build
         for pId in postGroups:
             post = postGroups[pId]
-            self.__postBuilds[pId] = Build(pId, {"cmd":post['cmd'], "output":post['output']})
+
+            build = Build(pId, {"cmd":post['cmd'], "output":post['output']})
+            self.__posts[pId] = Post("", pId, post['group'], build)
 
         # Build a dict to store relation among builds.
         for pId in postGroups:

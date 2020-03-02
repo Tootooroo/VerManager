@@ -2,6 +2,7 @@
 
 from typing import *
 from socket import *
+from threading import Thread
 
 from manager.basic.type import Ok, Error, State
 from manager.basic.mmanager import MManager, Module
@@ -11,7 +12,7 @@ from manager.master.workerRoom import WorkerRoom
 from manager.master.dispatcher import Dispatcher, workerLost_redispatch
 from manager.master.eventListener import EventListener, workerRegister
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler
+    logHandler, logRegisterhandler, postHandler
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.exceptions import INVALID_CONFIGURATIONS
@@ -29,10 +30,10 @@ predicates = [
     lambda cfgs: "TimeZone" in cfgs
 ]
 
-class ServerInst:
+class ServerInst(Thread):
 
     def __init__(self, address:str, port:int, cfgPath:str) -> None:
-
+        Thread.__init__(self)
         self.__address = address
         self.__port = port
 
@@ -68,6 +69,7 @@ class ServerInst:
         eventListener = EventListener(workerRoom, self)
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
+        eventListener.registerEvent(Letter.CmdResponse, postHandler)
         self.addModule(eventListener)
 
         logger = Logger("./logger")
@@ -82,3 +84,8 @@ class ServerInst:
         workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))
 
         self.__mmanager.startAll()
+
+        # Block the initial thread cause the entire program
+        # exists when only daemon-thread exists. initial thread
+        # is the only one non-daemon thread.
+        self.__mmanager.join()

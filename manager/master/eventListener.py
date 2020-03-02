@@ -13,6 +13,9 @@ from manager.basic.type import *
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.letter import Letter
 
+from manager.master.logger import M_NAME as LOGGER_M_NAME
+from manager.master.workerRoom import M_NAME as WORKER_M_NAME
+
 import traceback
 
 M_NAME = "EventListener"
@@ -63,7 +66,7 @@ class EventListener(ModuleDaemon):
         self.entries.register(sock.fileno(), select.POLLIN)
 
     def fdUnregister(self, ident: str) -> None:
-        workers = self.getModule('WorkerRoom')
+        workers = self.getModule(WORKER_M_NAME)
         worker = workers.getWorker()
 
         if not worker is None:
@@ -109,7 +112,7 @@ class EventListener(ModuleDaemon):
 
     def run(self) -> None:
         global letterLog
-        logger = self.__sInst.getModule('Logger')
+        logger = self.__sInst.getModule(LOGGER_M_NAME)
 
         if logger is None:
             raise COMPONENTS_LOG_NOT_INIT

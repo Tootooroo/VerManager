@@ -5,6 +5,7 @@ import sys
 import os
 import platform
 
+from threading import Thread
 from typing import Union, List, Optional
 
 from ..basic.letter import Letter, ResponseLetter, BinaryLetter
@@ -17,81 +18,16 @@ from .receiver import Receiver
 from .server import Server
 from .post import Post
 
+from .server import M_NAME as SERVER_M_NAME
+from .receiver import M_NAME as RECEIVER_M_NAME
 
-def do_proc(server: 'Server', post: 'Post',
-            reqLetter: Letter,
-            info: Info) -> None:
-
-    workerName = info.getConfig('WORKER_NAME')
-    extra = reqLetter.getContent("extra")
-    building_cmds = extra['cmds']
-    result_path = extra['resultPath']
-
-    tid = reqLetter.getHeader("tid")
-
-    if platform.system() == "Windows":
-        result_path = result_path.replace("/", "\\")
-        building_cmds = result_path.replace(";", "&&")
-
-    # Notify master this task is change into in_processing state
-    response = ResponseLetter(ident=workerName, tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
-    server.transfer(response)
-
-    # rocessing
-    try:
-        repo_url = info.getConfig("REPO_URL")
-        projName = info.getConfig("PROJECT_NAME")
-
-        # Get repo
-        os.system("git clone -b master " + repo_url)
-
-        os.chdir(projName)
-
-        revision = reqLetter.getContent('sn')
-
-        # Checkout to specific revision
-        os.system("git checkout -f " + revision)
-
-        version = reqLetter.getContent('vsn')
-        version_date = reqLetter.getContent('datetime')
-
-        building_cmds = building_cmds.replace("<vsn>", version)
-        building_cmds = building_cmds.replace("datetime>", version_date)
-
-        # Run commands
-        os.system(building_cmds)
-
-        with open(result_path, "rb") as result_file:
-            needPost = reqLetter.getHeader("needPost")
-            target = server  # type: Union[Server, Post]
-
-            isNeedPost = needPost == 'true'
-
-            if isNeedPost:
-                target = post
-
-            if platform.system() == 'Windows':
-                sep = "\\"
-            else:
-                sep = "/"
-            for line in result_file:
-                fileName = result_path.split(sep)[-1]
-                binaryLetter = BinaryLetter(tid=tid, bStr=line,
-                                            fileName=fileName)
-                target.transfer(binaryLetter)
-
-            response.setContent("state", Letter.RESPONSE_STATE_FINISHED)
-            target.transfer(response)
-    except Exception:
-        response.setContent("state", Letter.RESPONSE_STATE_FAILURE)
-        server.transfer(response)
-
-
-class Client:
+class Client(Thread):
 
     def __init__(self, mAddress: str,
                  mPort: int, cfgPath: str,
                  name: str = "") -> None:
+
+        Thread.__init__(self)
 
         self.__cfgPath = cfgPath
 
@@ -100,7 +36,7 @@ class Client:
         self.__mAddress = mAddress
         self.__mPort = mPort
 
-        self.__status = 0
+        self.__isStop = True
 
         self.__manager = MManager()
 
@@ -113,12 +49,12 @@ class Client:
     def inProcTasks(self) -> List[str]:
         pass
 
-    def status(self) -> int:
-        return self.__status
+    def isStop(self) -> bool:
+        return self.__isStop
 
     def connect(self) -> None:
-        server = self.getModule('Server')
-        taskDealer = self.getModule('Receiver')
+        server = self.getModule(SERVER_M_NAME)
+        taskDealer = self.getModule(RECEIVER_M_NAME)
 
         if server is None or not isinstance(server, Server):
             return None
@@ -129,7 +65,7 @@ class Client:
                        taskDealer.numOfTasks())
 
     def disconnect(self) -> None:
-        server = self.getModule('Server')
+        server = self.getModule(SERVER_M_NAME)
         if server is None or not isinstance(server, Server):
             return None
 
@@ -139,9 +75,11 @@ class Client:
         self.__manager.addModule(m)
 
     def getModule(self, ident: str) -> Optional[Module]:
-        return self.__manager.getModule("ident")
+        return self.__manager.getModule(ident)
 
-    def init(self) -> None:
+    def run(self) -> None:
+        self.__isStop = False
+
         info = Info(self.__cfgPath)
 
         address = self.__mAddress
@@ -170,6 +108,13 @@ class Client:
 
         self.__manager.startAll()
 
+        # Block the initial thread cause the entire program
+        # exists when only daemon-thread exists. initial thread
+        # is the only one non-daemon thread.
+        self.__manager.join()
+
+        self.__isStop = True
+
 
 if __name__ == '__main__':
     configPath = sys.argv[1]
@@ -180,4 +125,4 @@ if __name__ == '__main__':
     port = info.getConfig('MASTER_ADDRESS', 'port')
 
     client = Client(address, port, configPath)
-    client.init()
+    client.start()

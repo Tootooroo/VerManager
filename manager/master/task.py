@@ -10,7 +10,7 @@ from manager.master.build import BuildSet
 from datetime import datetime
 from threading import Lock
 
-from manager.master.build import Build, BuildSet
+from manager.master.build import Build, BuildSet, Post
 
 TaskState = int
 
@@ -84,6 +84,12 @@ class Task:
 
     def setBuildSet(self, bs:BuildSet) -> None:
         self.__buildSet = bs
+
+    def getPosts(self) -> List[Post]:
+        if self.__buildSet is None:
+            return []
+
+        return self.__buildSet.getPosts()
 
     def subTasksSpawn(self) -> None:
         if len(self.__subTasks) > 0:
@@ -225,7 +231,10 @@ class Task:
     def isBigTask(self) -> bool:
         return not self.__buildSet is None
 
-    def file(self) -> Optional[BinaryIO]:
+    # fixme: Python 3.5.3 raise an NameError exception:
+    #        name 'BinaryIO' is not defined. Temporarily
+    #        use Any to instead of BinaryIO
+    def file(self) -> Optional[Any]:
         return self.__files
 
     def toNewTaskLetter(self) -> Optional[NewLetter]:
@@ -240,10 +249,17 @@ class Task:
                 return None
 
             parent_id = parent.id()
-            needPost = "true"
+
+            group = self.getGroupOf(self.taskId)
+
+            if group is None:
+                needPost = "false"
+            else:
+                needPost = "true"
+
         else:
             parent_id = ""
-            needPost = ""
+            needPost = "false"
 
         build = self.__build
 

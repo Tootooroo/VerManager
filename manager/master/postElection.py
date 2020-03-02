@@ -7,7 +7,8 @@ from manager.basic.letter import CmdResponseLetter
 from manager.basic.commands import PostConfigCmd
 from manager.basic.type import Ok, Error, State
 from manager.master.worker import Worker
-from typing import List, Dict, Optional, Callable, Iterator, Any
+from typing import List, Dict, Optional, Callable, \
+    Iterator, Any, Tuple
 
 PostRole = int
 ElectProtocolRtn = Callable[['ElectGroup', Any], None]
@@ -17,26 +18,32 @@ Role_Provider = 1  # type: PostRole
 
 class ElectGroup_iter(Iterator):
 
-    def __init__(self, iter:Iterator) -> None:
+    def __init__(self, iter:Iterator, dict:Dict) -> None:
         self.__iter = iter
+        self.__dict = dict
 
     def __next__(self) -> Worker:
-        return self.__iter.__next__()
+        ident = self.__iter.__next__()
+        return self.__dict[ident]
 
 class ElectGroup:
 
     def __init__(self, workers:List[Worker] = []) -> None:
-        self.__providers = {}  # type: Dict[str, Worker]
-
         self.__listener = None  # type: Optional[Worker]
+        self.__providers = {}  # type: Dict[str, Worker]
 
         for w in workers:
             # At begining all workers is provider
             self.__providers[w.getIdent()] = w
 
     def __iter__(self) -> ElectGroup_iter:
-        iter = self.__providers.__iter__()
-        return ElectGroup_iter(iter)
+        workers = self.__providers.copy()
+
+        if self.__listener is not None:
+            workers[self.__listener.getIdent()] = self.__listener
+
+        iter = workers.__iter__()
+        return ElectGroup_iter(iter, workers)
 
     def numOfWorkers(self) -> int:
         num_of_providers = len(self.__providers)
@@ -54,7 +61,12 @@ class ElectGroup:
             return Error
 
         worker = self.__providers[ident]
-        self.__listener = worker
+
+        if self.__listener is None:
+            self.__listener = worker
+        else:
+            ident_old = self.__listener.getIdent()
+            self.__providers[ident_old] = self.__listener
 
         del self.__providers [ident]
 
@@ -113,12 +125,12 @@ class ElectGroup:
 class PostElectProtocol:
 
     def __init__(self) -> None:
-        self.__isInit = False
-        self.__group = None # type: Optional[ElectGroup]
-        self.__msgQueue = Queue(256) # type: Queue[CmdResponseLetter]
+        self.isInit = False
+        self.group = None # type: Optional[ElectGroup]
+        self.msgQueue = Queue(256) # type: Queue[CmdResponseLetter]
 
     def setGroup(self, group:ElectGroup) -> None:
-        self.__group = group
+        self.group = group
 
     def step(self) -> State:
         raise Exception
@@ -130,10 +142,26 @@ class PostElectProtocol:
         raise Exception
 
     def msgTransfer(self, l:CmdResponseLetter) -> None:
-        self.__msgQueue.put(l)
+        self.msgQueue.put(l)
 
     def waitMsg(self) -> CmdResponseLetter:
-        return self.__msgQueue.get()
+        return self.msgQueue.get()
+
+    def relations(self) -> Tuple[str, List[str]]:
+
+        if self.group is None:
+            return ("", [])
+
+        listener = self.group.getListener()
+        if listener is not None:
+            listener_ident = listener.getIdent()
+        else:
+            listener_ident = ""
+
+        providers = self.group.getProviders()
+        providers_ident = list(map(lambda p: p.getIdent(), providers))
+
+        return (listener_ident, providers_ident)
 
 class PostManager:
 
@@ -142,26 +170,31 @@ class PostManager:
         self.__eGroup = ElectGroup(workers)
         self.__eProtocol = proto
 
+        self.__eProtocol.group = self.__eGroup
+
     def removeWorker(self, ident:str) -> State:
         return self.__eGroup.removeWorker(ident)
 
     def addWorker(self, w:Worker) -> State:
         return self.__eGroup.addWorker(w)
 
-    def processing(self) -> None:
-        pass
-
     def setRole(self, ident:str, role:PostRole) -> State:
         return self.__eGroup.setRole(ident, role)
 
     def proto_init(self) -> State:
-        pass
+        return self.__eProtocol.init()
 
     def proto_step(self) -> State:
-        pass
+        return self.__eProtocol.step()
 
     def proto_msg_transfer(self, l:CmdResponseLetter) -> None:
         self.__eProtocol.msgTransfer(l)
 
     def proto_terminate(self) -> State:
-        pass
+        return self.__eProtocol.terminate()
+
+    def relations(self) -> Tuple[str, List[str]]:
+        return self.__eProtocol.relations()
+
+    def getListener(self) -> Optional[Worker]:
+        return self.__eGroup.getListener()

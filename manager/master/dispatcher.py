@@ -23,6 +23,8 @@ from datetime import datetime
 
 from manager.master.logger import Logger
 
+from manager.master.logger import M_NAME as INFO_M_NAME
+
 class Dispatcher(ModuleDaemon):
 
     def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
@@ -61,8 +63,6 @@ class Dispatcher(ModuleDaemon):
             task.refs += 1
 
             return True
-
-        task = self.__bind(task)
 
         if task.isBigTask():
             return self.__dispatchBigTask(task)
@@ -109,7 +109,32 @@ class Dispatcher(ModuleDaemon):
         return ret
 
     def dispatch(self, task: Task) -> bool:
+
+        # Bind task with a build or buildSet
+        self.__bind(task)
+
         with self.dispatchLock:
+
+            # If task is a big task send post menu via MenuLetter
+            if task.isBigTask:
+                posts = task.getPosts()
+                listener = self.__workers.postListener()
+
+                while listener is None:
+                    # Wait STABLE_INTERVAL seconds for a new
+                    # listener.
+                    time.sleep(WorkerRoom.STABLE_INTERVAL)
+                    listener = self.__workers.postListener()
+
+                ver = task.getVSN()
+
+                for post in posts:
+                    post.setVersion(ver)
+                    try:
+                        listener.do_menu(post)
+                    except:
+                        return False
+
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
@@ -132,7 +157,7 @@ class Dispatcher(ModuleDaemon):
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
             # bind one with it.
-            info = self.__sInst.getModule('Config')
+            info = self.__sInst.getModule(INFO_M_NAME)
             build = info.getConfig("Build")
             buildSet = info.getConfig("BuildSet")
 
@@ -147,7 +172,7 @@ class Dispatcher(ModuleDaemon):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        logger = self.__sInst.getModule('Logger')
+        logger = self.__sInst.getModule(INFO_M_NAME)
 
         if not logger is None:
             logger.log_register("dispatcher")

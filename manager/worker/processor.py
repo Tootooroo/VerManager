@@ -1,6 +1,8 @@
 # processor.py
 
 import time
+import os
+import platform
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool
@@ -19,16 +21,44 @@ from .postListener import PostListener, PostProvider
 
 from ..basic.commands import Command, PostConfigCmd, CMD_POST_TYPE
 
+from manager.worker.server import M_NAME as SERVER_M_NAME
+from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
+from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
+
+from manager.basic.commands import CMD_POST_TYPE
+
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[[CommandLetter, Info, Any], State]
+
+M_NAME = "Processor"
+
+if platform.system() == 'Windows':
+    sep = "\\"
+else:
+    sep = "/"
+
+class Result:
+
+    def __init__(self, tid:str,
+                 filePath:str, needPost:str,
+                 version:str, isSuccess:bool) -> None:
+        self.tid = tid
+        self.path = filePath
+        self.needPost = needPost
+        self.version = version
+        self.isSuccess = isSuccess
+
 
 class Processor(Module):
 
     def __init__(self, info:Info, cInst:Any, procedure:Procedure = None) -> None:
+        global M_NAME
+        Module.__init__(self, M_NAME)
+
         self.__max = int(info.getConfig('MAX_TASK_CAN_PROC'))
         self.__numOfTasksInProc = 0
         self.__cInst = cInst
-        self.__poolSize = int(info.getConfig('PROCESS_POLL_SIZE'))
+        self.__poolSize = int(info.getConfig('PROCESS_POOL_SIZE'))
         self.__pool = Pool(self.__poolSize)
         self.__info = info
 
@@ -60,10 +90,67 @@ class Processor(Module):
             self.proc_command(reqLetter)
         elif isinstance(reqLetter, NewLetter):
             self.proc_newtask(reqLetter)
+        elif isinstance(reqLetter, MenuLetter):
+            self.proc_menu(reqLetter)
+
+    @staticmethod
+    def do_proc(reqLetter: Letter, info: Info) -> Result:
+
+        isSuccess = True
+
+        workerName = info.getConfig('WORKER_NAME')
+        extra = reqLetter.getContent("extra")
+        building_cmds = extra['cmds']
+        result_path = extra['resultPath']
+        needPost = extra['needPost']
+
+        tid = reqLetter.getHeader("tid")
+
+        if platform.system() == "Windows":
+            result_path = result_path.replace("/", "\\")
+            building_cmds = result_path.replace(";", "&&")
+
+        # rocessing
+        try:
+            repo_url = info.getConfig("REPO_URL")
+            projName = info.getConfig("PROJECT_NAME")
+
+            # Get repo
+            os.system("git clone -b master " + repo_url)
+
+            os.chdir(projName)
+
+            revision = reqLetter.getContent('sn')
+
+            # Checkout to specific revision
+            os.system("git checkout -f " + revision)
+
+            version = reqLetter.getContent('vsn')
+            version_date = reqLetter.getContent('datetime')
+
+            building_cmds = building_cmds.replace("<vsn>", version)
+            building_cmds = building_cmds.replace("datetime>", version_date)
+
+            # Run commands
+            os.system(building_cmds)
+
+        except Exception:
+            isSuccess = False
+
+        return Result(tid, result_path, needPost, version, isSuccess)
+
+    def proc_menu(self, menuLetter:MenuLetter) -> State:
+        listener = self.__cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
+
+        # This worker is not a listener
+        if listener is None:
+            return Error
+
+        listener.menuAppend(menuLetter)
+
+        return Ok
 
     def proc_command(self, cmdLetter:CommandLetter) -> State:
-
-        cmd = Command.fromLetter(cmdLetter)
 
         type = cmdLetter.getHeader('type')
         subType = cmdLetter.getHeader('extra')
@@ -101,6 +188,14 @@ class Processor(Module):
 
         cInst.addModule(pl)
 
+        # Resposne to configuration command
+        server = cInst.getModule(SERVER_M_NAME)
+
+        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
+                                   extra = {"isListener":"true"})
+        server.transfer(letter)
+
+
         return Ok
 
     @staticmethod
@@ -121,6 +216,14 @@ class Processor(Module):
             time.sleep(1)
 
         cInst.addModule(provider)
+
+        # Response to configuraton command
+        server = cInst.getModule(SERVER_M_NAME)
+
+        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
+                                   extra={"isListener":"false"})
+        server.transfer(letter)
+
         return Ok
 
     def proc_newtask(self, reqLetter:NewLetter) -> State:
@@ -129,21 +232,26 @@ class Processor(Module):
             return Error
 
         tid = reqLetter.getHeader('tid')
-        parent = reqLetter.getHeader('parent')
+        version = reqLetter.getContent('vsn')
 
-        if self.isReqInProc(tid, parent):
+        if self.isReqInProc(tid, version):
             return Error
 
-        s = self.__cInst.getModule("Server")
+        s = self.__cInst.getModule(SERVER_M_NAME)
 
         if self.__procedure is None:
             return Error
 
-        res = self.__pool.apply_async(self.__procedure, (s, reqLetter, self.__info))
+        # Notify master this task is change into in_processing state
+        response = ResponseLetter(ident=self.__info.getConfig('WORKER_NAME'),
+                                  tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
+        s.transfer(response)
+
+        res = self.__pool.apply_async(self.do_proc, (reqLetter, self.__info))
         self.__numOfTasksInProc += 1
 
-        self.__allTasks.append((tid, parent, res))
-        self.__allTasks_dict[parent+tid] = res
+        self.__allTasks.append((tid, version, res))
+        self.__allTasks_dict[version+tid] = res
 
         return Ok
 
@@ -154,12 +262,50 @@ class Processor(Module):
         self.__allTasks = not_readies
 
         for res in readies:
-            tid = res[0]
-            parent = res[1]
+            result = res.get() # type: Result
 
-            del self.__allTasks_dict [parent+tid]
+            version = result.version
+            tid = result.tid
+            needPost = result.needPost
+            path = result.path
+
+            server = self.__cInst.getModule(SERVER_M_NAME)
+
+            if result.isSuccess is False:
+                response = ResponseLetter(ident = self.__info.getConfig('WORKER_NAME'),
+                                        tid = tid, state=Letter.RESPONSE_STATE_FAILURE)
+                server.transfer(response)
+                continue
+            else:
+                if needPost == "false":
+                    self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
+                    response = ResponseLetter(ident=self.__info.getConfig('WORKER_NAME'),
+                                              tid=tid, state=Letter.RESPONSE_STATE_FINISHED)
+
+                    server.transfer(response)
+                else:
+                    provider = self.__cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
+                    self.__transBinaryTo(tid, path, lambda l: provider.provide(l))
+
+
+            del self.__allTasks_dict [version+tid]
 
         return len(readies)
+
+    def __transBinaryTo(self, tid:str, path:str, transferRtn:Callable[[BinaryLetter], Any]) -> None:
+        global sep
+
+        fileName = path.split(sep)[-1]
+        with open(path, "rb") as binFile:
+            binLetter = BinaryLetter(tid=tid, bStr=b"", fileName=fileName)
+
+            for line in binFile:
+                binLetter.setBytes(line)
+                transferRtn(binLetter)
+
+            # Terminated binary letter
+            binLetter.setBytes(b"")
+            transferRtn(binLetter)
 
     def isReqInProc(self, tid:str, parent:str = "") -> bool:
         return tid in self.__allTasks_dict

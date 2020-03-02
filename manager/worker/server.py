@@ -12,6 +12,8 @@ from ..basic.type import *
 from typing import Any, Union, Optional
 from multiprocessing import Manager
 
+M_NAME = "Server"
+
 class DISCONN_EXCEPTION(Exception):
     pass
 
@@ -26,6 +28,8 @@ class Server(Module):
     SOCK_DISCONN = 2
 
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
+        global M_NAME
+        Module.__init__(self, M_NAME)
         self.info = info
 
         queueSize = info.getConfig('QUEUE_SIZE')

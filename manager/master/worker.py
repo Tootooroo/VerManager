@@ -18,6 +18,8 @@ from manager.basic.letter import Letter, NewLetter
 from manager.basic.type import Ok, Error
 from manager.basic.commands import Command
 
+from manager.master.build import Post
+
 class WorkerInitFailed(Exception): pass
 
 WorkerState = int
@@ -33,7 +35,10 @@ class Worker:
         self.address = address
         self.max = 0
         self.inProcTask = TaskGroup()
+        self.menus = [] # type: List[Tuple[str, str]]
         self.ident = ""
+
+        self.sendLock = Lock()
 
         # Before a PropertyNotify letter is report
         # from worker we see a worker as an offline
@@ -145,6 +150,20 @@ class Worker:
         letter = cmd.toLetter()
         self.__send(letter)
 
+    def do_menu(self, post: Post) -> None:
+        letter = post.toMenuLetter()
+        ver = letter.getVersion()
+        mid = letter.getMenuId()
+
+        pair = (ver, mid)
+
+        if pair in self.menus:
+            return None
+
+        self.__send(letter)
+
+        self.menus.append(pair)
+
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
             raise Exception
@@ -206,4 +225,4 @@ class Worker:
         return Worker.receving(self.sock)
 
     def __send(self, l: Letter) -> None:
-        Worker.sending(self.sock, l)
+        with self.sendLock: Worker.sending(self.sock, l)
