@@ -57,6 +57,13 @@ class Letter:
     # content :  "{"cmds": "[...]", "depends": "[...]", "output": "..."}"
     NewMenu = 'menu'
 
+    # Format of Post letter
+    # Type    :  "Post"
+    # header  :  '{"version":"...", "output":"..."}'
+    # content :  '{"Menus":{"M1":{"mid":"...", "cmds":[...], "depends":[...], "output":"..."},
+    #              "Fragments":["F1", "F2"], "cmds":[...]}'
+    Post = 'Post'
+
     # Format of Command letter
     # Type    :  "command"
     # header  :  "{"type": "...", "target": "...", "extra": "..."}"
@@ -90,6 +97,7 @@ class Letter:
     RESPONSE_STATE_IN_PROC = "1"
     RESPONSE_STATE_FINISHED = "2"
     RESPONSE_STATE_FAILURE = "3"
+    RESPONSE_STATE_IN_POST = "4"
 
     # Format of PrpertyNotify letter
     # Type    :  'notify'
@@ -379,6 +387,43 @@ class CmdResponseLetter(Letter):
 
     def getExtra(self, key: str) -> str:
         return self.getContent('extra')[key]
+
+class PostTaskLetter(Letter):
+
+    def __init__(self, ver:str, cmds:List[str], output:str, menus:Dict = {}, frags:List = []) -> None:
+        Letter.__init__(self, Letter.Post,
+                        {"version":ver, "output":output},
+                        {"cmds":cmds, "Menus":menus, "Fragments":frags})
+
+    @staticmethod
+    def parse(s:bytes) -> Optional['PostTaskLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.Post:
+            return None
+
+        return PostTaskLetter(header['version'], content['cmds'], header['output'],
+                              menus = content['Menus'], frags = content['Fragments'])
+
+    def addFrag(self, fragId:str) -> None:
+        frags = self.getContent('Fragments')
+
+        if fragId in frags:
+            return None
+
+        frags.append(fragId)
+
+    def addMenu(self, menu:'MenuLetter') -> None:
+        mid = menu.getMenuId()
+
+        menus = self.getContent('Menus')
+
+        if mid in menus:
+            return None
+
+        menus[mid] = {"mid":mid, "cmds":menu.getCmds(),
+                      "depends":menu.getDepends(),
+                      "output":menu.getOutput()}
 
 class MenuLetter(Letter):
 

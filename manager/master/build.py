@@ -3,7 +3,7 @@
 from typing import Dict, List, Union, Optional, Tuple
 from functools import reduce
 
-from manager.basic.letter import MenuLetter
+from manager.basic.letter import MenuLetter, PostTaskLetter
 
 MAX_LENGTH_OF_COMMAND = 1024
 
@@ -42,8 +42,7 @@ class Build:
 
 class Post:
 
-    def __init__(self, version:str, ident:str, members:List[str], build:Build) -> None:
-        self.__version = version
+    def __init__(self, ident:str, members:List[str], build:Build) -> None:
         self.__ident = ident
         self.__build = build
         self.__members = members
@@ -51,25 +50,34 @@ class Post:
     def getIdent(self) -> str:
         return self.__ident
 
-    def getVersion(self) -> str:
-        return self.__version
-
-    def setVersion(self, ver:str) -> None:
-        self.__version = ver
-
     def getMembers(self) -> List[str]:
         return self.__members
 
     def getBuild(self) -> Build:
         return self.__build
 
-    def toMenuLetter(self) -> MenuLetter:
+    def toMenuLetter(self, version:str) -> MenuLetter:
         cmds = self.__build.getCmd()
         output = self.__build.getOutput()
-        mLetter = MenuLetter(self.__version, self.__ident, cmds,
+        mLetter = MenuLetter(version, self.__ident, cmds,
                              self.__members, output)
 
         return mLetter
+
+class Merge:
+
+    def __init__(self, build:Build) -> None:
+        self.__build = build
+
+    def getBuild(self) -> Build:
+        return self.__build
+
+    def getCmds(self) -> List[str]:
+        return self.__build.getCmd()
+
+    def getOutput(self) -> str:
+        return self.__build.getOutput()
+
 
 
 class BuildSet:
@@ -82,12 +90,19 @@ class BuildSet:
         self.__postBelong = {} # type: Dict[str, Tuple[str, List[Build]]]
         self.__posts = {} # type: Dict[str, Post]
 
+        merge = buildSet['Merge']
+        mergeBuild = Build("merge", {"cmd":merge['cmd'], "output":merge['output']})
+        self.__merge = Merge(mergeBuild)
+
         self.__buildPosts(buildSet)
 
     def belongTo(self, bId) -> Optional[Tuple[str, List[Build]]]:
         if not bId in self.__postBelong:
             return None
         return self.__postBelong[bId]
+
+    def getMerge(self) -> Merge:
+        return self.__merge
 
     def getPosts(self) -> List[Post]:
         return list(self.__posts.values())
@@ -149,7 +164,7 @@ class BuildSet:
             post = postGroups[pId]
 
             build = Build(pId, {"cmd":post['cmd'], "output":post['output']})
-            self.__posts[pId] = Post("", pId, post['group'], build)
+            self.__posts[pId] = Post(pId, post['group'], build)
 
         # Build a dict to store relation among builds.
         for pId in postGroups:

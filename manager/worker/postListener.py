@@ -42,9 +42,6 @@ class PostListener(ModuleDaemon):
         self.__cInst = cInst
         self.__processor = PostProcessor(cInst)
 
-    def reqAppend(self, stuff:'Stuff') -> None:
-        self.__processor.appendStuff(stuff)
-
     def menuAppend(self, menuLetter:'MenuLetter') -> None:
         menu = PostMenu(menuLetter.getHeader('version'),
                         menuLetter.getHeader('mid'),
@@ -407,6 +404,9 @@ class PostProcessor(Thread):
                                                 parent = stuff.version())
                     server.transfer(binaryLetter)
 
+                binaryLetter.setBytes(b"")
+                server.transfer(binaryLetter)
+
             # Transfer fin letter after binary
             finLetter = ResponseLetter(menu.getIdent(), Letter.RESPONSE_STATE_FINISHED,
                                        menu.getVersion())
@@ -417,9 +417,6 @@ class PostProcessor(Thread):
     def appendMenu(self, menu:PostMenu) -> None:
         with self.__menus_lock:
             self.__menus.append(menu)
-
-    def appendStuff(self, stuff:Stuff) -> None:
-        self.__stuffs.addStuff(stuff)
 
     # Retrive information and binary file from workers and store into __pends
     def __menu_collect_stuffs(self, args = None) -> None:

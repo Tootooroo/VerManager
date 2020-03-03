@@ -195,8 +195,7 @@ class Processor(Module):
                                    extra = {"isListener":"true"})
         server.transfer(letter)
 
-
-        return Ok
+        return Processor.__postProvider_config(address, port, info, cInst)
 
     @staticmethod
     def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:
@@ -270,6 +269,8 @@ class Processor(Module):
             path = result.path
 
             server = self.__cInst.getModule(SERVER_M_NAME)
+
+            isListener = self.__cInst.getModule(POST_LISTENER_M_NAME) is not None
 
             if result.isSuccess is False:
                 response = ResponseLetter(ident = self.__info.getConfig('WORKER_NAME'),

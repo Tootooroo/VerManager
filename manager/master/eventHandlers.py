@@ -75,7 +75,6 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
 
     # Close chooser
     chooser = chooserSet[taskId]
-    chooser.close()
     del chooserSet [taskId]
 
     # Pending feature
@@ -147,7 +146,10 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         if isinstance(content, str):
             return None
 
-        chooser.store(content)
+        if content == b"":
+            chooser.close()
+        else:
+            chooser.store(content)
     except:
         traceback.print_exc()
 

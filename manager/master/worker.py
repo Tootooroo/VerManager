@@ -150,26 +150,12 @@ class Worker:
         letter = cmd.toLetter()
         self.__send(letter)
 
-    def do_menu(self, post: Post) -> None:
-        letter = post.toMenuLetter()
-        ver = letter.getVersion()
-        mid = letter.getMenuId()
-
-        pair = (ver, mid)
-
-        if pair in self.menus:
-            return None
-
-        self.__send(letter)
-
-        self.menus.append(pair)
-
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
             raise Exception
 
         # Task assign
-        letter = task.toNewTaskLetter()
+        letter = task.toLetter()
         if letter is None:
             return None
 

@@ -66,6 +66,13 @@ BuildSet:
         output:
         - "C:\\pack.rar"
 
+  Merge:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
 Build:
   RepoUrl: git@gpon.git.com:gpon/olt.git
   ProjectName: olt
