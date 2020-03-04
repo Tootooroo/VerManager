@@ -435,7 +435,8 @@ class UnitTest(TestCase):
     def test_task(self):
         from manager.basic.info import Info
         from manager.master.build import Build, BuildSet
-        from manager.master.task import Task
+        from manager.master.task import Task, SuperTask, SingleTask
+        from manager.basic.letter import MenuLetter
 
         info = Info("./config_test.yaml")
 
@@ -444,7 +445,7 @@ class UnitTest(TestCase):
         bs = BuildSet(buildSet)
 
         # Create a taks object
-        t = Task("VersionToto", "ABC", "VersionToto", buildSet = bs)
+        t = SuperTask("VersionToto", "ABC", "VersionToto", buildSet = bs)
 
         # Get a group which GL5610 reside in
         groupOfGL5610 = t.getGroupOf("GL5610")
@@ -453,19 +454,48 @@ class UnitTest(TestCase):
         GL5610_v2 = list(filter(lambda t: t.id() == "GL5610-v2", groupOfGL5610))
         self.assertTrue(len(GL5610_v2) == 1)
         # Check the parent of GL5610-v2
-        self.assertTrue(GL5610_v2[0].hasParent() and GL5610_v2[0].getParent().id() == "VersionToto")
+        self.assertTrue(GL5610_v2[0].isAChild() and GL5610_v2[0].getParent().id() == "VersionToto")
 
         # GL5610-v3 should in this group too
         GL5610_v3 = list(filter(lambda t: t.id() == "GL5610-v3", groupOfGL5610))
         self.assertTrue(len(GL5610_v3) == 1)
         # Check the parent of GL5610-v3
-        self.assertTrue(GL5610_v3[0].hasParent() and GL5610_v3[0].getParent().id() == "VersionToto")
+        self.assertTrue(GL5610_v3[0].isAChild() and GL5610_v3[0].getParent().id() == "VersionToto")
 
         # Get group which GL8900 reside in
         groupOfGL8900 = t.getGroupOf("GL8900")
         self.assertTrue(len(groupOfGL8900) == 1)
         # Check the parent of GL8900
         self.assertTrue(groupOfGL8900[0].id() == "GL8900", groupOfGL8900[0].getParent().id() == "VersionToto")
+
+        # Posts
+        pt = t.getPostTask()
+        self.assertEqual("VersionToto", pt.id())
+        postLetter = pt.toLetter()
+
+        self.assertEqual([], postLetter.frags())
+        menus = postLetter.menus()
+        self.assertTrue("GL5610_OEM" in menus)
+        self.assertTrue("GL8900_OEM" in menus)
+
+        # Menu GL5610 check
+        menu_GL5610 = postLetter.getMenu("GL5610_OEM")
+        depends = menu_GL5610.getDepends()
+        self.assertTrue("GL5610" in depends)
+        self.assertTrue("GL5610-v2" in depends)
+        self.assertTrue("GL5610-v3" in depends)
+
+        cmds = menu_GL5610.getCmds()
+        self.assertEqual(["link_GL5610.bat"], cmds)
+
+
+        # Menu GL8900 check
+        menu_GL8900 = postLetter.getMenu("GL8900_OEM")
+        depends_89 = menu_GL8900.getDepends()
+        self.assertTrue("GL8900" in depends_89)
+
+        cmds = menu_GL8900.getCmds()
+        self.assertEqual(["..."], cmds)
 
         # Get children of the task
         children = t.getChildren()
@@ -477,15 +507,12 @@ class UnitTest(TestCase):
         self.assertTrue("GL5610-v3" in children_id)
         self.assertTrue("GL8900" in children_id)
 
-        # Big task should unable to convert to big task
-        self.assertTrue(t.toNewTaskLetter() == None)
-
         # Convert child to letter
         # Format
         # header  : '{"ident":"...", "tid":"...", "needPost":"true/false"}'
         # content : '{"sn":"...", "vsn":"...", "datetime":"...",
         #             "extra":{"resultPath":"...", "cmds":"..."} }"
-        v2Letter = GL5610_v2[0].toNewTaskLetter()
+        v2Letter = GL5610_v2[0].toLetter()
 
         v2Tid = v2Letter.getHeader("tid")
         self.assertEqual("GL5610-v2", v2Tid)

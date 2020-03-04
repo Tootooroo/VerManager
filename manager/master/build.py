@@ -69,15 +69,11 @@ class Merge:
     def __init__(self, build:Build) -> None:
         self.__build = build
 
-    def getBuild(self) -> Build:
-        return self.__build
-
     def getCmds(self) -> List[str]:
         return self.__build.getCmd()
 
     def getOutput(self) -> str:
         return self.__build.getOutput()
-
 
 
 class BuildSet:

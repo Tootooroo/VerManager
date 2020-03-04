@@ -54,6 +54,8 @@ class RandomElectProtocol(PostElectProtocol):
             if l.getState() is CmdResponseLetter.STATE_FAILED:
                 pass
 
+            p.role = Role_Provider
+
         self.isInit = True
 
         return Ok

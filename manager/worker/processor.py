@@ -51,7 +51,7 @@ class Result:
 
 class Processor(Module):
 
-    def __init__(self, info:Info, cInst:Any, procedure:Procedure = None) -> None:
+    def __init__(self, info:Info, cInst:Any) -> None:
         global M_NAME
         Module.__init__(self, M_NAME)
 

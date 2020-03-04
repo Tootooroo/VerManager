@@ -11,10 +11,13 @@ from typing import *
 from functools import reduce
 
 from threading import Lock, Event
+from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
+from manager.master.postElection import Role_Listener, Role_Provider
+from manager.basic.info import Info
 from manager.basic.type import *
-from manager.master.task import TaskState, Task
+from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask
 from manager.basic.type import *
 
 from manager.master.workerRoom import WorkerRoom
@@ -64,8 +67,8 @@ class Dispatcher(ModuleDaemon):
 
             return True
 
-        if task.isBigTask():
-            return self.__dispatchBigTask(task)
+        if isinstance(task, SuperTask):
+            return self.__dispatchSuperTask(task)
 
         ret = self.__do_dispatch(task)
         if ret is True:
@@ -79,7 +82,13 @@ class Dispatcher(ModuleDaemon):
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and __tasks otherwise append to taskWait
-        workers = self.__workers.getWorkerWithCond(viaOverhead)
+        cond = viaOverhead
+        workers = [] # type: List[Worker]
+
+        if isinstance(task, PostTask):
+            cond = theListener
+
+        workers = self.__workers.getWorkerWithCond(cond)
 
         if workers != []:
             try:
@@ -92,7 +101,7 @@ class Dispatcher(ModuleDaemon):
 
         return False
 
-    def __dispatchBigTask(self, task: Task) -> bool:
+    def __dispatchSuperTask(self, task: SuperTask) -> bool:
 
         ret = True
         subTasks = task.getChildren()
@@ -111,13 +120,15 @@ class Dispatcher(ModuleDaemon):
     def dispatch(self, task: Task) -> bool:
 
         # Bind task with a build or buildSet
-        self.__bind(task)
+        task = self.__bind(task)
 
         with self.dispatchLock:
 
             # If task is a big task send post menu via MenuLetter
-            if task.isBigTask:
-                posts = task.getPosts()
+            if isinstance(task, SuperTask):
+                post = task.getPostTask()
+                assert(post is not None)
+
                 listener = self.__workers.postListener()
 
                 while listener is None:
@@ -126,14 +137,7 @@ class Dispatcher(ModuleDaemon):
                     time.sleep(WorkerRoom.STABLE_INTERVAL)
                     listener = self.__workers.postListener()
 
-                ver = task.getVSN()
-
-                for post in posts:
-                    post.setVersion(ver)
-                    try:
-                        listener.do_menu(post)
-                    except:
-                        return False
+                listener.do(post)
 
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
@@ -148,8 +152,11 @@ class Dispatcher(ModuleDaemon):
 
     def redispatch(self, task: Task) -> bool:
         taskId = task.id()
+
         if taskId in self.__tasks:
+            task.stateChange(Task.STATE_PREPARE)
             del self.__tasks [taskId]
+
         return self.dispatch(task)
 
     def __bind(self, task:Task) -> Task:
@@ -157,15 +164,17 @@ class Dispatcher(ModuleDaemon):
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
             # bind one with it.
-            info = self.__sInst.getModule(INFO_M_NAME)
+            info = self.__sInst.getModule(INFO_M_NAME) # type: Info
+
             build = info.getConfig("Build")
+            if isinstance(build, Build):
+                task.setBuild(build)
+
             buildSet = info.getConfig("BuildSet")
+            if isinstance(buildSet, buildSet):
+                task.setBuild(buildSet)
 
-            task.setBuild(build)
-            task.setBuildSet(buildSet)
-
-            # Spawn subtasks if it's allowed
-            task.subTasksSpawn()
+            task = task.transform()
 
         return task
 
@@ -318,6 +327,7 @@ class Dispatcher(ModuleDaemon):
 
 
 # Hooks will be registered into WorkerRoom
+
 def workerLost_redispatch(w: Worker, args:Any ) -> None:
     tasks = w.inProcTasks()
     dispatcher = args[0]
@@ -344,3 +354,6 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     f_online_acceptable = lambda w: w.isOnline() and w.isAbleToAccept()
     return list(filter(lambda w: f_online_acceptable(w), workers))
+
+def theListener(workers: List[Worker]) -> List[Worker]:
+    return list(filter(lambda w: w.role == Role_Listener, workers))

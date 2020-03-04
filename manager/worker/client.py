@@ -103,7 +103,7 @@ class Client(Thread):
         m2 = Sender(s, info, self)
         self.__manager.addModule(m2)
 
-        m3 = Processor(info, self, procedure=do_proc)
+        m3 = Processor(info, self)
         self.__manager.addModule(m3)
 
         self.__manager.startAll()

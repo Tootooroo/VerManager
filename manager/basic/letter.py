@@ -405,6 +405,15 @@ class PostTaskLetter(Letter):
         return PostTaskLetter(header['version'], content['cmds'], header['output'],
                               menus = content['Menus'], frags = content['Fragments'])
 
+    def getVersion(self) -> str:
+        return self.getHeader("version")
+
+    def getCmds(self) -> List[str]:
+        return self.getContent('cmds')
+
+    def getOutput(self) -> str:
+        return self.getContent('output')
+
     def addFrag(self, fragId:str) -> None:
         frags = self.getContent('Fragments')
 
@@ -424,6 +433,20 @@ class PostTaskLetter(Letter):
         menus[mid] = {"mid":mid, "cmds":menu.getCmds(),
                       "depends":menu.getDepends(),
                       "output":menu.getOutput()}
+
+    def getMenu(self, mid:str) -> 'MenuLetter':
+        theMenu = self.getContent('Menus')[mid]
+
+        return MenuLetter(self.getVersion(), mid, theMenu['cmds'], theMenu['depends'],
+                          theMenu['output'])
+
+    def menus(self) -> List[str]:
+        return list(self.getContent("Menus").keys())
+
+    def frags(self) -> List[str]:
+        return self.getContent("Fragments")
+
+
 
 class MenuLetter(Letter):
 

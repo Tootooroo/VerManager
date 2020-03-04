@@ -2,7 +2,7 @@
 
 from typing import *
 from functools import reduce
-from manager.basic.type import *
+from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, PostTaskLetter
 
 from manager.master.build import BuildSet
@@ -15,6 +15,8 @@ from manager.master.build import Build, BuildSet, Post, Merge
 TaskState = int
 
 TaskType = int
+
+class TASK_TRANSFORM_ERROR(Exception): pass
 
 class Task:
 
@@ -43,6 +45,8 @@ class Task:
         # the task is complete by worker and transfer
         # back totally.
         self.data = ""
+
+        self.build = None # type: Optional[Union[Build, BuildSet]]
 
         # Indicate that the number of request to the task
         self.refs = 0
@@ -75,6 +79,12 @@ class Task:
 
     def taskState(self) -> TaskState:
         return self.state
+
+    def setBuild(self, b:Union[Build, BuildSet]) ->  None:
+        self.build = b
+
+    def isBindWithBuild(self) -> bool:
+        return self.build is not None
 
     def stateChange(self, state:int) -> None:
         self.state = state
@@ -112,9 +122,21 @@ class Task:
     def file(self) -> Optional[Any]:
         return self.__files
 
+    def toLetter(self) -> Letter:
+        pass
+
     @staticmethod
     def isValidState(s:int) -> bool:
         return s >= Task.STATE_PREPARE and s <= Task.STATE_POST
+
+    def transform(self) -> 'Task':
+
+        if isinstance(self.build, Build):
+            return SingleTask(self.id(), self.sn, self.vsn, self.build, self.extra)
+        elif isinstance(self.build, BuildSet):
+            return SuperTask(self.id(), self.sn, self.vsn, self.build)
+
+        raise TASK_TRANSFORM_ERROR
 
 class SuperTask(Task):
 
@@ -127,7 +149,9 @@ class SuperTask(Task):
         self.__children = [] # type: List['Task']
         self.__buildSet = buildSet
 
-    def getChilder(self) -> List[Task]:
+        self.__split()
+
+    def getChildren(self) -> List[Task]:
         return self.__children
 
     def getChild(self, ident:str) -> Optional[Task]:
@@ -187,8 +211,12 @@ class SuperTask(Task):
     def setBuildSet(self, buildSet:BuildSet) -> None:
         self.__buildSet = buildSet
 
-    def getPosts(self) -> List[Post]:
-        return self.__buildSet.getPosts()
+    def getPostTask(self) -> Optional['PostTask']:
+        for child in self.__children:
+            if isinstance(child, PostTask):
+                return child
+        return None
+
 
     def isInPost(self, bId:str) -> bool:
         pass
@@ -217,9 +245,6 @@ class SuperTask(Task):
 
         children.append(pt)
         self.__children = children
-
-    def toLetters(self) -> List[Letter]:
-        pass
 
 class SingleTask(Task):
 
@@ -274,7 +299,7 @@ class PostTask(Task):
     Type = 2
 
     def __init__(self, version:str, groups:List[Post], frags:List[str], merge:Merge):
-        Task.__init__(self, PostTask.Type, "", "", version)
+        Task.__init__(self, PostTask.Type, version, "", version)
 
         self.__postGroups = groups
         self.__frags = frags
@@ -308,28 +333,43 @@ class PostTask(Task):
 # Every task in TaskGroup must be unique in the TaskGroup
 class TaskGroup:
     def __init__(self) -> None:
-        self.__dict_tasks = {} # type: Dict[str, Task]
+        # {Type:Tasks}
+        self.__tasks = {} # type: Dict[TaskType, Dict[str, Task]]
         self.__numOfTasks = 0
         self.__lock = Lock()
 
     def newTask(self, task: Task) -> None:
+        type = task.getType()
         tid = task.id()
 
         with self.__lock:
-            if tid in self.__dict_tasks:
+
+            if self.__isExists(tid):
                 return None
 
-            self.__dict_tasks[task.id()] = task
+            if type not in self.__tasks:
+                self.__tasks[type] = {}
+
+            tasks = self.__tasks[type]
+
+            tasks[task.id()] = task
             self.__numOfTasks += 1
 
     def remove(self, id: str) -> State:
-        with self.__lock:
-            if not id in self.__dict_tasks:
-                return Error
 
-            del self.__dict_tasks [id]
-            self.__numOfTasks -= 1
-            return Ok
+        with self.__lock:
+            task_dicts = list(self.__tasks.values())
+
+            for tasks in task_dicts:
+                if not id in tasks:
+                    continue
+
+                del tasks [id]
+                self.__numOfTasks -= 1
+
+                return Ok
+
+            return Error
 
     def __mark(self, id: str, st: TaskState) -> State:
         task = self.search(id)
@@ -340,13 +380,32 @@ class TaskGroup:
         return Ok
 
     def toList(self) -> List[Task]:
-        return list(self.__dict_tasks.values())
+        with self.__lock:
+            task_dicts = list(self.__tasks.values())
+            task_lists = list(map(lambda d: list(d.values()), task_dicts))
+
+            return reduce(lambda acc, cur: acc + cur, task_lists)
 
     def toList_(self) -> List[str]:
         l = self.toList()
         l_id = map(lambda t: t.id(), l)
 
         return list(l_id)
+
+    def isExists(self, ident:str) -> bool:
+        with self.__lock: return self.__isExists(ident)
+
+    def __isExists(self, ident:str) -> bool:
+        task_dicts = list(self.__tasks.values())
+
+        for tasks in task_dicts:
+            if not id in tasks:
+                continue
+
+            return True
+
+        return False
+
 
     def markPre(self, id: str) -> State:
         return self.__mark(id, Task.STATE_PREPARE)
@@ -362,10 +421,15 @@ class TaskGroup:
 
     def search(self, id: str) -> Union[Task, None]:
         with self.__lock:
-            if not id in self.__dict_tasks:
-                return None
+            tasks_dicts = list(self.__tasks.values())
 
-            return self.__dict_tasks[id]
+            for tasks in tasks_dicts:
+                if id not in tasks:
+                    continue
+
+                return tasks[id]
+
+            return None
 
     def numOfTasks(self) -> int:
         return self.__numOfTasks

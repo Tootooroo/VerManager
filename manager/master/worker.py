@@ -31,6 +31,7 @@ class Worker:
     STATE_OFFLINE = 2
 
     def __init__(self, sock: socket.socket, address:Tuple[str, int]) -> None:
+        self.role = None # type: Optional[int]
         self.sock = sock
         self.address = address
         self.max = 0
@@ -156,6 +157,7 @@ class Worker:
 
         # Task assign
         letter = task.toLetter()
+
         if letter is None:
             return None
 

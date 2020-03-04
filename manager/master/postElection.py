@@ -57,18 +57,38 @@ class ElectGroup:
         return self.__listener
 
     def setRole(self, ident:str, role:PostRole) -> State:
+        # The worker is a listener
         if ident not in self.__providers:
-            return Error
+            if self.__listener is None:
+                return Error
 
-        worker = self.__providers[ident]
+            listener_ident = self.__listener.getIdent()
 
-        if self.__listener is None:
-            self.__listener = worker
+            if ident != listener_ident:
+                return Error
+            else:
+
+                if role == Role_Listener:
+                    self.__listener.role = Role_Listener
+                else:
+                    self.__listener.role = Role_Provider
+                    self.__providers[listener_ident] = self.__listener
+                    self.__listener = None
         else:
-            ident_old = self.__listener.getIdent()
-            self.__providers[ident_old] = self.__listener
+            # The worker in a provider
+            worker = self.__providers[ident]
 
-        del self.__providers [ident]
+            if role == Role_Listener:
+                worker.role = Role_Listener
+
+                if self.__listener is not None:
+                    l_ident = self.__listener.getIdent()
+                    self.__providers[l_ident] = self.__listener
+
+                self.__listener = worker
+                del self.__providers [worker.getIdent()]
+            else:
+                worker.role = Role_Provider
 
         return Ok
 
