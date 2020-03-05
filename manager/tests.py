@@ -218,7 +218,7 @@ class UnitTest(TestCase):
         self.assertEqual("NN", cmdRLetter_parsed.getReason())
         self.assertEqual("tt", cmdRLetter_parsed.getTarget())
 
-    def test_Connected(self):
+    def tes_Connected(self):
 
         sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
         sInst.start()
@@ -284,7 +284,7 @@ class UnitTest(TestCase):
     def tes_dispatcher(self):
 
         # Create a server
-        sInst = ServerInst("127.0.0.1", 8013, "./config.yaml")
+        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
         sInst.start()
 
         time.sleep(1)
@@ -314,7 +314,7 @@ class UnitTest(TestCase):
 
         time.sleep(3)
 
-        # To check workers is task dispatch to one of four workers
+        # To check that whether the task dispatch to one of four workers
         w_set = list( filter(lambda w: len(w.inProcTasks()) > 0, workers) )
 
         # There should be only one worker has task in processing
@@ -326,8 +326,7 @@ class UnitTest(TestCase):
         self.assertEqual("123", w.inProcTasks()[0])
 
         workerRoom = sInst.getModule("WorkerRoom")
-        if not isinstance(workerRoom, WorkerRoom):
-            self.assertTrue(False)
+        self.assertTrue(isinstance(workerRoom, WorkerRoom))
 
         status = workerRoom.statusOfWorker(w.getIdent())
         self.assertEqual(1, status["processing"])
@@ -486,7 +485,7 @@ class UnitTest(TestCase):
         self.assertTrue("GL5610-v3" in depends)
 
         cmds = menu_GL5610.getCmds()
-        self.assertEqual(["link_GL5610.bat"], cmds)
+        self.assertEqual(["touch post"], cmds)
 
 
         # Menu GL8900 check
@@ -495,7 +494,7 @@ class UnitTest(TestCase):
         self.assertTrue("GL8900" in depends_89)
 
         cmds = menu_GL8900.getCmds()
-        self.assertEqual(["..."], cmds)
+        self.assertEqual(["touch post_gl8900"], cmds)
 
         # Get children of the task
         children = t.getChildren()
@@ -531,10 +530,10 @@ class UnitTest(TestCase):
         resultPath = extra['resultPath']
         cmds = extra['cmds']
 
-        self.assertEqual("...", resultPath)
-        self.assertEqual(['...', '...'], cmds)
+        self.assertEqual("./ll2", resultPath)
+        self.assertEqual(['touch ll2'], cmds)
 
-    def tes_postListener(self):
+    def test_postListener(self):
 
         from manager.basic.letter import MenuLetter, BinaryLetter
         from manager.master.worker import Worker
@@ -546,14 +545,19 @@ class UnitTest(TestCase):
         manager = MManager()
 
         info = Info("./manager/worker/config.yaml")
+        manager.addModule(info)
 
         server = Server("127.0.0.1", 8044, info, manager)
-        manager.addModule("Server", server)
+        manager.addModule(server)
 
         pl = PostListener("127.0.0.1", 8033, manager)
         pl.start()
 
-        manager.addModule("PostListener", pl)
+        manager.addModule(pl)
+
+        postTaskLetter = PostTaskLetter("version",
+                                        ["echo 'POST_PROCESSING'", "echo Processing > processing"],
+                                        "./processing")
 
         menuLetter = MenuLetter("version", "Mid",
 
@@ -563,29 +567,31 @@ class UnitTest(TestCase):
 
                                 ["file1", "file2", "file3"],
                                 "/home/aydenlin/ll")
-        pl.menuAppend(menuLetter)
+
+        postTaskLetter.addMenu(menuLetter)
+        pl.postAppend(postTaskLetter)
 
         time.sleep(1)
 
         # file1
-        binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", extension = "rar", parent = "version")
-        binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", fileName = "file1", parent = "version")
+        binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", fileName = "file1", parent = "version")
 
         provider_1 = PostProvider("127.0.0.1", 8033, connect=True)
         provider_1.provide(binaryLetter)
         provider_1.provide(binaryLetter_last)
 
         # file2
-        binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", extension = "rar", parent = "version")
-        binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", fileName = "file2", parent = "version")
+        binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", fileName = "file2", parent = "version")
 
         provider_2 = PostProvider("127.0.0.1", 8033, connect=True)
         provider_2.provide(binaryLetter)
         provider_2.provide(binaryLetter_last)
 
         # file3
-        binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", extension = "rar", parent = "version")
-        binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", extension = "rar", parent = "version")
+        binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", fileName = "file3", parent = "version")
+        binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", fileName = "file3", parent = "version")
 
         provider_3 = PostProvider("127.0.0.1", 8033, connect=True)
         provider_3.provide(binaryLetter)
@@ -597,16 +603,21 @@ class UnitTest(TestCase):
         # Binary letter from postListener
         bin_letter = server.responseRetrive()
         self.assertTrue(bin_letter is not None)
-        self.assertEqual(b'123\n', bin_letter.getContent('bytes'))
-        self.assertEqual("rar", bin_letter.getHeader('extension'))
-        self.assertEqual("Mid", bin_letter.getHeader("menu"))
-        self.assertEqual("version", bin_letter.getHeader("parent"))
+        self.assertEqual(b'Processing\n', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
+
+        bin_letter = server.responseRetrive()
+        self.assertTrue(bin_letter is not None)
+        self.assertEqual(b'', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
 
         # Response letter from postListener
         response_letter = server.responseRetrive()
         self.assertTrue(response_letter is not None)
-        self.assertEqual("Mid", response_letter.getHeader('tid'))
-        self.assertEqual("version", response_letter.getHeader('parent'))
+        self.assertEqual("WORKER_EXAMPLE", response_letter.getIdent())
+        self.assertEqual("version", response_letter.getTid())
 
 
 if __name__ == '__main__':

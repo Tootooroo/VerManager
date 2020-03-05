@@ -2,31 +2,27 @@ BuildSet:
   Builds:
     GL5610:
         cmd:
-        - ...
-        - ...
+        - touch ll
         output:
-        - ...
+        - ./ll
 
     GL5610-v2:
         cmd:
-        - ...
-        - ...
+        - touch ll2
         output:
-        - ...
+        - ./ll2
 
     GL5610-v3:
         cmd:
-        - ...
-        - ...
+        - touch ll3
         output:
-        - ...
+        - ./ll3
 
     GL8900:
         cmd:
-        - ...
-        - ...
+        - touch ll4
         output:
-        - ...
+        - ./ll4
 
   Posts:
     GL5610_OEM:
@@ -35,21 +31,20 @@ BuildSet:
         - GL5610-v2
         - GL5610-v3
       cmd:
-        - link_GL5610.bat
+        - touch post
       output:
-        - "C:\\pack.rar"
+        - ./post
 
     GL8900_OEM:
       group:
         - GL8900
       cmd:
-        - ...
+        - touch post_gl8900
       output:
-        - "C:\\pack.rar"
+        - ./post_gl8900
 
   Merge:
     cmd:
-      - ...
-      - ...
+      - touch merge
     output:
-      -...
+      - ./merge

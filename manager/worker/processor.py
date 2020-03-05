@@ -270,8 +270,6 @@ class Processor(Module):
 
             server = self.__cInst.getModule(SERVER_M_NAME)
 
-            isListener = self.__cInst.getModule(POST_LISTENER_M_NAME) is not None
-
             if result.isSuccess is False:
                 response = ResponseLetter(ident = self.__info.getConfig('WORKER_NAME'),
                                         tid = tid, state=Letter.RESPONSE_STATE_FAILURE)

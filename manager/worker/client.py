@@ -81,6 +81,7 @@ class Client(Thread):
         self.__isStop = False
 
         info = Info(self.__cfgPath)
+        self.__manager.addModule(info)
 
         address = self.__mAddress
         port = self.__mPort

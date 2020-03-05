@@ -20,18 +20,20 @@ class TASK_TRANSFORM_ERROR(Exception): pass
 
 class Task:
 
+    Type = 0
+
     STATE_PREPARE = 0
     STATE_IN_PROC = 1
     STATE_FINISHED = 2
     STATE_FAILURE = 3
     STATE_POST = 4
 
-    def __init__(self, type:TaskType, id: str, sn:str, vsn:str,
+    def __init__(self, id: str, sn:str, vsn:str,
                  extra:Dict[str, str] = {}) -> None:
 
         self.taskId = id
 
-        self.type = type
+        self.type = Task.Type
         self.sn = sn
         self.vsn = vsn
         self.extra = extra
@@ -140,12 +142,13 @@ class Task:
 
 class SuperTask(Task):
 
-    Type = 0
+    Type = 1
 
     def __init__(self, id:str, sn:str, revision:str, buildSet:BuildSet) -> None:
 
-        Task.__init__(self, SuperTask.Type, id, sn, revision)
+        Task.__init__(self, id, sn, revision)
 
+        self.type = SuperTask.Type
         self.__children = [] # type: List['Task']
         self.__buildSet = buildSet
 
@@ -248,14 +251,15 @@ class SuperTask(Task):
 
 class SingleTask(Task):
 
-    Type = 1
+    Type = 2
 
     def __init__(self, id:str, sn:str, revision:str,
                  build:Build,
                  extra:Dict = {}):
 
-        Task.__init__(self, SingleTask.Type, id, sn, revision, extra)
+        Task.__init__(self, id, sn, revision, extra)
 
+        self.type = SingleTask.Type
         self.__build = build
         self.__parent = None # type: Optional[SuperTask]
         self.__postGroup = None # type: Optional[str]
@@ -296,11 +300,12 @@ class SingleTask(Task):
 
 class PostTask(Task):
 
-    Type = 2
+    Type = 3
 
     def __init__(self, version:str, groups:List[Post], frags:List[str], merge:Merge):
-        Task.__init__(self, PostTask.Type, version, "", version)
+        Task.__init__(self, version, "", version)
 
+        self.type = PostTask.Type
         self.__postGroups = groups
         self.__frags = frags
         self.__merge = merge

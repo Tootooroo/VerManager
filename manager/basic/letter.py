@@ -412,7 +412,7 @@ class PostTaskLetter(Letter):
         return self.getContent('cmds')
 
     def getOutput(self) -> str:
-        return self.getContent('output')
+        return self.getHeader('output')
 
     def addFrag(self, fragId:str) -> None:
         frags = self.getContent('Fragments')
@@ -514,6 +514,9 @@ class ResponseLetter(Letter):
 
     def getState(self) -> str:
         return self.getContent('state')
+
+    def setState(self, state:str) -> None:
+        self.setContent('state', state)
 
 class PropLetter(Letter):
 

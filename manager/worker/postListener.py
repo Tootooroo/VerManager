@@ -9,7 +9,8 @@ import select
 import traceback
 
 from ..basic.util import spawnThread
-from ..basic.letter import Letter, BinaryLetter, MenuLetter, ResponseLetter
+from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
+    ResponseLetter, PostTaskLetter
 from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
@@ -19,6 +20,7 @@ from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
 from queue import Queue
 
+from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.worker.server import M_NAME as SERVER_M_NAME
 
 ReqIdent = Tuple[str, str]
@@ -26,6 +28,16 @@ ReqIdent = Tuple[str, str]
 M_NAME = "PostListener"
 
 M_NAME_Provider = "PostProvider"
+
+FilePath = str
+
+if platform.system() == 'Windows':
+    sep = "&&"
+    path_sep = "\\"
+else:
+    sep = ";"
+    path_sep = "/"
+
 
 class DISCONN(Exception):
     pass
@@ -42,13 +54,9 @@ class PostListener(ModuleDaemon):
         self.__cInst = cInst
         self.__processor = PostProcessor(cInst)
 
-    def menuAppend(self, menuLetter:'MenuLetter') -> None:
-        menu = PostMenu(menuLetter.getHeader('version'),
-                        menuLetter.getHeader('mid'),
-                        menuLetter.getContent('depends'),
-                        menuLetter.getContent('cmds'),
-                        menuLetter.getContent('output'))
-        self.__processor.appendMenu(menu)
+    def postAppend(self, postLetter:'PostTaskLetter') -> None:
+        post = Post.fromPostLetter(postLetter)
+        self.__processor.appendMenu(post)
 
     def run(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -153,6 +161,86 @@ class PostProvider(Module):
 
         return Ok
 
+class Post:
+
+    # Describe a post-processing of a task
+    # 1. Match frags and menus from providers and include
+    #    match frags and menus.
+    # 2. Contain informations that guid processor how
+    #    to do post-processing.
+
+    def __init__(self, version:str, cmds:List[str], output:str,
+                 menus:List['PostMenu'], frags:List[str]):
+
+        self.__ver = version
+        self.__cmds = cmds
+        self.__output = output
+        self.__menus = menus
+
+        self.__frags = {} # type: Dict[str, str]
+        for frag in frags:
+            self.__frags[frag] = ""
+
+    def getVersion(self) -> str:
+        return self.__ver
+
+    def getMenus(self) -> List['PostMenu']:
+        return self.__menus
+
+    def getMenu(self, ident:str) -> Optional['PostMenu']:
+        menus = list(filter(lambda menu: menu.getIdent(), self.__menus))
+
+        if len(menus) > 0:
+            return menus[0]
+
+        return None
+
+    def getCmds(self) -> List[str]:
+        return self.__cmds
+
+    def getOutput(self) -> str:
+        return self.__output
+
+    def getFrags(self) -> List[str]:
+        return list(self.__frags.keys())
+
+    def __menu_ids(self) -> List[str]:
+        return list(map(lambda m: m.getIdent(), self.__menus))
+
+    def isSatisfied(self) -> bool:
+
+        isFragsMatched = "" not in list(self.__frags.values())
+        if not isFragsMatched:
+            return False
+
+        for menu in self.__menus:
+            if not menu.isSatisfied(): return False
+
+        return True
+
+    def match(self, stuff:'Stuff') -> bool:
+        stuffName = stuff.name()
+
+        if stuffName in self.__frags:
+            self.__frags[stuffName] = stuff.where()
+            return True
+
+        for menu in self.__menus:
+            isMatched = menu.stuffMatch(stuff)
+            return isMatched
+
+        return False
+
+    @staticmethod
+    def fromPostLetter(letter:PostTaskLetter) -> 'Post':
+        menus_ident = letter.menus()
+        f = lambda mid: PostMenu.fromMenuLetter(letter.getMenu(mid))
+        menus = list(map(f, menus_ident))
+
+        return Post(letter.getVersion(), letter.getCmds(),
+                    letter.getOutput(), menus, letter.frags())
+
+
 
 class PostMenu:
 
@@ -207,6 +295,14 @@ class PostMenu:
 
     def getCmd(self) -> List[str]:
         return self.__cmd
+
+    @staticmethod
+    def fromMenuLetter(letter:MenuLetter) -> 'PostMenu':
+        return PostMenu(letter.getHeader('version'),
+                        letter.getHeader('mid'),
+                        letter.getContent('depends'),
+                        letter.getContent('cmds'),
+                        letter.getContent('output'))
 
 class Stuffs:
 
@@ -338,88 +434,110 @@ class PostProcessor(Thread):
         # after command of menu is
         # executed the menu will
         # be removed from this list
-        self.__menus = [] # type: List[PostMenu]
-        self.__menus_lock = Lock()
+        self.__posts = [] # type: List[Post]
+        self.__post_lock = Lock()
 
         self.__stuffs = Stuffs() # type: Stuffs
 
-        self.__satisfiedMenus = Queue(10) # type: Queue[PostMenu]
+        self.__satisfiedPosts = Queue(10) # type: Queue[Post]
 
         self.__providers = select.poll()
         self.__inProcReq = [] # type: List[ReqIdent]
         self.__storage = Storage("./PostStorage", None)
         self.__chooserSet = {} # type: Dict[str, StoChooser]
 
+    def do_post_processing(self, post:Post) -> Optional[tempfile.TemporaryDirectory]:
+        workingDir = tempfile.TemporaryDirectory()
+
+        menus = post.getMenus()
+        states = list(map(lambda menu: self.__do_menu(menu, workingDir.name), menus))
+
+        if Error in states:
+            return None
+
+        cmds = post.getCmds()
+        cmds.insert(0, "cd " + workingDir.name)
+        cmds_str = sep.join(cmds)
+
+        try:
+            os.system(cmds_str)
+        except:
+            return None
+
+        return workingDir
+
+    def __do_menu(self, menu:PostMenu, workDir:FilePath) -> State:
+        command = menu.getCmd()
+        stuffs = menu.getStuffs()
+
+        for stuff in stuffs:
+            self.__storage.copyTo(stuff.where(), workDir)
+        command.insert(0, "cd " + workDir)
+        command_str = sep.join(command)
+
+        try:
+            os.system(command_str)
+        except:
+            return Error
+
+        output = menu.getOutput()
+
+        # Cleanup
+        for stuff in stuffs:
+            self.__storage.delete(stuff.name())
+
+        return Ok
+
     def run(self) -> None:
 
-        spawnThread(self.__menu_collect_stuffs)
+        spawnThread(self.__post_collect_stuffs)
 
-        statisfied_menus = self.__satisfiedMenus
+        statisfied_posts = self.__satisfiedPosts
 
-        if platform.system() == 'Windows':
-            sep = "&&"
-            path_sep = "\\"
-        else:
-            sep = ";"
-            path_sep = "/"
+        configs = self.__cInst.getModule(INFO_M_NAME)
+        workerIdent = configs.getConfig('WORKER_NAME')
+
+        server = self.__cInst.getModule(SERVER_M_NAME)
 
         while True:
 
-            menu = statisfied_menus.get()
+            post = statisfied_posts.get()
+            output = post.getOutput()
+            version = post.getVersion()
 
-            command = menu.getCmd()
-            stuffs = menu.getStuffs()
+            response = ResponseLetter(workerIdent, version, Letter.RESPONSE_STATE_FINISHED)
 
-            workingDir = tempfile.TemporaryDirectory()
-
-            for stuff in stuffs:
-                self.__storage.copyTo(stuff.where(), workingDir.name)
-
-            command.insert(0, "cd " + workingDir.name)
-
-            command_str = sep.join(command)
-
-            # Need a way to stop commands
-            # with os.system() we are unable to
-            # stop commands
-            os.system(command_str)
-
-            # Output of command should be a file
-            output = menu.getOutput()
-            if not os.path.isfile(output):
+            wDir = self.do_post_processing(post)
+            if wDir is None:
+                # Notify master this post is failed.
+                response.setState(Letter.RESPONSE_STATE_FAILURE)
+                server.transfer(response)
                 continue
 
-            # Cleanup
-            for stuff in stuffs:
-                self.__storage.delete(stuff.name())
+            fileName = output.split(path_sep)[-1]
 
-            server = self.__cInst.getModule(SERVER_M_NAME)
+            if output[0] == ".":
+                output = wDir.name + path_sep + output
 
-            with open(output, "rb") as output_file:
+            with open(output, "rb") as binFile:
+                for bytes in binFile:
+                    binaryLetter = BinaryLetter(
+                        post.getVersion(), bytes, fileName = fileName)
 
-                for line in output_file:
-                    binaryLetter = BinaryLetter(stuff.name(), line,
-                                                menu = stuff.menu(),
-                                                fileName = output.split(path_sep)[-1],
-                                                parent = stuff.version())
                     server.transfer(binaryLetter)
 
                 binaryLetter.setBytes(b"")
                 server.transfer(binaryLetter)
 
-            # Transfer fin letter after binary
-            finLetter = ResponseLetter(menu.getIdent(), Letter.RESPONSE_STATE_FINISHED,
-                                       menu.getVersion())
-
-            server.transfer(finLetter)
+            server.transfer(response)
 
 
-    def appendMenu(self, menu:PostMenu) -> None:
-        with self.__menus_lock:
-            self.__menus.append(menu)
+    def appendMenu(self, post:Post) -> None:
+        with self.__post_lock:
+            self.__posts.append(post)
 
     # Retrive information and binary file from workers and store into __pends
-    def __menu_collect_stuffs(self, args = None) -> None:
+    def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
             providers = self.__providers.poll(1000)
@@ -435,7 +553,7 @@ class PostProcessor(Thread):
             if stuff is None:
                 continue
 
-            isPaired = self.__menu_stuff_pair(stuff)
+            isPaired = self.__post_stuff_pair(stuff)
 
             # fixme: add a counter to this stuff so we can remove
             #        a stuff if it's counter's value is bigger than
@@ -445,15 +563,15 @@ class PostProcessor(Thread):
 
             # After match we need to check is there a menu which
             # collect all stuffs of it need
-            self.__menus_lock.acquire()
+            self.__post_lock.acquire()
 
-            for menu in self.__menus:
-                isSatisfied = menu.isSatisfied()
+            for post in self.__posts:
+                isSatisfied = post.isSatisfied()
 
                 if isSatisfied:
-                    self.__satisfiedMenus.put(menu)
+                    self.__satisfiedPosts.put(post)
 
-            self.__menus_lock.release()
+            self.__post_lock.release()
 
 
     # Return (tid, parent, stoId)
@@ -514,20 +632,20 @@ class PostProcessor(Thread):
             if isinstance(content, bytes) and chooser is not None:
                 chooser.store(content)
 
-    def __menu_stuff_pair(self, stuff:Stuff) -> bool:
-        menus = self.__menus
+    def __post_stuff_pair(self, stuff:Stuff) -> bool:
+        posts = self.__posts
 
-        self.__menus_lock.acquire()
+        self.__post_lock.acquire()
 
-        for menu in menus:
-            isMatched = menu.stuffMatch(stuff)
-
-            if isMatched:
+        for post in posts:
+            if post.match(stuff):
                 break
 
-        self.__menus_lock.release()
+            return False
 
-        return isMatched
+        self.__post_lock.release()
+
+        return True
 
 
     @staticmethod
