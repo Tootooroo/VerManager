@@ -90,7 +90,7 @@ class Processor(Module):
             self.proc_command(reqLetter)
         elif isinstance(reqLetter, NewLetter):
             self.proc_newtask(reqLetter)
-        elif isinstance(reqLetter, MenuLetter):
+        elif isinstance(reqLetter, PostTaskLetter):
             self.proc_menu(reqLetter)
 
     @staticmethod
@@ -139,14 +139,14 @@ class Processor(Module):
 
         return Result(tid, result_path, needPost, version, isSuccess)
 
-    def proc_menu(self, menuLetter:MenuLetter) -> State:
+    def proc_menu(self, postTaskLetter:PostTaskLetter) -> State:
         listener = self.__cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
 
         # This worker is not a listener
         if listener is None:
             return Error
 
-        listener.menuAppend(menuLetter)
+        listener.postAppend(postTaskLetter)
 
         return Ok
 
