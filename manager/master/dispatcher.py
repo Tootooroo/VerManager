@@ -124,7 +124,7 @@ class Dispatcher(ModuleDaemon):
 
         with self.dispatchLock:
 
-            # If task is a big task send post menu via MenuLetter
+            """
             if isinstance(task, SuperTask):
                 post = task.getPostTask()
                 assert(post is not None)
@@ -138,6 +138,7 @@ class Dispatcher(ModuleDaemon):
                     listener = self.__workers.postListener()
 
                 listener.do(post)
+            """
 
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting

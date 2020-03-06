@@ -281,7 +281,7 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
-    def tes_dispatcher(self):
+    def test_dispatcher(self):
 
         # Create a server
         sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
@@ -356,9 +356,7 @@ class UnitTest(TestCase):
         # Now let client4 stop
         client4.stop()
 
-        # Wait 15 seconds so client4 will be removed
-        # from WorkerRoom
-        time.sleep(15)
+
 
         # Now client1 should have two task in processing
         cond = len(client1.inProcTasks()) == 2 or \
