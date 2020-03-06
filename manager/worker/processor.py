@@ -2,6 +2,7 @@
 
 import time
 import os
+import traceback
 import platform
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
@@ -39,7 +40,7 @@ else:
 
 class Result:
 
-    def __init__(self, tid:str,
+    def __init__(self, tid:str, mid:str,
                  filePath:str, needPost:str,
                  version:str, isSuccess:bool) -> None:
         self.tid = tid
@@ -47,6 +48,7 @@ class Result:
         self.needPost = needPost
         self.version = version
         self.isSuccess = isSuccess
+        self.menuId = mid
 
 
 class Processor(Module):
@@ -91,24 +93,26 @@ class Processor(Module):
         elif isinstance(reqLetter, NewLetter):
             self.proc_newtask(reqLetter)
         elif isinstance(reqLetter, PostTaskLetter):
-            self.proc_menu(reqLetter)
+            self.proc_post(reqLetter)
 
     @staticmethod
-    def do_proc(reqLetter: Letter, info: Info) -> Result:
-
+    def do_proc(reqLetter: NewLetter, info: Info) -> Result:
         isSuccess = True
+        try:
+            workerName = info.getConfig('WORKER_NAME')
+            extra = reqLetter.getExtra()
+            building_cmds = extra['cmds']
+            result_path = extra['resultPath']
+            needPost = reqLetter.needPost()
+            menuId = reqLetter.getMenu()
 
-        workerName = info.getConfig('WORKER_NAME')
-        extra = reqLetter.getContent("extra")
-        building_cmds = extra['cmds']
-        result_path = extra['resultPath']
-        needPost = extra['needPost']
+            tid = reqLetter.getTid()
 
-        tid = reqLetter.getHeader("tid")
+            if platform.system() == "Windows":
+                result_path = result_path.replace("/", "\\")
 
-        if platform.system() == "Windows":
-            result_path = result_path.replace("/", "\\")
-            building_cmds = result_path.replace(";", "&&")
+        except:
+            traceback.print_exc()
 
         # rocessing
         try:
@@ -116,30 +120,37 @@ class Processor(Module):
             projName = info.getConfig("PROJECT_NAME")
 
             # Get repo
-            os.system("git clone -b master " + repo_url)
+            #os.system("git clone -b master " + repo_url)
 
-            os.chdir(projName)
+            #os.chdir(projName)
 
             revision = reqLetter.getContent('sn')
 
             # Checkout to specific revision
-            os.system("git checkout -f " + revision)
+            #os.system("git checkout -f " + revision)
 
             version = reqLetter.getContent('vsn')
             version_date = reqLetter.getContent('datetime')
 
-            building_cmds = building_cmds.replace("<vsn>", version)
-            building_cmds = building_cmds.replace("datetime>", version_date)
+            cmds_str =  ""
+            if platform.system() == "Windows":
+                cmds_str = "&&".join(building_cmds)
+            else:
+                cmds_str = ";".join(building_cmds)
+
+            cmds_str = cmds_str.replace("<vsn>", version)
+            cmds_str = cmds_str.replace("datetime>", version_date)
 
             # Run commands
-            os.system(building_cmds)
+            os.system(cmds_str)
 
         except Exception:
+            traceback.print_exc()
             isSuccess = False
 
-        return Result(tid, result_path, needPost, version, isSuccess)
+        return Result(tid, menuId, result_path, needPost, version, isSuccess)
 
-    def proc_menu(self, postTaskLetter:PostTaskLetter) -> State:
+    def proc_post(self, postTaskLetter:PostTaskLetter) -> State:
         listener = self.__cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
 
         # This worker is not a listener
@@ -191,7 +202,8 @@ class Processor(Module):
         # Resposne to configuration command
         server = cInst.getModule(SERVER_M_NAME)
 
-        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
+        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE,
+                                   CmdResponseLetter.STATE_SUCCESS,
                                    extra = {"isListener":"true"})
         server.transfer(letter)
 
@@ -226,27 +238,25 @@ class Processor(Module):
         return Ok
 
     def proc_newtask(self, reqLetter:NewLetter) -> State:
-
         if not self.isAbleToProc():
+            print("Unable to proc")
             return Error
 
         tid = reqLetter.getHeader('tid')
         version = reqLetter.getContent('vsn')
 
         if self.isReqInProc(tid, version):
+            print("In proc")
             return Error
 
         s = self.__cInst.getModule(SERVER_M_NAME)
 
-        if self.__procedure is None:
-            return Error
-
         # Notify master this task is change into in_processing state
-        response = ResponseLetter(ident=self.__info.getConfig('WORKER_NAME'),
+        response = ResponseLetter(ident=self.__cInst.getName(),
                                   tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
         s.transfer(response)
 
-        res = self.__pool.apply_async(self.do_proc, (reqLetter, self.__info))
+        res = self.__pool.apply_async(Processor.do_proc, (reqLetter, self.__info))
         self.__numOfTasksInProc += 1
 
         self.__allTasks.append((tid, version, res))
@@ -257,16 +267,17 @@ class Processor(Module):
     # Remove tasks from processor and return
     # the number of request finished
     def recyle(self) -> int:
-        (readies, not_readies) = partition(self.__allTasks, lambda res: res[1].ready())
+        (readies, not_readies) = partition(self.__allTasks, lambda res: res[2].ready())
         self.__allTasks = not_readies
 
-        for res in readies:
+        for (tid, version, res) in readies:
             result = res.get() # type: Result
 
             version = result.version
             tid = result.tid
             needPost = result.needPost
             path = result.path
+            menu = result.menuId
 
             server = self.__cInst.getModule(SERVER_M_NAME)
 
@@ -284,19 +295,22 @@ class Processor(Module):
                     server.transfer(response)
                 else:
                     provider = self.__cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
-                    self.__transBinaryTo(tid, path, lambda l: provider.provide(l))
-
+                    self.__transBinaryTo(tid, path, lambda l: provider.provide(l), mid=menu,
+                                         parent=version)
 
             del self.__allTasks_dict [version+tid]
 
         return len(readies)
 
-    def __transBinaryTo(self, tid:str, path:str, transferRtn:Callable[[BinaryLetter], Any]) -> None:
+    def __transBinaryTo(self, tid:str, path:str,
+                        transferRtn:Callable[[BinaryLetter], Any],
+                        mid:str = "", parent:str = "") -> None:
         global sep
 
         fileName = path.split(sep)[-1]
         with open(path, "rb") as binFile:
-            binLetter = BinaryLetter(tid=tid, bStr=b"", fileName=fileName)
+            binLetter = BinaryLetter(tid=tid, bStr=b"", menu = mid,
+                                     fileName=fileName, parent = parent)
 
             for line in binFile:
                 binLetter.setBytes(line)

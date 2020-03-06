@@ -5,6 +5,7 @@
 
 import socket
 import select
+import traceback
 
 from typing import Tuple
 
@@ -153,14 +154,17 @@ class Worker:
 
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
+            print("unable to accept")
             raise Exception
 
         # Task assign
         letter = task.toLetter()
 
         if letter is None:
+            print("letter is None")
             return None
 
+        print("Master send:" + letter.toString())
         self.__send(letter)
 
         # Register task into task group
@@ -213,4 +217,7 @@ class Worker:
         return Worker.receving(self.sock)
 
     def __send(self, l: Letter) -> None:
-        with self.sendLock: Worker.sending(self.sock, l)
+        try:
+            with self.sendLock: Worker.sending(self.sock, l)
+        except:
+            traceback.print_exc()

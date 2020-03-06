@@ -56,7 +56,7 @@ class PostListener(ModuleDaemon):
 
     def postAppend(self, postLetter:'PostTaskLetter') -> None:
         post = Post.fromPostLetter(postLetter)
-        self.__processor.appendMenu(post)
+        self.__processor.appendPost(post)
 
     def run(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -227,7 +227,8 @@ class Post:
 
         for menu in self.__menus:
             isMatched = menu.stuffMatch(stuff)
-            return isMatched
+            if isMatched:
+                return True
 
         return False
 
@@ -502,9 +503,8 @@ class PostProcessor(Thread):
         while True:
 
             post = statisfied_posts.get()
-            output = post.getOutput()
-            version = post.getVersion()
 
+            version = post.getVersion()
             response = ResponseLetter(workerIdent, version, Letter.RESPONSE_STATE_FINISHED)
 
             wDir = self.do_post_processing(post)
@@ -514,6 +514,7 @@ class PostProcessor(Thread):
                 server.transfer(response)
                 continue
 
+            output = post.getOutput()
             fileName = output.split(path_sep)[-1]
 
             if output[0] == ".":
@@ -532,7 +533,7 @@ class PostProcessor(Thread):
             server.transfer(response)
 
 
-    def appendMenu(self, post:Post) -> None:
+    def appendPost(self, post:Post) -> None:
         with self.__post_lock:
             self.__posts.append(post)
 
@@ -565,8 +566,10 @@ class PostProcessor(Thread):
             # collect all stuffs of it need
             self.__post_lock.acquire()
 
+            print(self.__posts)
             for post in self.__posts:
                 isSatisfied = post.isSatisfied()
+                print(isSatisfied)
 
                 if isSatisfied:
                     self.__satisfiedPosts.put(post)

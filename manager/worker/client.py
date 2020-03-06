@@ -20,6 +20,7 @@ from .post import Post
 
 from .server import M_NAME as SERVER_M_NAME
 from .receiver import M_NAME as RECEIVER_M_NAME
+from .processor import M_NAME as PROCESSOR_M_NAME
 
 class Client(Thread):
 
@@ -46,8 +47,13 @@ class Client(Thread):
     def stop(self) -> None:
         self.__manager.stopAll()
 
-    def inProcTasks(self) -> List[str]:
-        pass
+    def inProcTasks(self) -> Optional[int]:
+        processor = self.__manager.getModule(PROCESSOR_M_NAME)
+
+        if isinstance(processor, Processor):
+            return processor.tasksInProc()
+
+        return None
 
     def isStop(self) -> bool:
         return self.__isStop

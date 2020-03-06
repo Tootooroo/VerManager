@@ -234,7 +234,13 @@ class SuperTask(Task):
             st = SingleTask(build.getIdent(), sn = self.sn, revision = self.vsn,
                             build = build,
                             extra = self.extra)
+
             st.setParent(self)
+
+            group = self.__buildSet.belongTo(build.getIdent())
+            if group is not None:
+                st.setGroup(group[0])
+
             children.append(st)
 
         # Build a child which type is PostTask
@@ -269,6 +275,12 @@ class SingleTask(Task):
 
     def getParent(self) -> Optional[SuperTask]:
         return self.__parent
+
+    def setGroup(self, group:str) -> None:
+        self.__postGroup = group
+
+    def getGroup(self) -> Optional[str]:
+        return self.__postGroup
 
     def isAChild(self) -> bool:
         return self.__parent is not None

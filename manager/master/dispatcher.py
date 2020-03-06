@@ -15,7 +15,7 @@ from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.master.postElection import Role_Listener, Role_Provider
-from manager.basic.info import Info
+from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
 from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask
 from manager.basic.type import *
@@ -26,7 +26,7 @@ from datetime import datetime
 
 from manager.master.logger import Logger
 
-from manager.master.logger import M_NAME as INFO_M_NAME
+from manager.master.logger import M_NAME as LOGGER_M_NAME
 
 class Dispatcher(ModuleDaemon):
 
@@ -60,13 +60,6 @@ class Dispatcher(ModuleDaemon):
     #
     # return True if task is assign successful otherwise return False
     def __dispatch(self, task: Task) -> bool:
-
-        if task.id() in self.__tasks:
-            task = self.__tasks[task.id()]
-            task.refs += 1
-
-            return True
-
         if isinstance(task, SuperTask):
             return self.__dispatchSuperTask(task)
 
@@ -78,7 +71,6 @@ class Dispatcher(ModuleDaemon):
         return False
 
     def __do_dispatch(self, task: Task) -> bool:
-
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and __tasks otherwise append to taskWait
@@ -102,7 +94,6 @@ class Dispatcher(ModuleDaemon):
         return False
 
     def __dispatchSuperTask(self, task: SuperTask) -> bool:
-
         ret = True
         subTasks = task.getChildren()
 
@@ -110,7 +101,7 @@ class Dispatcher(ModuleDaemon):
             if not sub.isPrepare():
                 continue
 
-            do_ret = self.__do_dispatch(task)
+            do_ret = self.__do_dispatch(sub)
 
             if do_ret is False:
                 ret = False
@@ -118,6 +109,11 @@ class Dispatcher(ModuleDaemon):
         return ret
 
     def dispatch(self, task: Task) -> bool:
+        if task.id() in self.__tasks:
+            task = self.__tasks[task.id()]
+            task.refs += 1
+
+            return True
 
         # Bind task with a build or buildSet
         task = self.__bind(task)
@@ -143,7 +139,6 @@ class Dispatcher(ModuleDaemon):
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
-
                 self.__tasks[task.id()] = task
                 task.refs += 1
 
@@ -167,14 +162,19 @@ class Dispatcher(ModuleDaemon):
             # bind one with it.
             info = self.__sInst.getModule(INFO_M_NAME) # type: Info
 
-            build = info.getConfig("Build")
-            if isinstance(build, Build):
-                task.setBuild(build)
+            try:
+                build = Build(task.vsn ,info.getConfig("Build"))
+                if isinstance(build, Build):
+                    task.setBuild(build)
+            except:
+                pass
 
-            buildSet = info.getConfig("BuildSet")
-            if isinstance(buildSet, buildSet):
-                task.setBuild(buildSet)
-
+            try:
+                buildSet = BuildSet(info.getConfig("BuildSet"))
+                if isinstance(buildSet, BuildSet):
+                    task.setBuild(buildSet)
+            except:
+                pass
             task = task.transform()
 
         return task
@@ -182,7 +182,7 @@ class Dispatcher(ModuleDaemon):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        logger = self.__sInst.getModule(INFO_M_NAME)
+        logger = self.__sInst.getModule(LOGGER_M_NAME)
 
         if not logger is None:
             logger.log_register("dispatcher")

@@ -13,10 +13,12 @@ from manager.master.dispatcher import Dispatcher, workerLost_redispatch
 from manager.master.eventListener import EventListener, workerRegister
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler, postHandler
-from manager.master.logger import Logger
+from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.basic.storage import Storage
 from manager.master.exceptions import INVALID_CONFIGURATIONS
 from manager.master.verControl import RevSync
+
+from manager.basic.info import M_NAME as INFO_M_NAME
 
 ServerInstance = None # type: Optional['ServerInst']
 
@@ -55,8 +57,8 @@ class ServerInst(Thread):
 
         info = Info(self.__configPath)
 
-        if not info.validityChecking(predicates):
-            raise INVALID_CONFIGURATIONS
+        #if not info.validityChecking(predicates):
+        #    raise INVALID_CONFIGURATIONS
 
         self.addModule(info)
 

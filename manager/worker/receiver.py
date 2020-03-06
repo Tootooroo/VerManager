@@ -12,6 +12,8 @@ from typing import Any, Dict, List
 
 from manager.worker.processor import M_NAME as PROCESSOR_M_NAME
 
+import traceback
+
 M_NAME = "Recevier"
 
 class Receiver(ModuleDaemon):
@@ -61,10 +63,17 @@ class Receiver(ModuleDaemon):
             if self.__status == 1:
                 return None
 
-            reqLetter = server.waitLetter()
+            try:
+                reqLetter = server.waitLetter()
 
-            if isinstance(reqLetter, int):
-                continue
+                processor.recyle()
 
-            processor.proc(reqLetter)
-            processor.recyle()
+                if isinstance(reqLetter, int):
+                    continue
+            except:
+                traceback.print_exc()
+
+            if not isinstance(reqLetter, int):
+                print(self.__cInst.getIdent() + " receive " + reqLetter.toString())
+
+                processor.proc(reqLetter)

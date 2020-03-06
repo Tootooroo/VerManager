@@ -313,7 +313,7 @@ class NewLetter(Letter):
     def getDatetime(self) -> str:
         return self.getContent('datetime')
 
-    def getExtra(self) -> str:
+    def getExtra(self) -> Dict[str, str]:
         return self.getContent('extra')
 
 CmdType = int
@@ -709,5 +709,6 @@ parseMethods = {
     Letter.LogRegister    : LogRegLetter,
     Letter.NewMenu        : MenuLetter,
     Letter.Command        : CommandLetter,
-    Letter.CmdResponse    : CmdResponseLetter
+    Letter.CmdResponse    : CmdResponseLetter,
+    Letter.Post           : PostTaskLetter
 } # type:  Any
