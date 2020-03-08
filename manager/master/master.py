@@ -80,7 +80,7 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        revSyncner = RevSync(self)
+        #revSyncner = RevSync(self)
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
         workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))

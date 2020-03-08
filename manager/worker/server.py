@@ -43,7 +43,7 @@ class Server(Module):
 
         self.__status = Server.STATE_DISCONNECTED
 
-    def connect(self, workerName:str, max:int, proc:int) -> State:
+    def connect(self, workerName:str, max:int, proc:int, retry:int = 0) -> State:
         # Store workerName into instance for reconnect purpose
         self.__workerName = workerName
 
@@ -51,7 +51,13 @@ class Server(Module):
         port = self.__port
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+
+        try:
+            self.sock.connect((host, port))
+        except ConnectionRefusedError:
+            while retry > 0:
+                time.sleep(1)
+                self.sock.connect((host, port))
 
         self.sock.settimeout(1)
 

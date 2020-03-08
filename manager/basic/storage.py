@@ -1,10 +1,11 @@
 # Storage
 
-import typing
 import os
 import platform
 import shutil
 import traceback
+
+from typing import Optional, Dict, BinaryIO, Any, List, IO
 
 from .mmanager import Module
 from manager.basic.type import *
@@ -18,6 +19,7 @@ else:
 class STORAGE_IDENT_NOT_FOUND(Exception):
     pass
 
+
 class StoChooser:
 
     def __init__(self, path:str) -> None:
@@ -29,7 +31,7 @@ class StoChooser:
         except FileNotFoundError:
             raise STORAGE_IDENT_NOT_FOUND
 
-    def fd(self) -> typing.BinaryIO:
+    def fd(self) -> BinaryIO:
         return self.__fd
 
     def setFd(self, fd) -> State:
@@ -73,15 +75,97 @@ class StoChooser:
         fd = self.__fd
         fd.seek(0, 0)
 
+class File:
+
+    def __init__(self, name:str, path:str) -> None:
+        self.name = name
+        self.__path = path
+
+    def open(self) -> BinaryIO:
+        return open(self.__path, "rb")
+
+    def remove(self) -> None:
+        os.remove(self.__path)
+
+    def path(self) -> str:
+        return self.__path
+
+class Box:
+
+    def __init__(self, ident:str, where:'Storage') -> None:
+        self.__ident = ident
+
+        self.__where = where
+        self.__files = {} # type: Dict[str, File]
+
+        self.__path = where.sotragePath() + seperator + ident
+
+        if not os.path.exists(self.__path):
+            os.makedirs(self.__path)
+        else:
+            self.__recover()
+
+    def __recover(self) -> None:
+        files = os.listdir(self.__path)
+
+        files = list(filter(lambda f: os.path.isfile(f), files))
+        if len(files) == 0:
+            return None
+
+
+
+    def files(self) -> List[File]:
+        return list(self.__files.values())
+
+    def getFile(self, fileName:str) -> File:
+        return self.__files[fileName]
+
+    def exists(self, fileName:str) -> bool:
+        return fileName in self.__files
+
+    def add(self, fileName:str, file:File) -> None:
+
+        if self.exists(fileName):
+            return None
+
+        self.__files[fileName] = file
+
+    def remove(self, fileName:str) -> None:
+
+        if not self.exists(fileName):
+            return None
+
+        theFile = self.__files[fileName]
+
+        try:
+            theFile.remove()
+        except:
+            pass
+
+        del self.__files [fileName]
+
+    def path(self) -> str:
+        return self.__where.sotragePath() + seperator + self.__ident
+
+    def newFile(self, name) -> Optional[StoChooser]:
+        if name in self.__files:
+            return None
+
+        filePath = self.path() + seperator + name
+        file = File(name, filePath)
+
+        self.add(name, file)
+
+        return StoChooser(filePath)
 
 class Storage(Module):
 
-    def __init__(self, path:str, inst:typing.Any) -> None:
+    def __init__(self, path:str, inst:Any) -> None:
 
         Module.__init__(self, "")
 
         self.__sInst = inst
-        self.__crago = {} # type: typing.Dict[str, str]
+        self.__crago = {} # type: Dict[str, Box]
         self.__num = 0
 
         # Need to check that is the path valid
@@ -102,7 +186,7 @@ class Storage(Module):
             return ""
 
     @staticmethod
-    def __addDirToCrago(crago:typing.Dict[str, str], path:str) -> None:
+    def __addDirToCrago(crago:Dict[str, Box], path:str) -> None:
         global seperator
 
         files = os.listdir(path)
@@ -112,15 +196,25 @@ class Storage(Module):
         for f in files:
             crago[f] = pathStrConcate(path, f, seperator = seperator)
 
-    def create(self, ident:str, ext:str = '') -> typing.Optional[StoChooser]:
+    def recover(self) -> None:
+        pass
+
+    def create(self, ident:str, fileName:str, box:Optional[str]=None) -> Optional[StoChooser]:
         global seperator
 
         if ident in self.__crago:
             return self.open(ident)
 
-        path = pathStrConcate(self.__path, ident, seperator = seperator)
-        if ext != '':
-            path += "." + ext
+        if box is None:
+            path = pathStrConcate(self.__path, fileName, seperator = seperator)
+        else:
+            path = pathStrConcate(self.__path, box, fileName, seperator=seperator)
+
+        dirs = seperator.join(path.split(seperator)[0:-1])
+        fileName = path.split(seperator)[-1]
+
+        if not os.path.exists(dirs):
+            os.makedirs(dirs)
 
         chooser = StoChooser(path)
 
@@ -129,10 +223,10 @@ class Storage(Module):
 
         return chooser
 
-    def open(self, ident:str) -> typing.Optional[StoChooser]:
+    def open(self, ident:str, box:Optional[str]=None) -> Optional[StoChooser]:
 
         if not ident in self.__crago:
-            return self.create(ident)
+            return None
 
         path = self.__crago[ident]
         chooser = StoChooser(path)
@@ -160,11 +254,14 @@ class Storage(Module):
     def numOfFiles(self) -> int:
         return self.__num
 
-    def getPath(self, ident:str) -> typing.Optional[str]:
+    def getPath(self, ident:str) -> Optional[str]:
         if not ident in self.__crago:
             return ""
 
         return self.__crago[ident]
+
+    def sotragePath(self) -> str:
+        return self.__path
 
     # User should make sure filePath is within Storage's path
     def __addNewFile(self, ident, filePath:str) -> State:

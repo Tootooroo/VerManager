@@ -101,7 +101,7 @@ class Client(Thread):
         proc = info.getConfig('PROCESS_POOL_SIZE')
 
         s = Server(address, port, info, self)
-        s.connect(workerName, max, proc)
+        s.connect(workerName, max, proc, retry=3)
         self.__manager.addModule(s)
 
         m1 = Receiver(s, info, self)

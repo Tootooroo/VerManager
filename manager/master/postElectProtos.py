@@ -19,6 +19,8 @@ class RandomElectProtocol(PostElectProtocol):
         PostElectProtocol.__init__(self)
         self.__blackList = [] # type: List[str]
 
+        self.__proto_port = 8066
+
     def init(self) -> State:
         # __group maybe None because WorkerRoom is in instable status
         if self.group is None:
@@ -44,7 +46,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         providers = self.group.getProviders()
 
-        cmd_set_provider = PostConfigCmd(host, port, PostConfigCmd.ROLE_PROVIDER)
+        cmd_set_provider = PostConfigCmd(host, self.__proto_port, PostConfigCmd.ROLE_PROVIDER)
 
         for p in providers:
             p.control(cmd_set_provider)
@@ -77,7 +79,8 @@ class RandomElectProtocol(PostElectProtocol):
 
         (host, port) = listener.getAddress()
 
-        cmd_set_listener = PostConfigCmd(host, port, PostConfigCmd.ROLE_LISTENER)
+        cmd_set_listener = PostConfigCmd(host, self.__proto_port,
+                                         PostConfigCmd.ROLE_LISTENER)
 
         listener.control(cmd_set_listener)
         l = self.waitMsg()
