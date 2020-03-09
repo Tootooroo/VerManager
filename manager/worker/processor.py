@@ -239,7 +239,7 @@ class Processor(Module):
 
     def proc_newtask(self, reqLetter:NewLetter) -> State:
         if not self.isAbleToProc():
-            print("Unable to proc")
+            print("nable to proc")
             return Error
 
         tid = reqLetter.getHeader('tid')
@@ -252,7 +252,7 @@ class Processor(Module):
         s = self.__cInst.getModule(SERVER_M_NAME)
 
         # Notify master this task is change into in_processing state
-        response = ResponseLetter(ident=self.__cInst.getName(),
+        response = ResponseLetter(ident=self.__cInst.getIdent(),
                                   tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
         s.transfer(response)
 
@@ -281,23 +281,24 @@ class Processor(Module):
 
             server = self.__cInst.getModule(SERVER_M_NAME)
 
+            response = ResponseLetter(ident = self.__cInst.getIdent(), tid = tid,
+                                      state = Letter.RESPONSE_STATE_FINISHED)
+
             if result.isSuccess is False:
-                response = ResponseLetter(ident = self.__info.getConfig('WORKER_NAME'),
-                                        tid = tid, state=Letter.RESPONSE_STATE_FAILURE)
+                response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
                 continue
             else:
                 if needPost == "false":
                     self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
-                    response = ResponseLetter(ident=self.__info.getConfig('WORKER_NAME'),
-                                              tid=tid, state=Letter.RESPONSE_STATE_FINISHED)
-
                     server.transfer(response)
                 else:
                     provider = self.__cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
                     self.__transBinaryTo(tid, path, lambda l: provider.provide(l), mid=menu,
                                          parent=version)
+                    server.transfer(response)
 
+            self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]
 
         return len(readies)

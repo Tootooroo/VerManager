@@ -369,6 +369,7 @@ class TaskGroup:
 
             tasks = self.__tasks[type]
 
+            if task
             tasks[task.id()] = task
             self.__numOfTasks += 1
 

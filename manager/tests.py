@@ -317,16 +317,13 @@ class UnitTest(TestCase):
             self.assertTrue(False)
 
         # Dispatch task
-        task1 = Task("123", "123", "123")
+        task1 = Task("1", "123", "1")
         dispatcher.dispatch(task1)
 
-        time.sleep(8)
+        time.sleep(1)
 
         # To check that whether the task dispatch to one of four workers
         w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
-
-        # There should be only one worker has task in processing
-        self.assertTrue(len(w_set) == 4)
 
         workerRoom = sInst.getModule("WorkerRoom")
         self.assertTrue(isinstance(workerRoom, WorkerRoom))
@@ -334,34 +331,34 @@ class UnitTest(TestCase):
         status = workerRoom.statusOfWorker("W1")
         self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
 
-        time.sleep(30)
+        time.sleep(10)
 
         """
         # Now let us dispatch three more task to workers
         # if nothing wrong each of these workers should
         # in work.
-        task2 = Task("124", "123", "123")
-        dispatcher.dispatch(task)
+        task2 = Task("124", "123", "124")
+        dispatcher.dispatch(task2)
 
-        task3 = Task("125", "123", "123")
-        dispatcher.dispatch(task)
+        task3 = Task("125", "123", "125")
+        dispatcher.dispatch(task3)
 
-        task4 = Task("126", "123", "123")
-        dispatcher.dispatch(task)
+        task4 = Task("126", "123", "126")
+        dispatcher.dispatch(task4)
 
-        time.sleep(5)
+        time.sleep(20)
 
+
+        """
+        """
         tasks = ["123", "124", "125", "126"]
         for w in workers:
             status = workerRoom.statusOfWorker(w.getIdent())
-
             self.assertTrue(len(w.inProcTasks()) == 1)
             self.assertEqual(w.inProcTasks()[0], status["inProcTask"][0])
 
         # Now let client4 stop
         client4.stop()
-
-
 
         # Now client1 should have two task in processing
         cond = len(client1.inProcTasks()) == 2 or \
@@ -371,39 +368,46 @@ class UnitTest(TestCase):
 
         """
 
-    def tes_storage(self):
+
+    def test_storage(self):
 
         import os
         from manager.basic.storage import Storage, StoChooser
 
-        fileName = "file"
         storage = Storage("./Storage", None)
 
         # Create a file via storage
-        chooser = storage.open(fileName)
+        boxName = "box"
+        fileName = "file"
+        chooser_create = storage.create(boxName, fileName)
 
-        # To check that is the has been created
-        self.assertTrue(os.path.exists(chooser.path()))
-        self.assertTrue(storage.getPath(fileName))
+        self.assertTrue(os.path.exists("./Storage/box/file"))
 
-        chooser.store(b"12345678")
-        chooser.close()
+        # Open
+        chooser_open = storage.open(boxName, fileName)
+        self.assertEqual(chooser_create.path(), chooser_open.path())
 
-        chooser = storage.open("file")
-        chooser.rewind()
 
-        bStr = chooser.retrive(8)
+        self.assertEqual(1, storage.numOfFiles())
 
-        # To check that is content of the file is same to
-        # the string that be writed before
-        self.assertEqual(b"12345678", bStr)
+        # Remove
+        storage.delete(boxName, fileName)
+        self.assertTrue(not os.path.exists("./Storage/box/file"))
 
-        chooser.close()
+        self.assertEqual(0, storage.numOfFiles())
 
-        filePath = chooser.path()
+        # Create files
+        files = ["file1", "file2", "file3", "file4", "file5"]
 
-        storage.delete(fileName)
-        self.assertTrue(not os.path.exists(filePath))
+        for file in files:
+            storage.create(boxName, file)
+        self.assertEqual(len(files), storage.numOfFiles())
+
+        self.assertTrue(os.path.exists("./Storage/box/file1"))
+        self.assertTrue(os.path.exists("./Storage/box/file2"))
+        self.assertTrue(os.path.exists("./Storage/box/file3"))
+        self.assertTrue(os.path.exists("./Storage/box/file4"))
+        self.assertTrue(os.path.exists("./Storage/box/file5"))
 
     def tes_build(self):
         from manager.basic.info import Info

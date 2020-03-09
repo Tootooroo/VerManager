@@ -5,6 +5,7 @@ import platform
 import shutil
 import traceback
 
+from functools import reduce
 from typing import Optional, Dict, BinaryIO, Any, List, IO
 
 from .mmanager import Module
@@ -15,6 +16,8 @@ if platform.system() == 'Windows':
     seperator = "\\"
 else:
     seperator = "/"
+
+M_NAME = "Storage"
 
 class STORAGE_IDENT_NOT_FOUND(Exception):
     pass
@@ -81,8 +84,14 @@ class File:
         self.name = name
         self.__path = path
 
-    def open(self) -> BinaryIO:
-        return open(self.__path, "rb")
+        # File is an object to describe a file on disk.
+        # If a file on disk is not exists. The object
+        # should not be able to create.
+        if not os.path.exists(path):
+            os.mknod(self.__path)
+
+    def open(self) -> StoChooser:
+        return StoChooser(self.__path)
 
     def remove(self) -> None:
         os.remove(self.__path)
@@ -92,41 +101,50 @@ class File:
 
 class Box:
 
-    def __init__(self, ident:str, where:'Storage') -> None:
-        self.__ident = ident
+    def __init__(self, name:str, where:'Storage') -> None:
+        self.__ident = name
 
         self.__where = where
         self.__files = {} # type: Dict[str, File]
 
-        self.__path = where.sotragePath() + seperator + ident
+        self.__path = where.sotragePath() + seperator + name
 
         if not os.path.exists(self.__path):
             os.makedirs(self.__path)
         else:
             self.__recover()
 
-    def __recover(self) -> None:
+    def __recover(self) -> State:
         files = os.listdir(self.__path)
 
         files = list(filter(lambda f: os.path.isfile(f), files))
         if len(files) == 0:
-            return None
+            return Ok
 
+        for fileName in files:
+            filePath = self.__path + seperator + fileName
+            file = File(fileName, filePath)
 
+            self.__files[fileName] = file
+
+        return Ok
 
     def files(self) -> List[File]:
         return list(self.__files.values())
 
-    def getFile(self, fileName:str) -> File:
+    def getFile(self, fileName:str) -> Optional[File]:
+        if fileName not in self.__files: return None
         return self.__files[fileName]
+
+    def openFile(self, fileName:str) -> Optional[StoChooser]:
+        if fileName not in self.__files: return None
+        return self.__files[fileName].open()
 
     def exists(self, fileName:str) -> bool:
         return fileName in self.__files
 
     def add(self, fileName:str, file:File) -> None:
-
-        if self.exists(fileName):
-            return None
+        if self.exists(fileName): return None
 
         self.__files[fileName] = file
 
@@ -147,7 +165,7 @@ class Box:
     def path(self) -> str:
         return self.__where.sotragePath() + seperator + self.__ident
 
-    def newFile(self, name) -> Optional[StoChooser]:
+    def newFile(self, name:str) -> Optional[StoChooser]:
         if name in self.__files:
             return None
 
@@ -158,157 +176,172 @@ class Box:
 
         return StoChooser(filePath)
 
+    def copyFrom(self, filePath:str, fileName:str) -> State:
+        # Copy a file specified by the filePath to this box.
+
+        if self.exists(fileName):
+            return Error
+
+        newFilePath = self.__path + seperator + fileName
+        shutil.copy(filePath, newFilePath)
+        f = File(fileName, newFilePath)
+
+        return Ok
+
+    def copyTo(self, fileName:str, filePath:str) -> State:
+        # Copy a file from given location to this box
+
+        if not self.exists(fileName):
+            return Error
+
+        f = self.getFile(fileName)
+        if f is None: return Error
+
+        shutil.copy(f.path(), filePath)
+
+        return Ok
+
+    def numOfFiles(self) -> int:
+        return len(self.__files)
+
 class Storage(Module):
 
     def __init__(self, path:str, inst:Any) -> None:
 
-        Module.__init__(self, "")
+        Module.__init__(self, M_NAME)
 
         self.__sInst = inst
-        self.__crago = {} # type: Dict[str, Box]
+        self.__boxes = {} # type: Dict[str, Box]
         self.__num = 0
 
         # Need to check that is the path valid
         self.__path = path
 
         # Add target directory's file into Storage
-        Storage.__addDirToCrago(self.__crago, path)
-
-    @staticmethod
-    def __trimExtension(name:str) -> str:
-        parts = name.split(".")
-
-        if len(parts) == 1:
-            return name
-        elif len(parts) > 1:
-            return ''.join(parts[0:-1])
+        if os.path.exists(path):
+            self.__recover()
         else:
-            return ""
+            os.makedirs(path)
 
-    @staticmethod
-    def __addDirToCrago(crago:Dict[str, Box], path:str) -> None:
+    def __recover(self) -> None:
         global seperator
 
-        files = os.listdir(path)
-        files = list(filter(lambda f: os.path.isfile(f), files))
-        files = list(map(lambda f: Storage.__trimExtension(f), files))
+        boxes = os.listdir(self.__path)
+        boxes = list(filter(lambda f: os.path.isdir(f), boxes))
 
-        for f in files:
-            crago[f] = pathStrConcate(path, f, seperator = seperator)
+        for boxName in boxes:
+            box = Box(boxName, self)
+            self.__boxes[boxName] = box
 
     def recover(self) -> None:
-        pass
+        self.__recover
 
-    def create(self, ident:str, fileName:str, box:Optional[str]=None) -> Optional[StoChooser]:
+    def create(self, boxName:str, fileName:str) -> Optional[StoChooser]:
+        """
+        Create a file within a box if the box is not exists then Create
+        that box and then create the file with given fileName.
+
+        If the file already exists then return chooser of that file.
+        """
         global seperator
 
-        if ident in self.__crago:
-            return self.open(ident)
-
-        if box is None:
-            path = pathStrConcate(self.__path, fileName, seperator = seperator)
-        else:
-            path = pathStrConcate(self.__path, box, fileName, seperator=seperator)
-
-        dirs = seperator.join(path.split(seperator)[0:-1])
-        fileName = path.split(seperator)[-1]
-
-        if not os.path.exists(dirs):
-            os.makedirs(dirs)
-
-        chooser = StoChooser(path)
-
-        self.__crago[ident] = path
-        self.__num += 1
-
-        return chooser
-
-    def open(self, ident:str, box:Optional[str]=None) -> Optional[StoChooser]:
-
-        if not ident in self.__crago:
+        if boxName == "" or fileName == "":
             return None
 
-        path = self.__crago[ident]
-        chooser = StoChooser(path)
+        if boxName not in self.__boxes:
+            self.__createBox(boxName)
 
-        return chooser
+        theBox = self.__getBox(boxName)
+        assert(theBox is not None)
 
-    def delete(self, ident:str) -> None:
+        f = theBox.getFile(fileName)
+        if f is not None: return f.open()
 
-        if not ident in self.__crago:
+        # The file is not exist.
+        return theBox.newFile(fileName)
+
+    def __createBox(self, boxName:str) -> State:
+        if self.__isExists(boxName):
+            return Error
+
+        self.__boxes[boxName] = Box(boxName, self)
+        return Ok
+
+    def __getBox(self, boxName:str) -> Optional[Box]:
+        if boxName not in self.__boxes:
+            return None
+        return self.__boxes[boxName]
+
+    def open(self, boxName:str, fileName:str) -> Optional[StoChooser]:
+        if boxName not in self.__boxes:
             return None
 
-        path = self.__crago[ident]
+        theBox = self.__boxes[boxName]
+        return theBox.openFile(fileName)
 
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+    def delete(self, boxName:str, fileName:str) -> None:
+        """
+        Delete a file specified by the fileName of the box specified by boxName.
+        """
+        if boxName not in self.__boxes:
+            return None
 
-        del self.__crago [ident]
-        self.__num -= 1
+        box = self.__boxes[boxName]
+        box.remove(fileName)
 
-    def isExists(self, ident:str) -> bool:
-        return ident in self.__crago
+    def __isExists(self, boxName:str) -> bool:
+        return boxName in self.__boxes
+
+    def isFileExists(self, boxName:str, fileName:str) -> bool:
+        pass
 
     def numOfFiles(self) -> int:
-        return self.__num
+        total = 0
 
-    def getPath(self, ident:str) -> Optional[str]:
-        if not ident in self.__crago:
-            return ""
+        for box in self.__boxes.values():
+            total += box.numOfFiles()
 
-        return self.__crago[ident]
+        return total
+
+    def getFile(self, boxName:str, fileName:str) -> Optional[File]:
+        if boxName not in self.__boxes:
+            return None
+
+        theBox = self.__getBox(boxName)
+        if theBox is None:
+            return None
+
+        return theBox.getFile(fileName)
+
+    def filesOf(self, boxName:str) -> List[File]:
+        if boxName not in self.__boxes:
+            return []
+
+        box = self.__boxes[boxName]
+        return box.files()
 
     def sotragePath(self) -> str:
         return self.__path
 
-    # User should make sure filePath is within Storage's path
-    def __addNewFile(self, ident, filePath:str) -> State:
-        if ident in self.__crago:
+    def copyFrom(self, filePath:str, boxName:str, fileName:str) -> State:
+
+        if not os.path.isfile(filePath):
+            # File support only.
             return Error
 
-        self.__crago[ident] = filePath
-        return Ok
-
-    def copy(self, filePath:str) -> State:
-
-        if len(filePath) < 1:
+        theBox = self.__getBox(boxName)
+        if theBox is None:
             return Error
 
-        if os.path.isfile(filePath):
-            copyMethod = shutil.copy
-        elif os.path.isdir(filePath):
-            copyMethod = shutil.copytree # type: ignore
+        return theBox.copyFrom(filePath, fileName)
 
-        targetFile = filePath.split(seperator)[-1]
-        stoIdent = targetFile.split(".")[-1]
+    def copyTo(self, boxName:str, fileName:str, dest:str) -> State:
 
-        dest = self.__path + seperator + targetFile
-
-        try:
-            copyMethod(filePath, dest)
-        except:
+        if not boxName in self.__boxes:
             return Error
 
-        self.__addNewFile(stoIdent, dest)
-
-        return Ok
-
-    def copyTo(self, ident:str, dest:str) -> State:
-
-        if dest == "":
+        theBox = self.__getBox(boxName)
+        if theBox is None:
             return Error
 
-        if not ident in self.__crago:
-            return Error
-
-        path = self.__crago[ident]
-
-        try:
-            shutil.copy(path, dest)
-        except:
-            traceback.print_exc()
-            return Error
-
-        return Ok
+        return theBox.copyTo(fileName, dest)

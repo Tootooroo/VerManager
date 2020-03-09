@@ -154,7 +154,6 @@ class Worker:
 
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
-            print("unable to accept")
             raise Exception
 
         # Task assign

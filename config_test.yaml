@@ -4,6 +4,7 @@ Port: 8024
 LogDir: ./log
 ResultDir: ./data
 Storage: ./Storage
+PostStorage: ./PostStorage
 
 GitlabUrl: http://gpon.git.com:8011
 Project_ID: 34
@@ -41,7 +42,7 @@ BuildSet:
         - ./ll4
 
   Posts:
-    GL5610_OEM:
+    P1:
       group:
         - GL5610
         - GL5610-v2
@@ -51,7 +52,7 @@ BuildSet:
       output:
         - ./post
 
-    GL8900_OEM:
+    P2:
       group:
         - GL8900
       cmd:

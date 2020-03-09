@@ -16,6 +16,8 @@ from manager.master.workerRoom import WorkerRoom
 from manager.master.workerRoom import M_NAME as WORKER_ROOM_MOD_NAME
 from manager.master.postElection import PostManager, Role_Listener
 
+from manager.basic.storage import M_NAME as STORAGE_M_NAME
+
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
     from manager.models import infoBetweenRev, Versions
 
@@ -38,6 +40,7 @@ chooserSet = {} # type: Dict[str, StoChooser]
 
 def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
+    print(letter.toString())
     if letter.typeOfLetter() != Letter.Response:
         return None
 
@@ -56,8 +59,9 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
     if not task is None and Task.isValidState(state):
         if state == Task.STATE_FINISHED:
 
-            responseHandler_ResultStore(eventListener, letter)
+            # responseHandler_ResultStore(eventListener, letter)
 
+            print("Remove Task " + taskId)
             worker.removeTask(taskId)
         task.stateChange(state)
 
@@ -127,6 +131,9 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
 
     import traceback
 
+    if not isinstance(letter, BinaryLetter):
+        return None
+
     try:
         fdSet = eventListener.taskResultFdSet
         tid = letter.getHeader('tid')
@@ -134,10 +141,11 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         # This is the first binary letter of the task correspond to the
         # received tid just open a file and store the relation into fdSet
         if not tid in chooserSet:
-            extension = letter.getHeader('extension')
+            fileName = letter.getFileName()
+            version = letter.getParent()
 
-            sto = eventListener.getModule('Storage')
-            chooser = sto.create(tid, extension)
+            sto = eventListener.getModule(STORAGE_M_NAME)
+            chooser = sto.create(version, fileName)
             chooserSet[tid] = chooser
 
         chooser = chooserSet[tid]

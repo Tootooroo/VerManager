@@ -158,6 +158,8 @@ class PostProvider(Module):
                     return Error
 
                 continue
+            except Exception:
+                traceback.print_exc()
 
         return Ok
 
@@ -177,9 +179,9 @@ class Post:
         self.__output = output
         self.__menus = menus
 
-        self.__frags = {} # type: Dict[str, str]
+        self.__frags = {} # type: Dict[str, PostFrag]
         for frag in frags:
-            self.__frags[frag] = ""
+            self.__frags[frag] = PostFrag(frag)
 
     def getVersion(self) -> str:
         return self.__ver
@@ -209,9 +211,9 @@ class Post:
 
     def isSatisfied(self) -> bool:
 
-        isFragsMatched = "" not in list(self.__frags.values())
-        if not isFragsMatched:
-            return False
+        for frag in self.__frags.values():
+            if frag.stuff is None:
+                return False
 
         for menu in self.__menus:
             if not menu.isSatisfied(): return False
@@ -222,7 +224,7 @@ class Post:
         stuffName = stuff.name()
 
         if stuffName in self.__frags:
-            self.__frags[stuffName] = stuff.where()
+            self.__frags[stuffName].stuff = stuff
             return True
 
         for menu in self.__menus:
@@ -242,10 +244,17 @@ class Post:
                     letter.getOutput(), menus, letter.frags())
 
 
+class PostFrag:
+
+    def __init__(self, name:str, stuff:Optional['Stuff'] = None) -> None:
+        self.name = name
+        self.stuff = stuff
 
 class PostMenu:
 
-    def __init__(self, version:str, ident:str, depends:List[str], cmd:List[str], output:str) -> None:
+    def __init__(self, version:str, ident:str, depends:List[str],
+                 cmd:List[str], output:str) -> None:
+
         self.__version = version
         self.__ident = ident
         self.__cmd = cmd
@@ -395,7 +404,9 @@ class Stuffs:
 
 class Stuff:
 
-    def __init__(self, version:str, menu:str, stuffName:str, where:str) -> None:
+    def __init__(self, version:str, menu:str, stuffName:str,
+                 # Where's structure: (BoxName, FileName)
+                 where:Tuple[str, str]) -> None:
         self.__version = version
         self.__menu = menu
         self.__stuffName = stuffName
@@ -410,7 +421,7 @@ class Stuff:
     def name(self) -> str:
         return self.__stuffName
 
-    def where(self) -> str:
+    def where(self) -> Tuple[str, str]:
         return self.__where
 
     def setMenu(self, menu:str) -> None:
@@ -419,7 +430,7 @@ class Stuff:
     def setName(self, name:str) -> None:
         self.__stuffname = name
 
-    def setWhere(self, where:str) -> None:
+    def setWhere(self, where:Tuple[str, str]) -> None:
         self.__where =  where
 
 class PostProcessor(Thread):
@@ -444,14 +455,20 @@ class PostProcessor(Thread):
 
         self.__providers = select.poll()
         self.__inProcReq = [] # type: List[ReqIdent]
-        self.__storage = Storage("./PostStorage", None)
+
+        cfgs = cInst.getModule(INFO_M_NAME)
+        self.__storage = Storage(cfgs.getConfig('PostStorage'), None)
+
         self.__chooserSet = {} # type: Dict[str, StoChooser]
 
     def do_post_processing(self, post:Post) -> Optional[tempfile.TemporaryDirectory]:
         workingDir = tempfile.TemporaryDirectory()
 
+        # Deal with menus
         menus = post.getMenus()
         states = list(map(lambda menu: self.__do_menu(menu, workingDir.name), menus))
+
+        # Copy frags to working directory
 
         if Error in states:
             return None
@@ -472,7 +489,8 @@ class PostProcessor(Thread):
         stuffs = menu.getStuffs()
 
         for stuff in stuffs:
-            self.__storage.copyTo(stuff.where(), workDir)
+            (boxName, fileName) = stuff.where()
+            self.__storage.copyTo(boxName, fileName, workDir)
         command.insert(0, "cd " + workDir)
         command_str = sep.join(command)
 
@@ -485,7 +503,8 @@ class PostProcessor(Thread):
 
         # Cleanup
         for stuff in stuffs:
-            self.__storage.delete(stuff.name())
+            (boxName, fileName) = stuff.where()
+            self.__storage.delete(boxName, fileName)
 
         return Ok
 
@@ -496,7 +515,7 @@ class PostProcessor(Thread):
         statisfied_posts = self.__satisfiedPosts
 
         configs = self.__cInst.getModule(INFO_M_NAME)
-        workerIdent = configs.getConfig('WORKER_NAME')
+        workerIdent = self.__cInst.getIdent()
 
         server = self.__cInst.getModule(SERVER_M_NAME)
 
@@ -523,7 +542,9 @@ class PostProcessor(Thread):
             with open(output, "rb") as binFile:
                 for bytes in binFile:
                     binaryLetter = BinaryLetter(
-                        post.getVersion(), bytes, fileName = fileName)
+                        post.getVersion(), bytes,
+                        parent = version,
+                        fileName = fileName)
 
                     server.transfer(binaryLetter)
 
@@ -531,6 +552,8 @@ class PostProcessor(Thread):
                 server.transfer(binaryLetter)
 
             server.transfer(response)
+
+            wDir.cleanup()
 
 
     def appendPost(self, post:Post) -> None:
@@ -541,7 +564,7 @@ class PostProcessor(Thread):
     def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
-            providers = self.__providers.poll(1000)
+            providers = self.__providers.poll(100)
 
             # Build stuffs from binary from providers
             for fd, event in providers:
@@ -562,19 +585,19 @@ class PostProcessor(Thread):
             if isPaired is False:
                 self.__stuffs.addStuff(stuff)
 
+
             # After match we need to check is there a menu which
             # collect all stuffs of it need
             self.__post_lock.acquire()
 
-            print(self.__posts)
             for post in self.__posts:
                 isSatisfied = post.isSatisfied()
-                print(isSatisfied)
 
                 if isSatisfied:
                     self.__satisfiedPosts.put(post)
 
             self.__post_lock.release()
+
 
 
     # Return (tid, parent, stoId)
@@ -596,14 +619,16 @@ class PostProcessor(Thread):
             except BlockingIOError as e:
                 if e.errno == 11:
                     break
+            except Exception:
+                traceback.print_exc()
 
             # if parse error
-            if letter is None:
+            if letter is None or not isinstance(letter, BinaryLetter):
                 return None
 
             content = letter.getContent('bytes')
-            tid = letter.getHeader('tid')
-            version = letter.getHeader("parent")
+            tid = letter.getTid()
+            version = letter.getParent()
             stoId = PostProcessor.__stoIdGen(tid, version)
 
             # the last binary letter
@@ -611,10 +636,11 @@ class PostProcessor(Thread):
                 self.__chooserSet[stoId].close()
                 del self.__chooserSet [stoId]
 
-                tid = letter.getHeader("tid")
-                menu = letter.getHeader("menu")
+                tid = letter.getTid()
+                menu = letter.getMenu()
+                fileName = letter.getFileName()
 
-                self.__stuffs.addStuff(Stuff(version, menu, tid, stoId))
+                self.__stuffs.addStuff(Stuff(version, menu, tid, (version, fileName)))
 
                 continue
 
@@ -622,8 +648,8 @@ class PostProcessor(Thread):
             if stoId not in self.__chooserSet:
 
                 # Create a file in storage
-                extension = letter.getHeader("extension")
-                chooser = storage.create(stoId, extension)
+                fileName = letter.getFileName()
+                chooser = storage.create(version, fileName)
 
                 if chooser is None:
                     return None
@@ -644,6 +670,7 @@ class PostProcessor(Thread):
             if post.match(stuff):
                 break
 
+            self.__post_lock.release ()
             return False
 
         self.__post_lock.release()
