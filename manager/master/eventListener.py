@@ -143,6 +143,7 @@ class EventListener(ModuleDaemon):
                         logger.log_put(letterLog, "Receive invalid letter " + letter.toString())
                         continue
                 except:
+                    traceback.print_exc()
                     self.workers.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED, fd)
 
                     self.entries.unregister(fd)

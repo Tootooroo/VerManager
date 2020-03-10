@@ -40,6 +40,8 @@ chooserSet = {} # type: Dict[str, StoChooser]
 
 def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
+    global chooserSet
+
     print(letter.toString())
     if letter.typeOfLetter() != Letter.Response:
         return None
@@ -62,7 +64,14 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             # responseHandler_ResultStore(eventListener, letter)
 
             print("Remove Task " + taskId)
+
             worker.removeTask(taskId)
+
+            # Close chooser
+            if taskId in chooserSet:
+                chooser = chooserSet[taskId]
+                del chooserSet [taskId]
+
         task.stateChange(state)
 
 def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) -> None:
@@ -76,10 +85,6 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
 
     if Task.isValidState(state) and state != Task.STATE_FINISHED:
         return None
-
-    # Close chooser
-    chooser = chooserSet[taskId]
-    del chooserSet [taskId]
 
     # Pending feature
     # Store result to the target position specified in configuration file

@@ -46,13 +46,15 @@ class Post:
         self.__ident = ident
         self.__build = build
         self.__members = members
-        self.__members = list(map(lambda member: member, self.__members))
 
     def getIdent(self) -> str:
         return self.__ident
 
     def getMembers(self) -> List[str]:
         return self.__members
+
+    def setMembers(self, members:List[str]) -> None:
+        self.__members = members
 
     def getBuild(self) -> Build:
         return self.__build

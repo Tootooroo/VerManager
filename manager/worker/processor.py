@@ -25,6 +25,7 @@ from ..basic.commands import Command, PostConfigCmd, CMD_POST_TYPE
 from manager.worker.server import M_NAME as SERVER_M_NAME
 from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
 from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
+from manager.worker.sender import M_NAME as SENDER_M_NAME
 
 from manager.basic.commands import CMD_POST_TYPE
 
@@ -226,12 +227,15 @@ class Processor(Module):
                 break
             time.sleep(1)
 
+        sender = cInst.getModule(SENDER_M_NAME)
+        sender.rtnRegister(lambda : provider.provide_step())
+
         cInst.addModule(provider)
 
         # Response to configuraton command
         server = cInst.getModule(SERVER_M_NAME)
-
-        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
+        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE,
+                                   CmdResponseLetter.STATE_SUCCESS,
                                    extra={"isListener":"false"})
         server.transfer(letter)
 
@@ -259,6 +263,7 @@ class Processor(Module):
         res = self.__pool.apply_async(Processor.do_proc, (reqLetter, self.__info))
         self.__numOfTasksInProc += 1
 
+        print("Proc:" + tid)
         self.__allTasks.append((tid, version, res))
         self.__allTasks_dict[version+tid] = res
 
@@ -294,7 +299,9 @@ class Processor(Module):
                     server.transfer(response)
                 else:
                     provider = self.__cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
-                    self.__transBinaryTo(tid, path, lambda l: provider.provide(l), mid=menu,
+                    self.__transBinaryTo(tid, path,
+                                         lambda l: provider.provide(l),
+                                         mid=menu,
                                          parent=version)
                     server.transfer(response)
 
@@ -308,18 +315,17 @@ class Processor(Module):
                         mid:str = "", parent:str = "") -> None:
         global sep
 
-        fileName = path.split(sep)[-1]
         with open(path, "rb") as binFile:
-            binLetter = BinaryLetter(tid=tid, bStr=b"", menu = mid,
-                                     fileName=fileName, parent = parent)
-
+            fileName = path.split(sep)[-1]
             for line in binFile:
-                binLetter.setBytes(line)
+                binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
+                                         fileName=fileName, parent=parent)
                 transferRtn(binLetter)
 
-            # Terminated binary letter
-            binLetter.setBytes(b"")
-            transferRtn(binLetter)
+        # Terminated binary letter
+        binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu = mid,
+                                    fileName=fileName, parent = parent)
+        transferRtn(binLetter_last)
 
     def isReqInProc(self, tid:str, parent:str = "") -> bool:
         return tid in self.__allTasks_dict

@@ -5,12 +5,13 @@ import time
 
 from ..basic.mmanager import Module
 
-from ..basic.letter import Letter, PropLetter, BinaryLetter
+from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter
 from ..basic.info import Info
 from ..basic.type import *
 
 from typing import Any, Union, Optional
-from multiprocessing import Manager
+from threading import Lock
+from queue import Queue, Empty
 
 M_NAME = "Server"
 
@@ -33,10 +34,10 @@ class Server(Module):
         self.info = info
 
         queueSize = info.getConfig('QUEUE_SIZE')
-        self.q = Manager().Queue(queueSize)
+        self.q = Queue(queueSize) # type: Queue[ResponseLetter]
 
         # Lock to protect socket while reconnecting
-        self.__lock = Manager().Lock()
+        self.__lock = Lock()
 
         self.__address = address
         self.__port = port
@@ -89,9 +90,16 @@ class Server(Module):
     def transfer(self, l) -> None:
         self.q.put(l)
 
-    def transfer_step(self, timeout:int = None) -> int:
-        response = self.q.get(timeout = timeout)
-        return self.__send(response, retry = 3)
+    def transfer_step(self, timeout:int = None) -> State:
+        try:
+            response = self.q.get_nowait()
+        except Empty:
+            return Error
+
+        if self.__send(response, retry = 3) == Server.SOCK_OK:
+            return Ok
+
+        return Error
 
     def responseRetrive(self) -> Optional[Letter]:
         try:
@@ -186,17 +194,6 @@ class Server(Module):
 
     @staticmethod
     def __receving(sock:socket.socket) -> Letter:
-        content = b''
-        remain = Letter.MAX_LEN
-
-        while remain > 0:
-            chunk = sock.recv(remain)
-            if chunk == b'':
-                raise DISCONN_EXCEPTION
-
-            content += chunk
-            remain = Letter.letterBytesRemain(content)
-
         return Letter.parse(content) # type: ignore
 
     @staticmethod

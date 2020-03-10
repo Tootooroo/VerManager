@@ -102,9 +102,13 @@ class Dispatcher(ModuleDaemon):
                 continue
 
             do_ret = self.__do_dispatch(sub)
+            sub.stateChange(Task.STATE_IN_PROC)
 
             if do_ret is False:
                 ret = False
+
+        if ret is True:
+            task.stateChange(Task.STATE_IN_PROC)
 
         return ret
 

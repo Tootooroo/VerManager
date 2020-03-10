@@ -18,7 +18,7 @@ from ..basic.type import *
 
 from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
-from queue import Queue
+from queue import Queue, Empty as Q_Empty
 
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.worker.server import M_NAME as SERVER_M_NAME
@@ -88,6 +88,7 @@ class PostProvider(Module):
         self.__address = address
         self.__port = port
         self.__sock = None # type: Optional[socket.socket]
+        self.__stuffQ = Queue(256)  # type: Queue[BinaryLetter]
 
         if connect:
             self.connectToListener()
@@ -126,8 +127,17 @@ class PostProvider(Module):
             self.__sock = None
 
     def provide(self, bin:BinaryLetter) -> State:
+        self.__stuffQ.put(bin)
+        return Ok
+
+    def provide_step(self) -> State:
 
         if self.__sock is None:
+            return Error
+
+        try:
+            bin = self.__stuffQ.get_nowait()
+        except Q_Empty:
             return Error
 
         byteStr = bin.toBytesWithLength()
@@ -301,7 +311,7 @@ class PostMenu:
         return self.__stuffs.toList()
 
     def isSatisfied(self) -> bool:
-        return not False in list(self.__depends.values())
+        return False not in list(self.__depends.values())
 
     def getCmd(self) -> List[str]:
         return self.__cmd
@@ -595,6 +605,7 @@ class PostProcessor(Thread):
 
                 if isSatisfied:
                     self.__satisfiedPosts.put(post)
+                    self.__posts.remove(post)
 
             self.__post_lock.release()
 
@@ -626,6 +637,7 @@ class PostProcessor(Thread):
             if letter is None or not isinstance(letter, BinaryLetter):
                 return None
 
+
             content = letter.getContent('bytes')
             tid = letter.getTid()
             version = letter.getParent()
@@ -633,6 +645,9 @@ class PostProcessor(Thread):
 
             # the last binary letter
             if content == b"":
+                if stoId not in self.__chooserSet:
+                    continue
+
                 self.__chooserSet[stoId].close()
                 del self.__chooserSet [stoId]
 

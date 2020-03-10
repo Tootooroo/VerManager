@@ -317,39 +317,32 @@ class UnitTest(TestCase):
             self.assertTrue(False)
 
         # Dispatch task
-        task1 = Task("1", "123", "1")
+        task1 = Task("122", "123", "122")
         dispatcher.dispatch(task1)
 
-        time.sleep(1)
-
         # To check that whether the task dispatch to one of four workers
-        w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
+        #w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
 
-        workerRoom = sInst.getModule("WorkerRoom")
-        self.assertTrue(isinstance(workerRoom, WorkerRoom))
+        #workerRoom = sInst.getModule("WorkerRoom")
+        #self.assertTrue(isinstance(workerRoom, WorkerRoom))
 
-        status = workerRoom.statusOfWorker("W1")
-        self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
+        #status = workerRoom.statusOfWorker("W1")
+        #self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
 
-        time.sleep(10)
-
-        """
         # Now let us dispatch three more task to workers
         # if nothing wrong each of these workers should
         # in work.
         task2 = Task("124", "123", "124")
         dispatcher.dispatch(task2)
 
-        task3 = Task("125", "123", "125")
-        dispatcher.dispatch(task3)
+        #task3 = Task("125", "123", "125")
+        #dispatcher.dispatch(task3)
 
-        task4 = Task("126", "123", "126")
-        dispatcher.dispatch(task4)
+        #task4 = Task("126", "123", "126")
+        #dispatcher.dispatch(task4)
 
         time.sleep(20)
 
-
-        """
         """
         tasks = ["123", "124", "125", "126"]
         for w in workers:

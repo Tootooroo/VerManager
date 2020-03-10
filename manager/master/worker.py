@@ -154,6 +154,7 @@ class Worker:
 
     def do(self, task: Task) -> None:
         if not self.isAbleToAccept():
+            print("Unable to accept task")
             raise Exception
 
         # Task assign
@@ -163,8 +164,8 @@ class Worker:
             print("letter is None")
             return None
 
-        print("Master send:" + letter.toString())
         self.__send(letter)
+        print("Master Send to "+self.getIdent()+":"+letter.toString())
 
         # Register task into task group
         task.toProcState()
@@ -188,7 +189,21 @@ class Worker:
     @staticmethod
     def receving(sock: socket.socket) -> Optional[Letter]:
         content = b''
-        remain = Letter.BINARY_HEADER_LEN
+        remain = 2
+
+        # Get first 2 bytes to know is a BinaryFile letter or
+        # another letter
+        while remain > 0:
+            chunk = sock.recv(remain)
+            if chunk == b'':
+                raise Exception
+            remain -= len(chunk)
+            content += chunk
+
+        if chunk == (1).to_bytes(2, "big"):
+            remain = Letter.BINARY_HEADER_LEN - 2
+        else:
+            remain = int.from_bytes(chunk, "big")
 
         while remain > 0:
             chunk = sock.recv(remain)
@@ -196,6 +211,7 @@ class Worker:
                 raise Exception
 
             content += chunk
+
             remain = Letter.letterBytesRemain(content)
 
         return Letter.parse(content)

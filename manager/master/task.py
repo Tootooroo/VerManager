@@ -132,6 +132,8 @@ class Task:
         return s >= Task.STATE_PREPARE and s <= Task.STATE_POST
 
     def transform(self) -> 'Task':
+        if type(self) is not Task:
+            return self
 
         if isinstance(self.build, Build):
             return SingleTask(self.id(), self.sn, self.vsn, self.build, self.extra)
@@ -225,13 +227,19 @@ class SuperTask(Task):
         pass
 
     def __split(self) -> None:
+        # Generate tasks from SuperTask
+        # Version should attach to subtasks's tid
+        # and Post group's member's id too.
         builds = self.__buildSet.getBuilds()
 
         children = [] # type: List[Task]
 
+        # Function to attach version ident to SingleTask's tid.
+        prefix = lambda ident: self.id() + "__" + ident
+
         # Build children which type is SingleTask
         for build in builds:
-            st = SingleTask(build.getIdent(), sn = self.sn, revision = self.vsn,
+            st = SingleTask(prefix(build.getIdent()), sn = self.sn, revision = self.vsn,
                             build = build,
                             extra = self.extra)
 
@@ -247,12 +255,17 @@ class SuperTask(Task):
         allBuilds_ident = list(map(lambda b: b.getIdent(), self.__buildSet.getBuilds()))
         frags = list(filter(lambda bid: self.__buildSet.belongTo(bid) is None, allBuilds_ident))
 
+        # Get posts from BuildSet and attach version to member's id.
         posts = self.__buildSet.getPosts()
+        for post in posts:
+            members = post.getMembers()
+            members = list(map(lambda member: prefix(member), members))
+            post.setMembers(members)
+
         merge = self.__buildSet.getMerge()
-
         pt = PostTask(self.vsn, posts, frags, merge)
-
         children.append(pt)
+
         self.__children = children
 
 class SingleTask(Task):
@@ -309,6 +322,9 @@ class SingleTask(Task):
                          menu = menu,
                          needPost = needPost)
 
+    def isBindWithBuild(self) -> bool:
+        return self.__build is not None
+
 
 class PostTask(Task):
 
@@ -329,6 +345,12 @@ class PostTask(Task):
     def getParent(self) -> Optional[SuperTask]:
         return self.__parent
 
+    def getGroups(self) -> List[Post]:
+        return self.__postGroups
+
+    def setGroups(self, groups:List[Post]) -> None:
+        self.__postGroups = groups
+
     def toLetter(self) -> PostTaskLetter:
 
         version = self.vsn
@@ -338,8 +360,8 @@ class PostTask(Task):
         postTaskLetter = PostTaskLetter(self.vsn,
                                         self.__merge.getCmds(),
                                         self.__merge.getOutput(),
-                                        frags=self.__frags)
-
+                                        frags=self.__frags,
+                                        menus = {})
         for menuLetter in menuLetters:
             postTaskLetter.addMenu(menuLetter)
 
@@ -369,9 +391,10 @@ class TaskGroup:
 
             tasks = self.__tasks[type]
 
-            if task
             tasks[task.id()] = task
-            self.__numOfTasks += 1
+
+            if not isinstance(task, PostTask):
+                self.__numOfTasks += 1
 
     def remove(self, id: str) -> State:
 
@@ -382,8 +405,11 @@ class TaskGroup:
                 if not id in tasks:
                     continue
 
+                task = tasks[id]
                 del tasks [id]
-                self.__numOfTasks -= 1
+
+                if not isinstance(task, PostTask):
+                    self.__numOfTasks -= 1
 
                 return Ok
 

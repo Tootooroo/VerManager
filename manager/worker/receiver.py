@@ -69,6 +69,7 @@ class Receiver(ModuleDaemon):
                 processor.recyle()
 
                 if isinstance(reqLetter, int):
+                    print("Error Letter")
                     continue
             except:
                 traceback.print_exc()

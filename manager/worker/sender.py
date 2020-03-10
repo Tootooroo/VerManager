@@ -2,7 +2,8 @@
 
 import time
 
-import typing
+from typing import Any, Callable, List
+
 from ..basic.mmanager import ModuleDaemon
 from ..basic.info import Info
 from ..basic.type import *
@@ -12,9 +13,11 @@ from threading import Condition
 
 M_NAME = "Sender"
 
+SendRtn_NoWait_NoExcep = Callable[[], State]
+
 class Sender(ModuleDaemon):
 
-    def __init__(self, server:Server, info:Info, cInst:typing.Any) -> None:
+    def __init__(self, server:Server, info:Info, cInst:Any) -> None:
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
 
@@ -23,12 +26,23 @@ class Sender(ModuleDaemon):
 
         self.__status = 0
 
+        self.__send_rtns = [] # type: List[SendRtn_NoWait_NoExcep]
+
     def stop(self) -> None:
         self.__status = 1
 
+    def rtnRegister(self, rtn:SendRtn_NoWait_NoExcep) -> State:
+        if rtn in self.__send_rtns:
+            return Error
+
+        self.__send_rtns.append(rtn)
+        return Ok
+
+    def rtnUnRegister(self) -> State:
+        pass
+
     def run(self) -> None:
         cond = self.cond
-        server = self.server
 
         cond.acquire()
 
@@ -38,12 +52,11 @@ class Sender(ModuleDaemon):
                 cond.release()
                 return None
 
-            try:
-                ret = server.transfer_step(1)
-            except:
-                continue
+            ret = Ok
 
-            while ret == Error:
-                # Waiting for <Receiver> reconnecting
-                time.sleep(5)
-                continue
+            for rtn in self.__send_rtns:
+                if rtn() == Error:
+                    ret = Error
+
+            if ret == Error:
+                time.sleep(0.01)
