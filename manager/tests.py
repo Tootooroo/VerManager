@@ -335,11 +335,11 @@ class UnitTest(TestCase):
         task2 = Task("124", "123", "124")
         dispatcher.dispatch(task2)
 
-        #task3 = Task("125", "123", "125")
-        #dispatcher.dispatch(task3)
+        task3 = Task("125", "123", "125")
+        dispatcher.dispatch(task3)
 
-        #task4 = Task("126", "123", "126")
-        #dispatcher.dispatch(task4)
+        task4 = Task("126", "123", "126")
+        dispatcher.dispatch(task4)
 
         time.sleep(20)
 

@@ -129,6 +129,7 @@ class Letter:
 
     BINARY_HEADER_LEN = 196
     BINARY_MIN_HEADER_LEN = 6
+    LETTER_TYPE_LEN = 2
 
     MAX_LEN = 512
 
@@ -712,3 +713,46 @@ parseMethods = {
     Letter.CmdResponse    : CmdResponseLetter,
     Letter.Post           : PostTaskLetter
 } # type:  Any
+
+import socket
+
+# Function to receive a letter from a socket
+def receving(sock: socket.socket) -> Optional[Letter]:
+    content = b''
+    remain = 2
+
+    # Get first 2 bytes to know is a BinaryFile letter or
+    # another letter
+    while remain > 0:
+        chunk = sock.recv(remain)
+        if chunk == b'':
+            raise Exception
+        remain -= len(chunk)
+        content += chunk
+
+    if chunk == (1).to_bytes(2, "big"):
+        remain = Letter.BINARY_HEADER_LEN - 2
+    else:
+        remain = int.from_bytes(chunk, "big")
+
+    while remain > 0:
+        chunk = sock.recv(remain)
+        if chunk == b'':
+            raise Exception
+
+        content += chunk
+
+        remain = Letter.letterBytesRemain(content)
+
+    return Letter.parse(content)
+
+def sending(sock: socket.socket, l:Letter) -> None:
+    jBytes = l.toBytesWithLength()
+    totalSent = 0
+    length = len(jBytes)
+
+    while totalSent < length:
+        sent = sock.send(jBytes[totalSent:])
+        if sent == 0:
+            raise Exception
+        totalSent += sent

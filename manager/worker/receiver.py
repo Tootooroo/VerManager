@@ -69,8 +69,15 @@ class Receiver(ModuleDaemon):
                 processor.recyle()
 
                 if isinstance(reqLetter, int):
-                    print("Error Letter")
-                    continue
+
+                    if reqLetter == Server.SOCK_DISCONN:
+                        print("Disconn")
+                        continue
+                    elif reqLetter == Server.SOCK_TIMEOUT:
+                        continue
+                    elif reqLetter == Server.SOCK_PARSE_ERROR:
+                        print("Parse error")
+                        continue
             except:
                 traceback.print_exc()
 

@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from functools import reduce
 from threading import Thread, Lock
 
-from manager.basic.letter import Letter, NewLetter
+from manager.basic.letter import Letter, NewLetter, \
+    receving as letter_receving, sending as letter_sending
 from manager.basic.type import Ok, Error
 from manager.basic.commands import Command
 
@@ -188,45 +189,11 @@ class Worker:
 
     @staticmethod
     def receving(sock: socket.socket) -> Optional[Letter]:
-        content = b''
-        remain = 2
-
-        # Get first 2 bytes to know is a BinaryFile letter or
-        # another letter
-        while remain > 0:
-            chunk = sock.recv(remain)
-            if chunk == b'':
-                raise Exception
-            remain -= len(chunk)
-            content += chunk
-
-        if chunk == (1).to_bytes(2, "big"):
-            remain = Letter.BINARY_HEADER_LEN - 2
-        else:
-            remain = int.from_bytes(chunk, "big")
-
-        while remain > 0:
-            chunk = sock.recv(remain)
-            if chunk == b'':
-                raise Exception
-
-            content += chunk
-
-            remain = Letter.letterBytesRemain(content)
-
-        return Letter.parse(content)
+        return letter_receving(sock)
 
     @staticmethod
     def sending(sock: socket.socket, l: Letter) -> None:
-        jBytes = l.toBytesWithLength()
-        totalSent = 0
-        length = len(jBytes)
-
-        while totalSent < length:
-            sent = sock.send(jBytes[totalSent:])
-            if sent == 0:
-                raise Exception
-            totalSent += sent
+        return letter_sending(sock, l)
 
     def __recv(self) -> Optional[Letter]:
         return Worker.receving(self.sock)

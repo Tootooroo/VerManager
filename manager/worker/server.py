@@ -5,7 +5,8 @@ import time
 
 from ..basic.mmanager import Module
 
-from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter
+from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
+    receving as letter_receving, sending as letter_sending
 from ..basic.info import Info
 from ..basic.type import *
 
@@ -27,6 +28,7 @@ class Server(Module):
     SOCK_OK = 0
     SOCK_TIMEOUT = 1
     SOCK_DISCONN = 2
+    SOCK_PARSE_ERROR = 3
 
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
         global M_NAME
@@ -184,17 +186,22 @@ class Server(Module):
 
     def __recv(self, retry:int = 0) -> Union[int, Letter]:
         try:
-            return Server.__receving(self.sock)
+            letter = Server.__receving(self.sock)
+            if letter is None:
+                return Server.SOCK_PARSE_ERROR
+            return letter
+
         except socket.timeout:
             return Server.SOCK_TIMEOUT
+
         except:
             if self.__reconnectWrapper(retry) == Server.SOCK_OK:
                 return self.__recv(retry)
             return Server.SOCK_DISCONN
 
     @staticmethod
-    def __receving(sock:socket.socket) -> Letter:
-        return Letter.parse(content) # type: ignore
+    def __receving(sock:socket.socket) -> Optional[Letter]:
+        return letter_receving(sock)
 
     @staticmethod
     def __sending(sock:socket.socket, l:Letter) -> None:
