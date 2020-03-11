@@ -154,11 +154,6 @@ class Worker:
         self.__send(letter)
 
     def do(self, task: Task) -> None:
-        if not self.isAbleToAccept():
-            print("Unable to accept task")
-            raise Exception
-
-        # Task assign
         letter = task.toLetter()
 
         if letter is None:

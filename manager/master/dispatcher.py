@@ -82,16 +82,18 @@ class Dispatcher(ModuleDaemon):
 
         workers = self.__workers.getWorkerWithCond(cond)
 
-        if workers != []:
-            try:
-                workers[0].do(task)
-            except:
-                return False
+        # No workers satisfiy the condition.
+        if workers == []:
+            print("Unable to accept")
+            return False
 
-            task.refs += 1
-            return True
+        try:
+            workers[0].do(task)
+        except:
+            return False
 
-        return False
+        task.refs += 1
+        return True
 
     def __dispatchSuperTask(self, task: SuperTask) -> bool:
         ret = True
@@ -102,10 +104,11 @@ class Dispatcher(ModuleDaemon):
                 continue
 
             do_ret = self.__do_dispatch(sub)
-            sub.stateChange(Task.STATE_IN_PROC)
 
             if do_ret is False:
                 ret = False
+            else:
+                sub.stateChange(Task.STATE_IN_PROC)
 
         if ret is True:
             task.stateChange(Task.STATE_IN_PROC)
@@ -123,23 +126,6 @@ class Dispatcher(ModuleDaemon):
         task = self.__bind(task)
 
         with self.dispatchLock:
-
-            """
-            if isinstance(task, SuperTask):
-                post = task.getPostTask()
-                assert(post is not None)
-
-                listener = self.__workers.postListener()
-
-                while listener is None:
-                    # Wait STABLE_INTERVAL seconds for a new
-                    # listener.
-                    time.sleep(WorkerRoom.STABLE_INTERVAL)
-                    listener = self.__workers.postListener()
-
-                listener.do(post)
-            """
-
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
@@ -195,7 +181,6 @@ class Dispatcher(ModuleDaemon):
 
 
         while True:
-
             # Remove oudated tasks
             self.__taskAging()
 
@@ -224,6 +209,7 @@ class Dispatcher(ModuleDaemon):
             Logger.putLog(logger, "dispatcher", "Dispatch task: " + task.id())
 
             if not self.__dispatch(task):
+                Logger.putLog(logger, "dispatcher", "Dispatcher task " + task.id() + " failed. Reappend")
                 self.taskWait.append(task)
 
             if len(self.taskWait) == 0:
