@@ -20,6 +20,7 @@ from manager.master.worker import Worker
 
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
+from manager.basic.util import pathSeperator
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
     from manager.models import infoBetweenRev, Versions
@@ -91,6 +92,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
 
     global chooserSet
 
+    seperator = pathSeperator()
+
     # Pending feature
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
@@ -108,9 +111,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
                                                  extra['logFrom'], extra['logTo'])
         else:
             path = chooser.path()
-            destFileName = path.split("/")[-1]
-            destFilePath = shutil.copy(chooser.path(),
-                                       resultDir+"/"+destFileName)
+            dest = resultDir + seperator + path.split(seperator)[-1]
+            destFilePath = shutil.copy(chooser.path(), dest)
 
     except FileNotFoundError:
         logger = eventListener.getModule('Logger')

@@ -1,5 +1,7 @@
 # util.py
 
+import platform
+
 from typing import Any, Callable
 from threading import Thread
 
@@ -42,3 +44,9 @@ def partition(items:List, predicate:Callable) -> Tuple[List, List]:
             falseSet.append(item)
 
     return (trueSet, falseSet)
+
+def pathSeperator() -> str:
+    if platform.system() == 'Windows':
+        return "\\"
+    else:
+        return "/"

@@ -169,8 +169,7 @@ class Box:
         if name in self.__files:
             return None
 
-        filePath = self.path() + seperator + name
-        file = File(name, filePath)
+        filePath = self.path() + seperator + file = File(name, filePath)
 
         self.add(name, file)
 
