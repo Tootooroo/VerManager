@@ -385,7 +385,7 @@ class UnitTest(TestCase):
 
         # Remove
         storage.delete(boxName, fileName)
-        self.assertTrue(not os.path.exists("./Storage/box/file"))
+        self.assertTrue(not os.path.exists("./Storage/box"))
 
         self.assertEqual(0, storage.numOfFiles())
 
@@ -401,6 +401,15 @@ class UnitTest(TestCase):
         self.assertTrue(os.path.exists("./Storage/box/file3"))
         self.assertTrue(os.path.exists("./Storage/box/file4"))
         self.assertTrue(os.path.exists("./Storage/box/file5"))
+
+        for file in files:
+            storage.delete(boxName, file)
+        self.assertTrue(not os.path.exists("./Storage/box/file1"))
+        self.assertTrue(not os.path.exists("./Storage/box/file2"))
+        self.assertTrue(not os.path.exists("./Storage/box/file3"))
+        self.assertTrue(not os.path.exists("./Storage/box/file4"))
+        self.assertTrue(not os.path.exists("./Storage/box/file5"))
+
 
     def tes_build(self):
         from manager.basic.info import Info

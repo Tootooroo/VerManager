@@ -289,6 +289,10 @@ class Storage(Module):
         box = self.__boxes[boxName]
         box.remove(fileName)
 
+        if box.numOfFiles() == 0:
+            del self.__boxes [boxName]
+            os.rmdir(box.path())
+
     def __isExists(self, boxName:str) -> bool:
         return boxName in self.__boxes
 

@@ -94,6 +94,12 @@ class WorkerRoom(ModuleDaemon):
         self.__lastChangedPoint = datetime.utcnow()
         self.__stableThres = WorkerRoom.STABLE_INTERVAL
 
+    def sockSetup(self, sock:socket.socket) -> None:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.__host, self.__port))
@@ -110,11 +116,7 @@ class WorkerRoom(ModuleDaemon):
             (workersocket, address) = self.sock.accept()
             Logger.putLog(logger, wrLog, "A new connection(" + str(address) + ") has been accepted")
 
-            # Keepalive setting
-            workersocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
-            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-            workersocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            self.sockSetup(workersocket)
             Logger.putLog(logger, wrLog, "Socket options set up")
 
             try:

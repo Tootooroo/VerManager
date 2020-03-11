@@ -193,17 +193,16 @@ class SuperTask(Task):
         return self.__buildSet is not None
 
     def toPreState(self) -> None:
-        f = lambda acc, cur: acc.isPrepare() and cur.isPrepare()
-
-        isAbleTo = reduce(f, self.__children)
-
+        isAbleTo = True
+        for c in self.__children:
+            isAbleTo &= c.isPrepare()
         if isAbleTo:
             self.state = Task.STATE_PREPARE
 
     def toFinState(self) -> None:
-        f = lambda acc, cur: acc.isFinished() and cur.isFinished()
-
-        isAbleTo = reduce(f, self.__children)
+        isAbleTo = True
+        for c in self.__children:
+            isAbleTo = c.isFinished()
         if isAbleTo:
             self.state = Task.STATE_FINISHED
 
@@ -264,6 +263,8 @@ class SuperTask(Task):
 
         merge = self.__buildSet.getMerge()
         pt = PostTask(self.vsn, posts, frags, merge)
+        pt.setParent(self)
+
         children.append(pt)
 
         self.__children = children

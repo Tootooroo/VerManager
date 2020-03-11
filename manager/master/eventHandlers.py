@@ -6,7 +6,7 @@ import shutil
 from manager.master.eventListener import EventListener, letterLog
 
 from manager.basic.letter import *
-from manager.master.task import Task
+from manager.master.task import Task, SuperTask, SingleTask, PostTask
 
 from manager.basic.commands import PostConfigCmd
 from manager.basic.storage import Storage, StoChooser
@@ -16,6 +16,9 @@ from manager.master.workerRoom import WorkerRoom
 from manager.master.workerRoom import M_NAME as WORKER_ROOM_MOD_NAME
 from manager.master.postElection import PostManager, Role_Listener
 
+from manager.master.worker import Worker
+
+from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
 
 def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
@@ -58,13 +61,21 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
     task = worker.searchTask(taskId)
 
-    if not task is None and Task.isValidState(state):
+    if task is not None and Task.isValidState(state):
         if state == Task.STATE_FINISHED:
 
-            # responseHandler_ResultStore(eventListener, letter)
+            if isinstance(task, SingleTask):
+                if task.getParent() is None:
+                    responseHandler_ResultStore(eventListener, task)
+            elif isinstance(task, PostTask):
+                super = task.getParent()
+                assert(super is not None)
+
+                super.toFinState()
+
+                responseHandler_ResultStore(eventListener, super)
 
             print("Remove Task " + taskId)
-
             worker.removeTask(taskId)
 
             # Close chooser
@@ -72,42 +83,32 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
                 chooser = chooserSet[taskId]
                 del chooserSet [taskId]
 
-        task.stateChange(state)
+        else:
+            task.stateChange(state)
 
-def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) -> None:
+def responseHandler_ResultStore(eventListener: EventListener,
+                                task: Task) -> None:
 
     global chooserSet
-
-    # Should verify the letter's format
-    ident = letter.getHeader('ident')
-    taskId = letter.getHeader('tid')
-    state = int(letter.getContent('state'))
-
-    if Task.isValidState(state) and state != Task.STATE_FINISHED:
-        return None
 
     # Pending feature
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
     try:
-        cfgs = eventListener.getModule('Config')
-        resultDir = cfgs.getConfig("ResultDir")
-
-        dispatcher = eventListener.getModule('Dispatcher')
-
-        task = dispatcher.getTask(taskId)
-        if task is None:
-            return None
-
+        taskId = task.id()
+        chooser = chooserSet[taskId]
         extra = task.getExtra()
 
-        if "logFrom" in extra and "logTo" in extra:
+        cfgs = eventListener.getModule(INFO_M_NAME)
+        resultDir = cfgs.getConfig("ResultDir")
+
+        if extra is not None and "logFrom" in extra and "logTo" in extra:
             destFileName = packDataWithChangeLog(taskId,
                                                  chooser.path(), resultDir,
                                                  extra['logFrom'], extra['logTo'])
         else:
             path = chooser.path()
-            destFileName = path.split("/")[-1] + "_without_log.rar"
+            destFileName = path.split("/")[-1]
             destFilePath = shutil.copy(chooser.path(),
                                        resultDir+"/"+destFileName)
 
@@ -115,19 +116,7 @@ def responseHandler_ResultStore(eventListener: EventListener, letter: Letter) ->
         logger = eventListener.getModule('Logger')
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
-    workers = eventListener.getModule('WorkerRoom')
-    worker = workers.getWorker(ident)
-
-    if worker is None:
-        return None
-
-    task = worker.searchTask(taskId)
-
-    if task is None:
-        return None
-
-    config = eventListener.getModule('Config')
-    url = config.getConfig('GitlabUr')
+    url = cfgs.getConfig('GitlabUr')
     task.setData(url + "/static/" + destFileName)
 
 
