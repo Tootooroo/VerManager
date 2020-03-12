@@ -92,7 +92,6 @@ class Dispatcher(ModuleDaemon):
         except:
             return False
 
-        task.refs += 1
         return True
 
     def __dispatchSuperTask(self, task: SuperTask) -> bool:
@@ -130,7 +129,6 @@ class Dispatcher(ModuleDaemon):
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
                 self.__tasks[task.id()] = task
-                task.refs += 1
 
                 self.taskEvent.set()
 
@@ -143,7 +141,13 @@ class Dispatcher(ModuleDaemon):
             task.stateChange(Task.STATE_PREPARE)
             del self.__tasks [taskId]
 
-        return self.dispatch(task)
+        with self.dispatchLock:
+            if self.__do_dispatch(task) is False:
+                self.taskWait.insert(0, task)
+                self.__tasks[task.id()] = task
+                self.taskEvent.set()
+
+        return True
 
     def __bind(self, task:Task) -> Task:
         if not task.isBindWithBuild():
@@ -201,7 +205,7 @@ class Dispatcher(ModuleDaemon):
 
             if workers == []:
                 Logger.putLog(logger, "dispatcher", "No acceptable worker")
-                time.sleep(5)
+                time.sleep(0.1)
                 continue
 
             task = self.taskWait.pop()
@@ -209,7 +213,9 @@ class Dispatcher(ModuleDaemon):
             Logger.putLog(logger, "dispatcher", "Dispatch task: " + task.id())
 
             if not self.__dispatch(task):
-                Logger.putLog(logger, "dispatcher", "Dispatcher task " + task.id() + " failed. Reappend")
+                Logger.putLog(logger, "dispatcher",
+                              "Dispatcher task " + task.id() + " failed. Reappend")
+
                 self.taskWait.append(task)
 
             if len(self.taskWait) == 0:
@@ -319,11 +325,28 @@ class Dispatcher(ModuleDaemon):
 
 # Hooks will be registered into WorkerRoom
 
-def workerLost_redispatch(w: Worker, args:Any ) -> None:
+def workerLost_redispatch(w: Worker, args:Any) -> None:
     tasks = w.inProcTasks()
     dispatcher = args[0]
+    workerRoom = args[1]
 
-    list(map(lambda task: dispatcher.redispatch(task), tasks))
+    for t in tasks:
+        assert(isinstance(t, SingleTask) or isinstance(t, PostTask))
+
+        # Not to redispatch tasks that need post-processing.
+        if w.role is Role_Listener and t.isAChild():
+            parent = t.getParent()
+            assert(parent is not None)
+            parent.toState_force(Task.STATE_FAILURE)
+
+        dispatcher.redispatch(t)
+
+    workers = workerRoom.getWorkerWithCond(lambda ws: ws)
+
+    # Remove all tasks in failure state.
+    if w.role is Role_Listener:
+        for w in workers:
+            w.removeTaskWithCond(lambda t: t.isFailure())
 
 # Misc
 

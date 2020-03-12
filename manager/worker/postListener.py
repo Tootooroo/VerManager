@@ -655,7 +655,8 @@ class PostProcessor(Thread):
                 menu = letter.getMenu()
                 fileName = letter.getFileName()
 
-                self.__stuffs.addStuff(Stuff(version, menu, tid, (version, fileName)))
+                stuff = Stuff(version, menu, tid, (version, fileName))
+                self.__stuffs.addStuff(stuff)
 
                 continue
 

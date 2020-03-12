@@ -1,10 +1,11 @@
-# EventHandlers
+# EventHandlers.py
 
 import zipfile
 import shutil
 
 from manager.master.eventListener import EventListener, letterLog
 
+from manager.basic.type import Ok, Error, State
 from manager.basic.letter import *
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
 
@@ -63,6 +64,12 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
     task = worker.searchTask(taskId)
 
     if task is not None and Task.isValidState(state):
+
+        ret = task.stateChange(state)
+        # Invalid state shift.
+        if ret is Error:
+            return None
+
         if state == Task.STATE_FINISHED:
 
             if isinstance(task, SingleTask):
@@ -83,9 +90,6 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             if taskId in chooserSet:
                 chooser = chooserSet[taskId]
                 del chooserSet [taskId]
-
-        else:
-            task.stateChange(state)
 
 def responseHandler_ResultStore(eventListener: EventListener,
                                 task: Task) -> None:
@@ -112,7 +116,7 @@ def responseHandler_ResultStore(eventListener: EventListener,
         else:
             path = chooser.path()
             dest = resultDir + seperator + path.split(seperator)[-1]
-            destFilePath = shutil.copy(chooser.path(), dest)
+            destFileName = shutil.copy(chooser.path(), dest)
 
     except FileNotFoundError:
         logger = eventListener.getModule('Logger')

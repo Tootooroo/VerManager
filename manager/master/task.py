@@ -22,11 +22,25 @@ class Task:
 
     Type = 0
 
+    # Task does not dispatch to any worker.
     STATE_PREPARE = 0
+
+    # Task was dispatch to a worker.
     STATE_IN_PROC = 1
+
+    # Task is done and the result of task has been received.
     STATE_FINISHED = 2
+
+    # Task is failure.
     STATE_FAILURE = 3
-    STATE_POST = 4
+
+    STATE_TOPOLOGY = {
+        STATE_PREPARE:[STATE_IN_PROC, STATE_FAILURE],
+        STATE_IN_PROC:[STATE_FINISHED, STATE_FAILURE],
+        STATE_FINISHED:[STATE_FAILURE],
+        STATE_FAILURE:[]
+    } # type: Dict[int, List[int]]
+
 
     def __init__(self, id: str, sn:str, vsn:str,
                  extra:Dict[str, str] = {}) -> None:
@@ -51,7 +65,7 @@ class Task:
         self.build = None # type: Optional[Union[Build, BuildSet]]
 
         # Indicate that the number of request to the task
-        self.refs = 0
+        self.refs = 1
 
         self.lastAccess = datetime.utcnow()
 
@@ -88,20 +102,27 @@ class Task:
     def isBindWithBuild(self) -> bool:
         return self.build is not None
 
-    def stateChange(self, state:int) -> None:
-        self.state = state
+    def stateChange(self, state:int) -> State:
+        ableStates = Task.STATE_TOPOLOGY[self.taskState()]
 
-    def toPreState(self) -> None:
+        if state in ableStates:
+            self.state = state
+            return Ok
+        else:
+            return Error
+
+    def toPreState(self) -> State:
         self.state = Task.STATE_PREPARE
+        return Ok
 
-    def toProcState(self) -> None:
-        self.state = Task.STATE_IN_PROC
+    def toProcState(self) -> State:
+        return self.stateChange(Task.STATE_IN_PROC)
 
-    def toFinState(self) -> None:
-        self.state = Task.STATE_FINISHED
+    def toFinState(self) -> State:
+        return self.stateChange(Task.STATE_FINISHED)
 
-    def toFailState(self) -> None:
-        self.state = Task.STATE_FAILURE
+    def toFailState(self) -> State:
+        return self.stateChange(Task.STATE_FAILURE)
 
     def setData(self, data: str) -> None:
         self.data = data
@@ -129,7 +150,7 @@ class Task:
 
     @staticmethod
     def isValidState(s:int) -> bool:
-        return s >= Task.STATE_PREPARE and s <= Task.STATE_POST
+        return s >= Task.STATE_PREPARE and s <= Task.STATE_FAILURE
 
     def transform(self) -> 'Task':
         if type(self) is not Task:
@@ -192,25 +213,50 @@ class SuperTask(Task):
     def isBindWithBuild(self) -> bool:
         return self.__buildSet is not None
 
-    def toPreState(self) -> None:
+    def toPreState(self) -> State:
         isAbleTo = True
         for c in self.__children:
             isAbleTo &= c.isPrepare()
         if isAbleTo:
             self.state = Task.STATE_PREPARE
+            return Ok
 
-    def toFinState(self) -> None:
+        return Error
+
+    def toFinState(self) -> State:
         isAbleTo = True
         for c in self.__children:
             isAbleTo = c.isFinished()
         if isAbleTo:
             self.state = Task.STATE_FINISHED
+            return Ok
 
-    def toFailState(self) -> None:
+        return Error
+
+    def toFailState(self) -> State:
         failedChildren = list(filter(lambda child: child.isFailure(), self.__children))
 
         if len(failedChildren) > 0:
             self.state = Task.STATE_FAILURE
+            return Ok
+
+        return Error
+
+    def toState_force(self, state:TaskState) -> State:
+        ret = True
+
+        for c in self.__children:
+            c_ret = c.stateChange(state)
+            if c_ret is Error:
+                ret &= False
+
+        if ret is False:
+            return Error
+
+        self.state = state
+
+        return Ok
+
 
     def setBuildSet(self, buildSet:BuildSet) -> None:
         self.__buildSet = buildSet
@@ -352,6 +398,9 @@ class PostTask(Task):
     def setGroups(self, groups:List[Post]) -> None:
         self.__postGroups = groups
 
+    def isAChild(self) -> bool:
+        return self.__parent is not None
+
     def toLetter(self) -> PostTaskLetter:
 
         version = self.vsn
@@ -398,23 +447,24 @@ class TaskGroup:
                 self.__numOfTasks += 1
 
     def remove(self, id: str) -> State:
+        with self.__lock: return self.__remove(id)
 
-        with self.__lock:
-            task_dicts = list(self.__tasks.values())
+    def __remove(self, id:str) -> State:
+        task_dicts = list(self.__tasks.values())
 
-            for tasks in task_dicts:
-                if not id in tasks:
-                    continue
+        for tasks in task_dicts:
+            if not id in tasks:
+                continue
 
-                task = tasks[id]
-                del tasks [id]
+            task = tasks[id]
+            del tasks [id]
 
-                if not isinstance(task, PostTask):
-                    self.__numOfTasks -= 1
+            if not isinstance(task, PostTask):
+                self.__numOfTasks -= 1
 
-                return Ok
+            return Ok
 
-            return Error
+        return Error
 
     def __mark(self, id: str, st: TaskState) -> State:
         task = self.search(id)
@@ -451,6 +501,13 @@ class TaskGroup:
 
         return False
 
+    def removeTasks(self, predicate:Callable[[Task], bool]) -> None:
+        with self.__lock:
+            for t in self.toList():
+                ret = predicate(t)
+
+                if ret is True:
+                    self.__remove(t.id())
 
     def markPre(self, id: str) -> State:
         return self.__mark(id, Task.STATE_PREPARE)

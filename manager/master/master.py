@@ -83,7 +83,7 @@ class ServerInst(Thread):
         #revSyncner = RevSync(self)
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
-        workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher]))
+        workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher, workerRoom]))
 
         self.__mmanager.startAll()
 

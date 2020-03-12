@@ -21,7 +21,7 @@ class ManagerConfig(AppConfig):
     def ready(self):
         return None
 
-        import manager.master.server as S
+        import manager.master.master as S
 
         if os.environ.get('RUN_MAIN') == 'true':
             sInst = S.ServerInst("127.0.0.1", 8012, "./config.yaml")

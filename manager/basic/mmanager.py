@@ -27,6 +27,9 @@ class Module:
     def getName(self) -> str:
         return self.__mName
 
+    def cleanup(self) -> None:
+        pass
+
 class ModuleDaemon(Module, Daemon):
 
     def __init__(self, mName:str) -> None:
@@ -108,6 +111,8 @@ class MManager:
         for mod in allMods:
             if isinstance(mod, ModuleDaemon):
                 mod.stop()
+
+            mod.cleanup()
 
     def join(self) -> None:
         allMods = self.getAllModules()

@@ -107,7 +107,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         listener = self.group.getListener()
 
-        # Listener is still valid
+        # Listener is still online.
         if listener is not None:
             return Ok
 

@@ -46,6 +46,9 @@ class Server(Module):
 
         self.__status = Server.STATE_DISCONNECTED
 
+    def cleanup(self) -> None:
+        self.disconnect()
+
     def connect(self, workerName:str, max:int, proc:int, retry:int = 0) -> State:
         # Store workerName into instance for reconnect purpose
         self.__workerName = workerName

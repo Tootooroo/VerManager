@@ -14,7 +14,7 @@ from manager.basic.mmanager import ModuleDaemon
 
 from queue import Queue, Empty
 
-from manager.basic.util import spawnThread
+from manager.basic.util import spawnThread, map_strict
 from manager.master.logger import Logger
 
 from manager.master.postElectProtos import RandomElectProtocol
@@ -151,7 +151,7 @@ class WorkerRoom(ModuleDaemon):
                 self.__pManager.addWorker(workerInWait)
                 self.__changePoint()
 
-                list(map(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)) # type: ignore
+                map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks) # type: ignore
 
                 Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
 
@@ -166,7 +166,7 @@ class WorkerRoom(ModuleDaemon):
             self.__pManager.addWorker(acceptedWorker)
             self.__changePoint()
 
-            list(map(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)) # type: ignore
+            map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks) # type: ignore
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
@@ -199,7 +199,6 @@ class WorkerRoom(ModuleDaemon):
         while True:
             self.__waiting_worker_update()
             self.__waiting_worker_processing(self.__workers_waiting)
-
             self.__postProcessing()
 
     def __postProcessing(self) -> None:
@@ -252,7 +251,7 @@ class WorkerRoom(ModuleDaemon):
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
 
-            list(map(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)) # type: ignore
+            map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks) # type: ignore
 
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         logger = self.__serverInst.getModule(LOGGER_M_NAME)
@@ -269,7 +268,8 @@ class WorkerRoom(ModuleDaemon):
             Logger.putLog(logger, wrLog, "Worker " + ident +\
                            " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
-            list(map(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)) # type: ignore
+
+            map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks) # type: ignore
 
         for w in outOfTime:
             del self.__workers_waiting [w.getIdent()]

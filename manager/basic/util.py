@@ -50,3 +50,6 @@ def pathSeperator() -> str:
         return "\\"
     else:
         return "/"
+
+def map_strict(f:Callable, args:List[Any]) -> List[Any]:
+    return list(map(f, args))

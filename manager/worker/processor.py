@@ -243,14 +243,12 @@ class Processor(Module):
 
     def proc_newtask(self, reqLetter:NewLetter) -> State:
         if not self.isAbleToProc():
-            print("nable to proc")
             return Error
 
         tid = reqLetter.getHeader('tid')
         version = reqLetter.getContent('vsn')
 
         if self.isReqInProc(tid, version):
-            print("In proc")
             return Error
 
         s = self.__cInst.getModule(SERVER_M_NAME)
@@ -263,7 +261,6 @@ class Processor(Module):
         res = self.__pool.apply_async(Processor.do_proc, (reqLetter, self.__info))
         self.__numOfTasksInProc += 1
 
-        print("Proc:" + tid)
         self.__allTasks.append((tid, version, res))
         self.__allTasks_dict[version+tid] = res
 

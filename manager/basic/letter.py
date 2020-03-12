@@ -97,7 +97,6 @@ class Letter:
     RESPONSE_STATE_IN_PROC = "1"
     RESPONSE_STATE_FINISHED = "2"
     RESPONSE_STATE_FAILURE = "3"
-    RESPONSE_STATE_IN_POST = "4"
 
     # Format of PrpertyNotify letter
     # Type    :  'notify'

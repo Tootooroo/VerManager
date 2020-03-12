@@ -7,9 +7,9 @@ import socket
 import select
 import traceback
 
-from typing import Tuple
+from typing import Tuple, Optional, List, Dict, Callable
 
-from .task import Task, TaskGroup, Optional, List, Dict
+from .task import Task, TaskGroup
 from datetime import datetime, timedelta
 
 from functools import reduce
@@ -142,6 +142,9 @@ class Worker:
 
     def removeTask(self, tid: str) -> None:
         self.inProcTask.remove(tid)
+
+    def removeTaskWithCond(self, predicate:Callable[[Task], bool]) -> None:
+        return self.inProcTask.removeTasks(predicate)
 
     def maxNumOfTask(self) -> int:
         return self.max

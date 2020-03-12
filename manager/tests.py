@@ -1,7 +1,6 @@
 from django.test import TestCase
 from django.http import HttpRequest
 from django.template.loader import render_to_string
-from selenium import webdriver
 
 from manager.views import index, verManagerPage
 
@@ -24,7 +23,7 @@ import socket
 
 # Create your tests here.
 
-
+"""
 class FunctionalTest(TestCase):
     def setUp(self):
         self.browser = webdriver.Firefox()
@@ -36,6 +35,7 @@ class FunctionalTest(TestCase):
 #        self.browser.get('http://localhost:8000/manager')
 #        self.assertEqual('GPON Team Site', self.browser.title)
 #        self.fail('Test finish')
+"""
 
 
 class HttpRequest_:
@@ -291,6 +291,8 @@ class UnitTest(TestCase):
 
     def test_dispatcher(self):
 
+        import os
+
         # Create a server
         sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
         sInst.start()
@@ -323,8 +325,8 @@ class UnitTest(TestCase):
         # To check that whether the task dispatch to one of four workers
         #w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
 
-        #workerRoom = sInst.getModule("WorkerRoom")
-        #self.assertTrue(isinstance(workerRoom, WorkerRoom))
+        workerRoom = sInst.getModule("WorkerRoom")
+        self.assertTrue(isinstance(workerRoom, WorkerRoom))
 
         #status = workerRoom.statusOfWorker("W1")
         #self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
@@ -341,25 +343,22 @@ class UnitTest(TestCase):
         task4 = Task("126", "123", "126")
         dispatcher.dispatch(task4)
 
+        self.assertTrue(os.path.exists("./Storage/122/total"))
+        self.assertTrue(os.path.exists("./Storage/124/total"))
+        self.assertTrue(os.path.exists("./Storage/125/total"))
+        self.assertTrue(os.path.exists("./Storage/126/total"))
+
+        time.sleep(10)
+
+        listener = workerRoom.postListener()
+        assert(listener is not None)
+
+        l_ident = listener.getIdent()
+
+        l_client = list(filter(lambda c: c.getIdent() == l_ident, workers))[0]
+        l_client.stop()
+
         time.sleep(20)
-
-        """
-        tasks = ["123", "124", "125", "126"]
-        for w in workers:
-            status = workerRoom.statusOfWorker(w.getIdent())
-            self.assertTrue(len(w.inProcTasks()) == 1)
-            self.assertEqual(w.inProcTasks()[0], status["inProcTask"][0])
-
-        # Now let client4 stop
-        client4.stop()
-
-        # Now client1 should have two task in processing
-        cond = len(client1.inProcTasks()) == 2 or \
-               len(client2.inProcTasks()) == 2 or \
-               len(client3.inProcTasks()) == 2
-        self.assertTrue(cond)
-
-        """
 
 
     def test_storage(self):
