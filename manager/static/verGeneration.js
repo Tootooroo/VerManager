@@ -3,15 +3,15 @@ import { ok, error } from "./lib/type.js";
 
 export { verGeneration_main };
 
-var verSeperator = "__<?>__";
+const verSeperator = "__<?>__";
 
 // Definitions
 function verGeneration_main() {
     fillVerList();
 
-    var submit = document.getElementById('generationBtn');
+    let submit = document.getElementById('generationBtn');
     submit.addEventListener('click', function() {
-        var vSelect = document.getElementById('verSelect');
+        let vSelect = document.getElementById('verSelect');
 
         generate();
 

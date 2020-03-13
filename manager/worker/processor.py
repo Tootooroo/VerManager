@@ -195,6 +195,10 @@ class Processor(Module):
 
     @staticmethod
     def __postListener_config(address:str, port:int, info:Info, cInst:Any) -> State:
+
+        if cInst.isModuleExists(POST_LISTENER_M_NAME):
+            cInst.removeModule(POST_LISTENER_M_NAME)
+
         pl = PostListener(address, port, cInst)
         pl.start()
 
@@ -212,6 +216,10 @@ class Processor(Module):
 
     @staticmethod
     def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:
+
+        if cInst.isModuleExists(POST_PROVIDER_M_NAME):
+            cInst.removeModule(POST_PROVIDER_M_NAME)
+
         provider = PostProvider(address, port)
 
         # PostConfigCmd will send from master to the worker
@@ -295,12 +303,16 @@ class Processor(Module):
                     self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
                     server.transfer(response)
                 else:
-                    provider = self.__cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
-                    self.__transBinaryTo(tid, path,
+                    provider = self.__cInst.getModule(POST_PROVIDER_M_NAME)
+                    if provider is None:
+                        response.setState(Letter.RESPONSE_STATE_FAILURE)
+                        server.transfer(response)
+                    else:
+                        self.__transBinaryTo(tid, path,
                                          lambda l: provider.provide(l),
                                          mid=menu,
                                          parent=version)
-                    server.transfer(response)
+                        server.transfer(response)
 
             self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]

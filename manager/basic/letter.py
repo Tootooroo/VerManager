@@ -156,6 +156,12 @@ class Letter:
         contentStr = str(self.content).replace("'", "\"")
         return Letter.format % (self.type_, headerStr, contentStr)
 
+    def __repr__(self) -> str:
+         # length of content after length
+        headerStr = str(self.header).replace("'", "\"")
+        contentStr = str(self.content).replace("'", "\"")
+        return Letter.format % (self.type_, headerStr, contentStr)
+
     def toJson(self) -> Dict:
         jsonStr = self.toString()
         return json.loads(jsonStr)
@@ -592,21 +598,19 @@ class BinaryLetter(Letter):
         if type(content) is str:
             return None
 
-        tid_field = b"".join([" ".encode() for x in range(64 - len(tid))]) + tid.encode()
-        parent_field = b"".join([" ".encode() for x in range(64 - len(parent))]) + parent.encode()
-        name_field = b"".join([" ".encode() for x in range(32 - len(fileName))]) + fileName.encode()
-        menu_field = b"".join([" ".encode() for x in range(30 - len(menu))]) + menu.encode()
+        extend_bytes = lambda n, bs: b" " * n + bs
+
+        type_field = (1).to_bytes(2, "big")
+        len_field = len(content).to_bytes(4, "big")
+        tid_field = extend_bytes(64 - len(tid), tid.encode())
+        parent_field = extend_bytes(64 - len(parent), parent.encode())
+        name_field = extend_bytes(32 - len(fileName), fileName.encode())
+        menu_field = extend_bytes(30 - len(menu), menu.encode())
 
         # Safe here content must not str and must a bytes
         # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String
         # | Parent(64 Bytes) : :  String | Menu (30 Bytes) : :  String | Content : :  Bytes |
-        packet = (1).to_bytes(2, "big") + \
-                 (len(content)).to_bytes(4, "big") + \
-                 name_field + \
-                 tid_field + \
-                 parent_field + \
-                 menu_field + \
-                 content
+        packet = type_field + len_field + name_field + tid_field + parent_field + menu_field + content
 
         return packet
 

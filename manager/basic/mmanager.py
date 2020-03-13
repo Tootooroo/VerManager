@@ -81,6 +81,11 @@ class MManager:
     def removeModule(self, mName:ModuleName) -> Optional[Module]:
         if self.isModuleExists(mName):
             m = self.__modules[mName]
+
+            m.cleanup()
+            if isinstance(m, ModuleDaemon):
+                m.stop()
+
             del self.__modules [mName]
             self.__num -= 1
 

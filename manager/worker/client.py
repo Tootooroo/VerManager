@@ -83,6 +83,12 @@ class Client(Thread):
     def getModule(self, ident: str) -> Optional[Module]:
         return self.__manager.getModule(ident)
 
+    def removeModule(self, ident) -> None:
+        self.__manager.removeModule(ident)
+
+    def isModuleExists(self, ident: str) -> bool:
+        return self.__manager.isModuleExists(ident)
+
     def run(self) -> None:
         self.__isStop = False
 
