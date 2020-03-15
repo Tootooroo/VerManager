@@ -51,12 +51,14 @@ class RandomElectProtocol(PostElectProtocol):
         for p in providers:
             p.control(cmd_set_provider)
             l = self.waitMsg()
+            print(l.toString())
 
             # fixme: Need to deal with failed of provider configure
             if l.getState() is CmdResponseLetter.STATE_FAILED:
                 pass
 
-            p.role = Role_Provider
+            if p.role is not Role_Listener:
+                p.role = Role_Provider
 
         self.isInit = True
 
@@ -84,16 +86,19 @@ class RandomElectProtocol(PostElectProtocol):
 
         listener.control(cmd_set_listener)
         l = self.waitMsg()
+        print(l.toString())
 
         ident = l.getIdent()
         if ident != listener.getIdent():
+            print(ident + " -- " + listener.getIdent())
             return (Error, listener.getIdent())
 
         state = l.getState()
         if state == CmdResponseLetter.STATE_FAILED:
+            print("Error:" + l.getIdent())
             return (Error, l.getIdent())
 
-        self.group.setRole(ident, Role_Listener)
+        self.group.setListener(listener)
 
         return (Ok, l.getIdent())
 

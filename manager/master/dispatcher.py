@@ -84,7 +84,6 @@ class Dispatcher(ModuleDaemon):
 
         # No workers satisfiy the condition.
         if workers == []:
-            print("Unable to accept")
             return False
 
         try:

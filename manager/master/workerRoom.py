@@ -148,7 +148,7 @@ class WorkerRoom(ModuleDaemon):
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
 
-                self.__pManager.addWorker(workerInWait)
+                self.__pManager.addProvider(workerInWait)
                 self.__changePoint()
 
                 map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks) # type: ignore
@@ -163,7 +163,7 @@ class WorkerRoom(ModuleDaemon):
 
             self.addWorker(acceptedWorker)
 
-            self.__pManager.addWorker(acceptedWorker)
+            self.__pManager.addProvider(acceptedWorker)
             self.__changePoint()
 
             map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks) # type: ignore
@@ -245,7 +245,10 @@ class WorkerRoom(ModuleDaemon):
             worker.setState(Worker.STATE_WAITING)
             self.removeWorker(ident)
 
-            self.__pManager.removeWorker(ident)
+            self.__pManager.removeProvider(ident)
+            if self.__pManager.isListener(ident):
+                self.__pManager.setListener(None)
+
             self.__changePoint()
 
             with self.syncLock:
