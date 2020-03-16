@@ -105,7 +105,7 @@ class Processor(Module):
 
     def proc(self, reqLetter:Letter) -> None:
 
-        self.logging(reqLetter.toString())
+        self.logging("Receive letter:" + reqLetter.type_)
 
         # fixme: need to deal with exception of command or
         #        newtask
