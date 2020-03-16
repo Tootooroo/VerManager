@@ -46,10 +46,18 @@ class Server(Module):
 
         self.__status = Server.STATE_DISCONNECTED
 
+        # A flag to indicate this connection to master
+        # should be closed and never rebuild in the future.
+        self.__isStop = False
+
     def cleanup(self) -> None:
+        self.__isStop = True
         self.disconnect()
 
     def connect(self, workerName:str, max:int, proc:int, retry:int = 0) -> State:
+
+        if self.__isStop: return Error
+
         # Store workerName into instance for reconnect purpose
         self.__workerName = workerName
 
@@ -122,7 +130,6 @@ class Server(Module):
         return ret
 
     def reconnect(self, workerName:str, max:int, proc:int) -> State:
-
         if workerName == "":
             workerName = self.__workerName
 
