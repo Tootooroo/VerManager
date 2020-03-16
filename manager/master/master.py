@@ -72,6 +72,8 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
         eventListener.registerEvent(Letter.CmdResponse, postHandler)
+        eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
+        eventListener.registerEvent(Letter.Log, logHandler)
         self.addModule(eventListener)
 
         logger = Logger("./logger")

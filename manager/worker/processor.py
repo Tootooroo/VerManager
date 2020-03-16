@@ -9,9 +9,10 @@ from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool
 from multiprocessing.pool import AsyncResult
 
-from ..basic.letter import *
+from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
+    LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter
 from ..basic.info import Info
-from ..basic.type import *
+from ..basic.type import Ok, Error, State
 from ..basic.util import partition
 
 from ..basic.mmanager import Module
@@ -33,6 +34,7 @@ Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[[CommandLetter, Info, Any], State]
 
 M_NAME = "Processor"
+LOG_ID = "Processor"
 
 if platform.system() == 'Windows':
     sep = "\\"
@@ -73,6 +75,22 @@ class Processor(Module):
         # Query purpose
         self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
 
+    def logging(self, msg:str) -> None:
+        global LOG_ID
+
+        if not hasattr(self, 'server'):
+            self.server = self.__cInst.getModule(SERVER_M_NAME)
+
+            if self.server is None:
+                return None
+
+            regLetter = LogRegLetter(self.__cInst.getIdent(), LOG_ID)
+            self.server.transfer(regLetter)
+
+        logLetter = LogLetter(self.__cInst.getIdent(), LOG_ID, msg)
+        self.server.transfer(logLetter)
+
+
     def maxTasksAbleToProc(self) -> int:
         return self.__max
 
@@ -86,6 +104,8 @@ class Processor(Module):
         self.__procedure = procedure
 
     def proc(self, reqLetter:Letter) -> None:
+
+        self.logging(reqLetter.toString())
 
         # fixme: need to deal with exception of command or
         #        newtask

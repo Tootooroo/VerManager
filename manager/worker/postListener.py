@@ -10,7 +10,7 @@ import traceback
 
 from ..basic.util import spawnThread
 from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
-    ResponseLetter, PostTaskLetter
+    ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter
 from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
@@ -21,7 +21,7 @@ from threading import Thread, Lock
 from queue import Queue, Empty as Q_Empty
 
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
-from manager.worker.server import M_NAME as SERVER_M_NAME
+from manager.worker.server import M_NAME as SERVER_M_NAME, Server
 
 ReqIdent = Tuple[str, str]
 
@@ -30,6 +30,9 @@ M_NAME = "PostListener"
 M_NAME_Provider = "PostProvider"
 
 FilePath = str
+
+# Log id
+LOG_ID = "PostListener"
 
 if platform.system() == 'Windows':
     sep = "&&"
@@ -471,6 +474,23 @@ class PostProcessor(Thread):
 
         self.__chooserSet = {} # type: Dict[str, StoChooser]
 
+        self.__server = None # type: Optional[Server]
+
+    def logging(self, msg:str) -> None:
+        global LOG_ID
+
+        if self.__server is None:
+            self.__server = self.__cInst.getModule(SERVER_M_NAME)
+
+            if self.__server is not None:
+                regLetter = LogRegLetter(self.__cInst.getIdent(), LOG_ID)
+                self.__server.transfer(regLetter)
+            else:
+                return None
+
+        log_letter = LogLetter(self.__cInst.getIdent(), LOG_ID, msg)
+        self.__server.transfer(log_letter)
+
     def do_post_processing(self, post:Post) -> Optional[tempfile.TemporaryDirectory]:
         workingDir = tempfile.TemporaryDirectory()
 
@@ -478,10 +498,15 @@ class PostProcessor(Thread):
         menus = post.getMenus()
         states = list(map(lambda menu: self.__do_menu(menu, workingDir.name), menus))
 
-        # Copy frags to working directory
+        for menu in post.getMenus():
+            if self.__do_menu(menu, workingDir.name) is Ok:
+                self.logging("Menu " + menu.getIdent() + " is processed")
+            else:
+                self.logging("Menu " + menu.getIdent() + " failed")
+                return None
 
-        if Error in states:
-            return None
+        # fixme: need to copy frags to working directory
+
 
         cmds = post.getCmds()
         cmds.insert(0, "cd " + workingDir.name)
@@ -501,6 +526,7 @@ class PostProcessor(Thread):
         for stuff in stuffs:
             (boxName, fileName) = stuff.where()
             self.__storage.copyTo(boxName, fileName, workDir)
+
         command.insert(0, "cd " + workDir)
         command_str = sep.join(command)
 
@@ -532,12 +558,14 @@ class PostProcessor(Thread):
         while True:
 
             post = statisfied_posts.get()
+            self.logging("Post " + post.getVersion() + " is in processing")
 
             version = post.getVersion()
             response = ResponseLetter(workerIdent, version, Letter.RESPONSE_STATE_FINISHED)
 
             wDir = self.do_post_processing(post)
             if wDir is None:
+                self.logging("Post " + post.getVersion() + " is failed")
                 # Notify master this post is failed.
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
@@ -587,6 +615,8 @@ class PostProcessor(Thread):
             if stuff is None:
                 continue
 
+            self.logging("Stuff arrived: " + stuff.name())
+
             isPaired = self.__post_stuff_pair(stuff)
 
             # fixme: add a counter to this stuff so we can remove
@@ -595,15 +625,14 @@ class PostProcessor(Thread):
             if isPaired is False:
                 self.__stuffs.addStuff(stuff)
 
+            self.logging("Stuff " + stuff.name() + " paired")
 
             # After match we need to check is there a menu which
             # collect all stuffs of it need
             self.__post_lock.acquire()
 
             for post in self.__posts:
-                isSatisfied = post.isSatisfied()
-
-                if isSatisfied:
+                if post.isSatisfied():
                     self.__satisfiedPosts.put(post)
                     self.__posts.remove(post)
 
