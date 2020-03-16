@@ -3,16 +3,24 @@
 import typing
 from typing import Generic, TypeVar
 from yaml import load, SafeLoader
+from functools import reduce
+
+from manager.basic.mmanager import Module
+
+M_NAME = "Info"
 
 # Abstruction of configuration file
-class Info:
+class Info(Module):
 
     def __init__(self, cfgPath: str) -> None:
+        global M_NAME
+
+        Module.__init__(self, M_NAME)
         with open(cfgPath, "r") as f:
             self.__config = load(f, Loader=SafeLoader)
 
 
-    def getConfig(self, *cfgKeys) -> str:
+    def getConfig(self, *cfgKeys) -> typing.Any:
         cfgValue = self.__config
 
         try:
@@ -27,9 +35,6 @@ class Info:
     def getConfigs(self) -> typing.Dict[str, typing.Any]:
         return self.__config
 
-    def validityChecking(self):
-        condition = 'WORKER_NAME' in self.__config and\
-                    'REPO_URL' in self.__config and\
-                    'PROJECT_NAME' in self.__config
-
-        return condition
+    def validityChecking(self, predicates) -> bool:
+        results = list(map(lambda p: p(self.__config), predicates))
+        return reduce(lambda acc, curr: acc and curr, results)

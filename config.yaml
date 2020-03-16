@@ -1,0 +1,85 @@
+Address: "127.0.0.1"
+Port: 8024
+
+LogDir: ./log
+ResultDir: ./data
+Storage: ./Storage
+
+GitlabUrl: http://gpon.git.com:8011
+Project_ID: 34
+
+PrivateToken: 4mU2joxotSkzTqLPhvgu
+
+TimeZone: +8:00
+
+WaitingInterval: 10
+
+BuildSet:
+  RepoUrl: git@gpon.git.com:gpon/olt.git
+  ProjectName: olt
+
+  Builds:
+    GL5610:
+        cmd:
+        - ...
+        - ...
+        output:
+        - ...
+
+    GL5610-v2:
+        cmd:
+        - ...
+        - ...
+        output:
+        - ...
+
+    GL5610-v3:
+        cmd:
+        - ...
+        - ...
+        output:
+        - ...
+
+    GL8900:
+        cmd:
+        - ...
+        - ...
+        output:
+        - ...
+
+  Posts:
+    GL5610_V2_V3:
+        group:
+        - GL5610
+        - GL5610-v2
+        - GL5610-v3
+        cmd:
+        - link_GL5610.bat
+        output:
+        - "C:\\pack.rar"
+
+    GL8900:
+        group:
+        - GL8900
+        cmd:
+        - link_GL8900.bat
+        output:
+        - "C:\\pack.rar"
+
+  Merge:
+    cmd:
+      - ...
+      - ...
+    output:
+      - ...
+
+Build:
+  RepoUrl: git@gpon.git.com:gpon/olt.git
+  ProjectName: olt
+
+  cmd:
+    - ...
+    - ...
+
+  output:
+    - ...

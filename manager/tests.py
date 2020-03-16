@@ -1,48 +1,30 @@
 from django.test import TestCase
 from django.http import HttpRequest
 from django.template.loader import render_to_string
-from selenium import webdriver
 
-from manager.views import index, verRegPage
+from manager.views import index, verManagerPage
 
-from manager.misc.verControl import RevSync
-from manager.misc.workerRoom import WorkerRoom
-from manager.misc.basic.letter import Letter
-from manager.misc.eventListener import EventListener
-from manager.misc.worker import Task
+from manager.master.verControl import RevSync
+from manager.master.workerRoom import WorkerRoom
+from manager.basic.letter import *
+from manager.master.eventListener import EventListener
+from manager.master.worker import Task
 
-from manager.misc.dispatcher import Dispatcher
+from manager.master.dispatcher import Dispatcher
+
+from manager.basic.util import spawnThread
+
+from manager.master.master import ServerInst
+from manager.worker.client import Client
 
 import time
 import unittest
 import socket
-from threading import Thread
-from multiprocessing import Process
 
 # Create your tests here.
 
-class ServerT(Thread):
-
-    def __init__(self, action):
-        Thread.__init__(self)
-        self.action = action
-
-    def run(self):
-        self.action()
-
-
-class ClientT(Thread):
-
-    def __init__(self, action, args):
-        Thread.__init__(self)
-        self.action = action
-        self.args = args
-
-    def run(self):
-        self.action(self.args)
-
+"""
 class FunctionalTest(TestCase):
-
     def setUp(self):
         self.browser = webdriver.Firefox()
 
@@ -53,27 +35,35 @@ class FunctionalTest(TestCase):
 #        self.browser.get('http://localhost:8000/manager')
 #        self.assertEqual('GPON Team Site', self.browser.title)
 #        self.fail('Test finish')
+"""
+
 
 class HttpRequest_:
     def __init__(self):
         self.headers = {}
         self.body = ""
 
+
 class UnitTest(TestCase):
-    def test_index_page(self):
+
+    def tes_index_page(self):
         response = self.client.get('/manager/')
         self.assertTemplateUsed(response, 'index.html')
 
-    def test_verRegister_page(self):
-        response = self.client.get('/manager/verRegister')
-        self.assertTemplateUsed(response, 'verRegister.html')
+    def tes_verRegister_page(self):
+        response = self.client.get('/manager/verManager')
+        self.assertTemplateUsed(response, 'verManager.html')
 
-    def test_register_feature(self):
+    def tes_register_feature(self):
         response = self.client.post('/manager/verRegister/register',
                                     data = { 'Version' : 'V1', 'verChoice' : 'XXXX' })
         self.assertTrue(response.status_code == 200)
 
-    def test_new_rev(self):
+    def tes_new_rev(self):
+        import manager.master.components as Components
+        from manager.basic.info import Info
+        Components.config = Info("./config.yaml")
+
         revSyncner = RevSync()
 
         revSyncner.revDBInit()
@@ -95,8 +85,6 @@ class UnitTest(TestCase):
                            }\
                          }'
 
-        import json
-
         from manager.views import newRev
         newRev(request)
 
@@ -114,325 +102,539 @@ class UnitTest(TestCase):
             self.assertEqual("2019-05-08 17:39:08+00:00", str(rev.dateTime))
 
             self.assertTrue(True)
-        except:
+        except Exception:
             self.assertTrue(False)
+
+    def tes_info(self):
+        from manager.basic.info import Info
+
+        cfgs = Info("./config.yaml")
+
+        predicates = [
+            lambda c: "Address" in c,
+            lambda c: "Port" in c,
+            lambda c: "LogDir" in c,
+            lambda c: "ResultDir" in c,
+            lambda c: "GitlabUrl" in c,
+            lambda c: "PrivateToken" in c,
+            lambda c: "TimeZone" in c
+        ]
+
+        self.assertTrue(cfgs.validityChecking(predicates))
 
     def test_letter(self):
 
-        def letterTest(l):
-            self.assertEqual(Letter.NewTask, l.type_)
-            self.assertEqual(content, l.content)
-            self.assertEqual(Letter.NewTask, Letter.typeOfLetter(l))
-            self.assertEqual('value', l.getContent('key'))
-            self.assertEqual('value', l.getHeader('key'))
+        from manager.basic.letter import NewLetter, \
+            ResponseLetter, BinaryLetter
 
-        header = {"key":"value"}
-        content = {"key":"value"}
-        l = Letter(Letter.NewTask, header, content)
+        from datetime import datetime
 
-        letterTest(l)
+        # NewLetter Test
+        dateStr = str(datetime.utcnow())
+        newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
+                              datetime=dateStr, menu="Menu",
+                              parent="123456", needPost="true")
+        self.assertEqual("sn_1", newLetter.getSN())
+        self.assertEqual("vsn_1", newLetter.getVSN())
+        self.assertEqual(dateStr, newLetter.getDatetime())
+        self.assertEqual('true', newLetter.needPost())
+        self.assertEqual('Menu', newLetter.getMenu())
+        self.assertEqual('123456', newLetter.getParent())
 
+        newLetter = Letter.parse(newLetter.toBytesWithLength())
+        self.assertEqual("sn_1", newLetter.getSN())
+        self.assertEqual("vsn_1", newLetter.getVSN())
+        self.assertEqual(dateStr, newLetter.getDatetime())
+        self.assertEqual('true', newLetter.needPost())
+        self.assertEqual('Menu', newLetter.getMenu())
+        self.assertEqual('123456', newLetter.getParent())
 
-        # Json to letter
-        l1 = Letter.json2Letter('{"type":"new", "header":{"key":"value"},"content":{"key":"value"}}')
-        letterTest(l1)
+        # ResponseLetter Test
+        response = ResponseLetter("ident", "tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
+        self.assertEqual("ident", response.getIdent())
+        self.assertEqual("tid_1", response.getTid())
+        self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getState())
+        self.assertEqual("123456", response.getParent())
 
-        # Letter parse
-        letterInBytes = l.toBytesWithLength()
-        l_parsed = Letter.parse(letterInBytes)
-        letterTest(l)
+        # BinaryLetter Test
+        binary = BinaryLetter("tid_1", b"123456", menu = "menu", fileName = "rar", parent = "123456")
+        self.assertEqual("tid_1", binary.getTid())
+        self.assertEqual(b"123456", binary.getBytes())
+        self.assertEqual("menu", binary.getMenu())
+        self.assertEqual("123456", binary.getParent())
+        self.assertEqual("rar", binary.getFileName())
 
-        # Parse Binary type
-        tid = b"".join([str(x).encode() for x in range(64)])[0:64]
-        letterInBytes = (1).to_bytes(2, "big") \
-                        + (4).to_bytes(4, "big") \
-                        + tid \
-                        + (123123).to_bytes(4, "big")
-        l_parsed = Letter.parse(letterInBytes)
-        print("l_parsed" + l_parsed.toString())
+        binBytes = binary.binaryPack()
+        binary_parsed = Letter.parse(binBytes)
+        self.assertEqual("tid_1", binary_parsed.getTid())
+        self.assertEqual(b"123456", binary_parsed.getBytes())
+        self.assertEqual("menu", binary_parsed.getMenu())
+        self.assertEqual("123456", binary_parsed.getParent())
+        self.assertEqual("rar", binary_parsed.getFileName())
 
-        self.assertEqual(tid.decode(), l_parsed.getHeader('tid'))
-        self.assertEqual((123123).to_bytes(4, "big"), l_parsed.getContent('bytes'))
+        # MenuLetter Test
+        menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
+                                ["file1", "file2"], "/home/test/test.py")
+        self.assertEqual("version", menuLetter.getVersion())
+        self.assertEqual("mid_1", menuLetter.getMenuId())
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter.getCmds())
+        self.assertEqual(["file1", "file2"], menuLetter.getDepends())
+        self.assertEqual("/home/test/test.py", menuLetter.getOutput())
 
-        # letterBytesRemain check
-        streamComplete = (14).to_bytes(2, "big") + b'{"type":"new"}'
-        streamIncomplete = (14).to_bytes(2, "big") + b'{"type":"new"'
+        menuBytes = menuLetter.toBytesWithLength()
+        menuLetter_parsed = Letter.parse(menuBytes)
 
-        self.assertEqual(0, Letter.letterBytesRemain(streamComplete))
-        self.assertEqual(1, Letter.letterBytesRemain(streamIncomplete))
+        self.assertEqual("version", menuLetter_parsed.getVersion())
+        self.assertEqual("mid_1", menuLetter_parsed.getMenuId())
+        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getCmds())
+        self.assertEqual(["file1", "file2"], menuLetter_parsed.getDepends())
+        self.assertEqual("/home/test/test.py", menuLetter_parsed.getOutput())
 
-        letterInBytes_incomplete = (1).to_bytes(2, "big") \
-                                + (4).to_bytes(4, "big") \
-                                + tid \
-                                + (123123).to_bytes(3, "big")
+        # commandLetter Test
+        commandLetter = CommandLetter("cmd_type", "T", "extra_information", content = {"1":"1"})
 
-        self.assertEqual(0, Letter.letterBytesRemain(letterInBytes))
-        self.assertEqual(1, Letter.letterBytesRemain(letterInBytes_incomplete))
+        self.assertEqual("cmd_type", commandLetter.getType())
+        self.assertEqual("T", commandLetter.getTarget())
+        self.assertEqual("extra_information", commandLetter.getExtra())
+        self.assertEqual("1", commandLetter.content_("1"))
 
-    def tes_worker(self):
-        import socket
-        import json
-        from threading import Thread
+        commandLetter_bytes = commandLetter.toBytesWithLength()
+        commandLetter_parsed = Letter.parse(commandLetter_bytes)
 
-        from manager.misc.worker import Worker
-        from manager.misc.eventListener import EventListener
+        self.assertEqual("cmd_type", commandLetter_parsed.getType())
+        self.assertEqual("T", commandLetter_parsed.getTarget())
+        self.assertEqual("extra_information", commandLetter_parsed.getExtra())
+        self.assertEqual("1", commandLetter_parsed.content_("1"))
 
-        listener = EventListener(WorkerRoom('localhost', 8013))
-        listener.start()
+        # CmdResponseLetter Test
+        cmdResponseLetter = CmdResponseLetter("wIdent", "post",
+                                              CmdResponseLetter.STATE_SUCCESS, reason = "NN",
+                                              target = "tt")
 
-        test = self
+        self.assertEqual("wIdent", cmdResponseLetter.getIdent())
+        self.assertEqual("post", cmdResponseLetter.getType())
+        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdResponseLetter.getState())
+        self.assertEqual("NN", cmdResponseLetter.getReason())
+        self.assertEqual("tt", cmdResponseLetter.getTarget())
 
-        class Server(Thread):
-            def __init__(self):
-                Thread.__init__(self)
+        cmdRBytes = cmdResponseLetter.toBytesWithLength()
+        cmdRLetter_parsed = Letter.parse(cmdRBytes)
 
-            def testEvent(eventListener, letter):
-                test.assertEqual('test_event', letter.typeOfLetter())
-                exit(0)
+        self.assertEqual("wIdent", cmdRLetter_parsed.getIdent())
+        self.assertEqual("post", cmdRLetter_parsed.getType())
+        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdRLetter_parsed.getState())
+        self.assertEqual("NN", cmdRLetter_parsed.getReason())
+        self.assertEqual("tt", cmdRLetter_parsed.getTarget())
 
-            def run(self):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.bind(('localhost', 8011))
-                sock.listen(1)
+    def tes_Connected(self):
 
-                (clientsock, address) = sock.accept()
-                w = Worker(clientsock)
-
-                test.assertEqual('test', w.ident)
-                test.assertEqual(2, w.max)
-                test.assertEqual(0, w.processing)
-                listener.registerEvent('test_event', Server.testEvent)
-                listener.addWorker(w)
-                test.assertTrue(listener.getWorker("test") != None)
-
-                task = Task('1', {"sn":"123", "vsn":"123"})
-                w.do(task)
-
-                time.sleep(3)
-
-                w.counterSync()
-                test.assertTrue(w.onlineCounter() == 3)
-                test.assertTrue(w.offlineCounter() == 0)
-                test.assertTrue(w.waitCounter() == 0)
-
-        class Client(Thread):
-            def __init__(self):
-                Thread.__init__(self)
-
-            def run(self):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect(('localhost', 8011))
-
-                content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
-                content = len(content).to_bytes(2, "big") + content
-                sock.send(content)
-
-                chunk = sock.recv(100)
-                content = json.loads(chunk.decode()[2:])
-
-                ident = content['header']['ident']
-                tid = content['header']['tid']
-                sn = content['content']['sn']
-                vsn = content['content']['vsn']
-
-                test.assertEqual(Letter.NewTask, content['type'])
-                test.assertEqual('test', ident)
-                test.assertEqual('1', tid)
-                test.assertEqual('123', sn)
-                test.assertEqual('123', vsn)
-
-                response = b'{"type":"test_event", "header":{"ident":"test", "tid":"1"}, "content":{"state":"2"}}'
-                response = len(content).to_bytes(2, "big") + response
-                sock.send(response)
-
-        s_thread = Server()
-        s_thread.start()
-
+        sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
+        sInst.start()
         time.sleep(1)
 
-        c_thread = Client()
-        c_thread.start()
+        client1 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W1")
+        client1.start()
 
-        time.sleep(10)
+        client2 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W2")
+        client2.start()
 
-    def test_WorkerRoom_EventListener(self):
-        import json
-
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
-
-        def serverAction():
-            workerRoom = WorkerRoom('localhost', 8012)
-            el = EventListener(workerRoom)
-
-            workerRoom.hookRegister((register, [el]))
-
-            workerRoom.start()
-
-            time.sleep(5)
-
-            self.assertTrue(workerRoom.isExists('A'))
-            self.assertTrue(workerRoom.isExists('B'))
-            self.assertTrue(workerRoom.isExists('C'))
-
-            self.assertTrue(workerRoom.getNumOfWorkers() == 3)
-
-        s = ServerT(serverAction)
-        s.start()
+        client3 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W3")
+        client3.start()
 
         time.sleep(2)
 
-        def clientAction(ident):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('localhost', 8012))
+        wr = sInst.getModule('WorkerRoom')
+        self.assertEqual(3, wr.getNumOfWorkers())
 
-            content = b'{"type":"notify", "header":{"ident":"' + ident.encode() + \
-                      b'"}, "content":{"MAX":"2", "PROC":"0"}}'
+        time.sleep(15)
+        print(wr.postRelations())
 
-            content = len(content).to_bytes(2, "big") + content
-            sock.send(content)
+        # Reconnect tests case
+        client1.disconnect()
 
-            chunk = sock.recv(100)
+        # After client1 disconnect there should be one
+        # worker in wait queue
+        time.sleep(3)
 
-            time.sleep(10)
-
-        c1 = ClientT(clientAction, 'A')
-        c2 = ClientT(clientAction, 'B')
-        c3 = ClientT(clientAction, 'C')
-
-        c1.start()
-        c2.start()
-        c3.start()
+        self.assertEqual(1, wr.getNumOfWorkersInWait())
 
         time.sleep(10)
 
-    def tes_integration(self):
-        import sys
-        sys.path.append("./worker")
+        # At this time worker should reconnect to master
+        self.assertEqual(0, wr.getNumOfWorkersInWait())
+        self.assertEqual(3, wr.getNumOfWorkers())
 
-        from worker.server import Server, RESPONSE_TO_SERVER_DAEMON, TASK_DEAL_DAEMON
-        from manager.misc.eventListener import responseHandler, binaryHandler
-        from worker.info import Info
+        # Client Stop
+        client1.stop()
+        client2.stop()
+        client3.stop()
 
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
+        time.sleep(3)
 
-        def serverAction():
-            workerRoom = WorkerRoom('127.0.0.1', 8024)
-            el = EventListener(workerRoom)
-            dispatcher = Dispatcher(workerRoom)
+        self.assertTrue(client1.isStop())
+        self.assertTrue(client2.isStop())
+        self.assertTrue(client3.isStop())
 
-            el.registerEvent(Letter.Response, responseHandler)
-            el.registerEvent(Letter.BinaryFile, binaryHandler)
+        time.sleep(10)
 
-            workerRoom.hookRegister((register, [el]))
+        self.assertEqual(0, wr.getNumOfWorkersInWait())
 
-            workerRoom.start()
-            el.start()
-            dispatcher.start()
+    def tes_logger(self):
 
-            time.sleep(2)
-
-            task = Task("abc", {"sn":"282a4eff09d6630457bd57571968b46c460da0b9", "vsn":"abc"})
-            dispatcher.dispatch(task)
-
-            time.sleep(10)
-
-        def clientAction():
-            info = Info("worker/config.yaml")
-            print(info.getConfigs())
-
-            s = Server(info)
-            self.assertTrue(s.init() == 0)
-
-
-            t1 = TASK_DEAL_DAEMON(s, info)
-            t2 = RESPONSE_TO_SERVER_DAEMON(s, info)
-
-            t1.start()
-            t2.start()
-
-            time.sleep(10)
-
-
-        s = Process(target=serverAction)
-        c = Process(target=clientAction)
-
-        s.start()
-        time.sleep(1)
-        c.start()
-
-        s.join()
-        c.join()
-
-    def test_logger(self):
-
-        from .misc.logger import Logger
-        from manager.misc.eventListener import responseHandler, logHandler, logRegisterhandler
+        from manager.master.logger import Logger
 
         logger = Logger("./logger")
         logger.start()
 
-        logger.log_register("123")
-        logger.log_put(("123", "ABC"))
+        logger.log_register("Test")
+        Logger.putLog(logger, "Test", "123")
 
-        time.sleep(10)
+    def test_dispatcher(self):
 
-        # log letter
-        import manager.misc.components as Components
+        import os
 
-        def register(worker, args):
-            el = args[0]
-            el.fdRegister(worker)
+        # Create a server
+        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
+        sInst.start()
 
-        def serverAction():
-            w = WorkerRoom('127.0.0.1', 8025)
-            e = EventListener(w)
-            l = Logger("./log")
-
-            Components.logger = l
-
-            e.registerEvent(Letter.Response, responseHandler)
-            e.registerEvent(Letter.LogRegister, logRegisterhandler)
-            e.registerEvent(Letter.Log, logHandler)
-            w.hookRegister((register, [e]))
-
-            l.start()
-            w.start()
-            e.start()
-
-            time.sleep(3)
-
-        def clientAction(args):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('127.0.0.1', 8025))
-
-            content = b'{"type":"notify", "header":{"ident":"test"}, "content":{"MAX":"2", "PROC":"0"}}'
-            content = len(content).to_bytes(2, "big") + content
-
-            sock.send(content)
-
-            logRegLetter = b'{"type":"logRegister", "header":{"logId":"logTest"}, "content":{"1":1}}'
-            logRegLetter = len(logRegLetter).to_bytes(2, "big") + logRegLetter
-            sock.send(logRegLetter)
-
-            logLetter = b'{"type":"log", "header":{"logId":"logTest"}, "content":{"logMsg":"Logger Test success"}}'
-            logLetter = len(logLetter).to_bytes(2, "big") + logLetter
-
-            sock.send(logLetter)
-
-            time.sleep(3)
-
-        s = ServerT(serverAction)
-        c = ClientT(clientAction, None)
-
-        s.start()
         time.sleep(1)
-        c.start()
+
+        # Create workers
+        client1 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W1")
+        client2 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W2")
+        client3 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W3")
+        client4 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W4")
+
+        workers = [client1, client2, client3, client4]
+
+        # Activate workers
+        list( map(lambda c: c.start(), workers) )
+
+        # Then wait a while so workers have enough time to connect to master
+        time.sleep(15)
+
+        # Get 'Dispatcher' Module on server so we can dispatch task to workers
+        dispatcher = sInst.getModule("Dispatcher")
+        if not isinstance(dispatcher, Dispatcher):
+            self.assertTrue(False)
+
+        # Dispatch task
+        task1 = Task("122", "123", "122")
+        dispatcher.dispatch(task1)
+
+        # To check that whether the task dispatch to one of four workers
+        #w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
+
+        workerRoom = sInst.getModule("WorkerRoom")
+        self.assertTrue(isinstance(workerRoom, WorkerRoom))
+
+        #status = workerRoom.statusOfWorker("W1")
+        #self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
+
+        # Now let us dispatch three more task to workers
+        # if nothing wrong each of these workers should
+        # in work.
+        task2 = Task("124", "123", "124")
+        dispatcher.dispatch(task2)
+
+        task3 = Task("125", "123", "125")
+        dispatcher.dispatch(task3)
+
+        task4 = Task("126", "123", "126")
+        dispatcher.dispatch(task4)
+
+        self.assertTrue(os.path.exists("./Storage/122/total"))
+        self.assertTrue(os.path.exists("./Storage/124/total"))
+        self.assertTrue(os.path.exists("./Storage/125/total"))
+        self.assertTrue(os.path.exists("./Storage/126/total"))
 
         time.sleep(10)
+
+        task5 = Task("127", "123", "127")
+        dispatcher.dispatch(task5)
+
+        listener = workerRoom.postListener()
+        assert(listener is not None)
+
+        l_ident = listener.getIdent()
+
+        l_client = list(filter(lambda c: c.getIdent() == l_ident, workers))[0]
+        l_client.stop()
+
+        time.sleep(2)
+        for w in workerRoom.getWorkers():
+            self.assertEqual(0, len(w.inProcTasks()))
+
+        time.sleep(20)
+
+
+    def test_storage(self):
+
+        import os
+        from manager.basic.storage import Storage, StoChooser
+
+        storage = Storage("./Storage", None)
+
+        # Create a file via storage
+        boxName = "box"
+        fileName = "file"
+        chooser_create = storage.create(boxName, fileName)
+
+        self.assertTrue(os.path.exists("./Storage/box/file"))
+
+        # Open
+        chooser_open = storage.open(boxName, fileName)
+        self.assertEqual(chooser_create.path(), chooser_open.path())
+
+
+        self.assertEqual(1, storage.numOfFiles())
+
+        # Remove
+        storage.delete(boxName, fileName)
+        self.assertTrue(not os.path.exists("./Storage/box"))
+
+        self.assertEqual(0, storage.numOfFiles())
+
+        # Create files
+        files = ["file1", "file2", "file3", "file4", "file5"]
+
+        for file in files:
+            storage.create(boxName, file)
+        self.assertEqual(len(files), storage.numOfFiles())
+
+        self.assertTrue(os.path.exists("./Storage/box/file1"))
+        self.assertTrue(os.path.exists("./Storage/box/file2"))
+        self.assertTrue(os.path.exists("./Storage/box/file3"))
+        self.assertTrue(os.path.exists("./Storage/box/file4"))
+        self.assertTrue(os.path.exists("./Storage/box/file5"))
+
+        for file in files:
+            storage.delete(boxName, file)
+        self.assertTrue(not os.path.exists("./Storage/box/file1"))
+        self.assertTrue(not os.path.exists("./Storage/box/file2"))
+        self.assertTrue(not os.path.exists("./Storage/box/file3"))
+        self.assertTrue(not os.path.exists("./Storage/box/file4"))
+        self.assertTrue(not os.path.exists("./Storage/box/file5"))
+
+
+    def tes_build(self):
+        from manager.basic.info import Info
+        from manager.master.build import Build, BuildSet
+
+        info = Info("./config_test.yaml")
+
+        buildSet = info.getConfig("BuildSet")
+
+        self.assertTrue(BuildSet.isValid(buildSet))
+
+        bs = BuildSet(buildSet)
+
+        b = bs.getBuild("GL5610")
+
+        self.assertTrue("GL5610", b.getIdent())
+
+        builds = bs.getBuilds()
+        builds_id = list(map(lambda b: b.getIdent(), builds))
+        self.assertTrue('GL5610' in builds_id)
+        self.assertTrue('GL5610-v2' in builds_id)
+        self.assertTrue('GL5610-v3' in builds_id)
+        self.assertTrue('GL8900' in builds_id)
+
+        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v2'))
+        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v3'))
+
+        bs_GL8900 = bs.belongTo('GL8900')
+        self.assertEqual("GL8900_OEM", bs_GL8900[0])
+        self.assertTrue(len(bs_GL8900[1]) == 1)
+        self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
+
+    def tes_task(self):
+        from manager.basic.info import Info
+        from manager.master.build import Build, BuildSet
+        from manager.master.task import Task, SuperTask, SingleTask
+        from manager.basic.letter import MenuLetter
+
+        info = Info("./config_test.yaml")
+
+        buildSet = info.getConfig('BuildSet')
+
+        bs = BuildSet(buildSet)
+
+        # Create a taks object
+        t = SuperTask("VersionToto", "ABC", "VersionToto", buildSet = bs)
+
+        # Get a group which GL5610 reside in
+        groupOfGL5610 = t.getGroupOf("GL5610")
+
+        # GL5610-v2 should in this group
+        GL5610_v2 = list(filter(lambda t: t.id() == "GL5610-v2", groupOfGL5610))
+        self.assertTrue(len(GL5610_v2) == 1)
+        # Check the parent of GL5610-v2
+        self.assertTrue(GL5610_v2[0].isAChild() and GL5610_v2[0].getParent().id() == "VersionToto")
+
+        # GL5610-v3 should in this group too
+        GL5610_v3 = list(filter(lambda t: t.id() == "GL5610-v3", groupOfGL5610))
+        self.assertTrue(len(GL5610_v3) == 1)
+        # Check the parent of GL5610-v3
+        self.assertTrue(GL5610_v3[0].isAChild() and GL5610_v3[0].getParent().id() == "VersionToto")
+
+        # Get group which GL8900 reside in
+        groupOfGL8900 = t.getGroupOf("GL8900")
+        self.assertTrue(len(groupOfGL8900) == 1)
+        # Check the parent of GL8900
+        self.assertTrue(groupOfGL8900[0].id() == "GL8900", groupOfGL8900[0].getParent().id() == "VersionToto")
+
+        # Posts
+        pt = t.getPostTask()
+        self.assertEqual("VersionToto", pt.id())
+        postLetter = pt.toLetter()
+
+        self.assertEqual([], postLetter.frags())
+        menus = postLetter.menus()
+        self.assertTrue("GL5610_OEM" in menus)
+        self.assertTrue("GL8900_OEM" in menus)
+
+        # Menu GL5610 check
+        menu_GL5610 = postLetter.getMenu("GL5610_OEM")
+        depends = menu_GL5610.getDepends()
+        self.assertTrue("GL5610" in depends)
+        self.assertTrue("GL5610-v2" in depends)
+        self.assertTrue("GL5610-v3" in depends)
+
+        cmds = menu_GL5610.getCmds()
+        self.assertEqual(["touch post"], cmds)
+
+
+        # Menu GL8900 check
+        menu_GL8900 = postLetter.getMenu("GL8900_OEM")
+        depends_89 = menu_GL8900.getDepends()
+        self.assertTrue("GL8900" in depends_89)
+
+        cmds = menu_GL8900.getCmds()
+        self.assertEqual(["touch post_gl8900"], cmds)
+
+        # Get children of the task
+        children = t.getChildren()
+        children_id = list(map(lambda t: t.id(), children))
+
+        # Check memebers
+        self.assertTrue("GL5610" in children_id)
+        self.assertTrue("GL5610-v2" in children_id)
+        self.assertTrue("GL5610-v3" in children_id)
+        self.assertTrue("GL8900" in children_id)
+
+        # Convert child to letter
+        # Format
+        # header  : '{"ident":"...", "tid":"...", "needPost":"true/false"}'
+        # content : '{"sn":"...", "vsn":"...", "datetime":"...",
+        #             "extra":{"resultPath":"...", "cmds":"..."} }"
+        v2Letter = GL5610_v2[0].toLetter()
+
+        v2Tid = v2Letter.getHeader("tid")
+        self.assertEqual("GL5610-v2", v2Tid)
+
+        v2NeedPost = v2Letter.getHeader("needPost")
+        self.assertEqual("true", v2NeedPost)
+
+        v2SN = v2Letter.getContent("sn")
+        self.assertEqual("ABC", v2SN)
+
+        v2VSN = v2Letter.getContent("vsn")
+        self.assertEqual("VersionToto", v2VSN)
+
+        extra = v2Letter.getContent("extra")
+
+        resultPath = extra['resultPath']
+        cmds = extra['cmds']
+
+        self.assertEqual("./ll2", resultPath)
+        self.assertEqual(['touch ll2'], cmds)
+
+    def tes_postListener(self):
+
+        from manager.basic.letter import MenuLetter, BinaryLetter
+        from manager.master.worker import Worker
+        from manager.basic.info import Info
+        from manager.worker.server import Server
+        from manager.basic.mmanager import MManager
+        from manager.worker.postListener import PostListener, PostProvider
+
+        manager = MManager()
+
+        info = Info("./manager/worker/config.yaml")
+        manager.addModule(info)
+
+        server = Server("127.0.0.1", 8044, info, manager)
+        manager.addModule(server)
+
+        pl = PostListener("127.0.0.1", 8033, manager)
+        pl.start()
+
+        manager.addModule(pl)
+
+        postTaskLetter = PostTaskLetter("version",
+                                        ["echo 'POST_PROCESSING'", "echo Processing > processing"],
+                                        "./processing")
+
+        menuLetter = MenuLetter("version", "Mid",
+
+                                ["cd /home/aydenlin",
+                                 "touch ll",
+                                 "echo '123' > ll"],
+
+                                ["file1", "file2", "file3"],
+                                "/home/aydenlin/ll")
+
+        postTaskLetter.addMenu(menuLetter)
+        pl.postAppend(postTaskLetter)
+
+        time.sleep(1)
+
+        # file1
+        binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", fileName = "file1", parent = "version")
+        binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", fileName = "file1", parent = "version")
+
+        provider_1 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_1.provide(binaryLetter)
+        provider_1.provide(binaryLetter_last)
+
+        # file2
+        binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", fileName = "file2", parent = "version")
+        binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", fileName = "file2", parent = "version")
+
+        provider_2 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_2.provide(binaryLetter)
+        provider_2.provide(binaryLetter_last)
+
+        # file3
+        binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", fileName = "file3", parent = "version")
+        binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", fileName = "file3", parent = "version")
+
+        provider_3 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_3.provide(binaryLetter)
+        provider_3.provide(binaryLetter_last)
+
+
+        time.sleep(3)
+
+        # Binary letter from postListener
+        bin_letter = server.responseRetrive()
+        self.assertTrue(bin_letter is not None)
+        self.assertEqual(b'Processing\n', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
+
+        bin_letter = server.responseRetrive()
+        self.assertTrue(bin_letter is not None)
+        self.assertEqual(b'', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
+
+        # Response letter from postListener
+        response_letter = server.responseRetrive()
+        self.assertTrue(response_letter is not None)
+        self.assertEqual("WORKER_EXAMPLE", response_letter.getIdent())
+        self.assertEqual("version", response_letter.getTid())
 
 
 if __name__ == '__main__':

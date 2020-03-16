@@ -1,0 +1,68 @@
+Address: "127.0.0.1"
+Port: 8024
+
+LogDir: ./log
+ResultDir: ./data
+Storage: ./Storage
+PostStorage: ./PostStorage
+
+GitlabUrl: http://gpon.git.com:8011
+Project_ID: 34
+
+PrivateToken: 4mU2joxotSkzTqLPhvgu
+
+TimeZone: +8:00
+
+WaitingInterval: 10
+
+BuildSet:
+  Builds:
+    GL5610:
+        cmd:
+        - echo ll > ll
+        output:
+        - ./ll
+
+    GL5610-v2:
+        cmd:
+        - echo ll2 > ll2
+        output:
+        - ./ll2
+
+    GL5610-v3:
+        cmd:
+        - echo ll3 > ll3
+        output:
+        - ./ll3
+
+    GL8900:
+        cmd:
+        - echo ll4 > ll4
+        output:
+        - ./ll4
+
+  Posts:
+    P1:
+      group:
+        - GL5610
+        - GL5610-v2
+        - GL5610-v3
+      cmd:
+        - cat ll ll2 ll3 > post
+      output:
+        - ./post
+
+    P2:
+      group:
+        - GL8900
+      cmd:
+        - cat ll4 > post_gl8900
+        - echo 8900 >> post_gl8900
+      output:
+        - ./post_gl8900
+
+  Merge:
+    cmd:
+      - cat * > total
+    output:
+      - ./total

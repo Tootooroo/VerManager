@@ -1,23 +1,26 @@
 # logger.py
 
 from datetime import datetime
-
-from typing import *
-from manager.misc.basic.letter import Letter
-from manager.misc.basic.type import *
-
 from queue import Queue
-from threading import Thread
+from typing import *
+
+from manager.basic.mmanager import ModuleDaemon
+from manager.basic.letter import Letter
+from manager.basic.type import *
+
 
 import os
+
+M_NAME ="Logger"
 
 LOG_ID = str
 LOG_MSG = str
 
-class Logger(Thread):
+class Logger(ModuleDaemon):
 
     def __init__(self, path: str) -> None:
-        Thread.__init__(self)
+        global M_NAME
+        ModuleDaemon.__init__(self, M_NAME)
 
         self.logPath = path
         self.logQueue = Queue(32) # type: Queue[Tuple[LOG_ID, LOG_MSG]]
@@ -45,15 +48,33 @@ class Logger(Thread):
 
         return Ok
 
+    def log_close(self, logId: LOG_ID) -> None:
+        if not logId in self.logTunnels:
+            return None
+
+        fd = self.logTunnels[logId]
+        fd.close()
+
+
     def __output(self, unit: Tuple[LOG_ID, LOG_MSG]) -> None:
         logId = unit[0]
         logMessage = unit[1]
+
+        if not logId in self.logTunnels:
+            return None
 
         logFile = self.logTunnels[logId]
 
         logMessage = self.__format(logMessage)
         logFile.write(logMessage)
         logFile.flush()
+
+    @staticmethod
+    def putLog(log:'Logger', lid:LOG_ID, msg:LOG_MSG) -> None:
+        if log is None:
+            return None
+
+        log.log_put(lid, msg)
 
     @staticmethod
     def __format(message: LOG_MSG) -> str:

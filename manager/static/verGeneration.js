@@ -3,15 +3,15 @@ import { ok, error } from "./lib/type.js";
 
 export { verGeneration_main };
 
-var verSeperator = "__<?>__";
+const verSeperator = "__<?>__";
 
 // Definitions
 function verGeneration_main() {
     fillVerList();
 
-    var submit = document.getElementById('generationBtn');
+    let submit = document.getElementById('generationBtn');
     submit.addEventListener('click', function() {
-        var vSelect = document.getElementById('verSelect');
+        let vSelect = document.getElementById('verSelect');
 
         generate();
 
@@ -49,13 +49,13 @@ function waitGenerateDone() {
     xhr.onload = function(event) {
         // Generation is done
         if (xhr.status == 200) {
-            // Download file via returned url
-            location.assign(xhr.responseText);
-
             var submit = document.getElementById('generationBtn');
             var vSelect = document.getElementById('verSelect');
             submit.setAttribute('disabled', false);
             vSelect.setAttribute('disabled', false);
+
+            // Download file via returned url
+            location.assign(xhr.responseText);
         } else if (xhr.status == 304) {
             // Pending
             waitGenerateDone.prototype.timer = setTimeout(waitGenerateDone, 1000);

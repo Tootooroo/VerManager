@@ -4,20 +4,25 @@
 # provide communication interface to another module
 
 import socket
-import typing
 import select
+import traceback
 
-from .task import *
+from typing import Tuple, Optional, List, Dict, Callable
+
+from .task import Task, TaskGroup
 from datetime import datetime, timedelta
 
 from functools import reduce
 from threading import Thread, Lock
 
-from manager.misc.basic.letter import Letter
-from manager.misc.basic.type import Ok, Error
+from manager.basic.letter import Letter, NewLetter, \
+    receving as letter_receving, sending as letter_sending
+from manager.basic.type import Ok, Error
+from manager.basic.commands import Command
 
-class WorkerInitFailed(Exception):
-    pass
+from manager.master.build import Post
+
+class WorkerInitFailed(Exception): pass
 
 WorkerState = int
 
@@ -27,16 +32,16 @@ class Worker:
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: socket.socket, address:Tuple[str, int]) -> None:
+        self.role = None # type: Optional[int]
         self.sock = sock
+        self.address = address
         self.max = 0
-        self.processing = 0
         self.inProcTask = TaskGroup()
+        self.menus = [] # type: List[Tuple[str, str]]
         self.ident = ""
 
-        # TaskGroup is not a thread safe object
-        # lock should protect TaskGroup and processing
-        self.lock = Lock()
+        self.sendLock = Lock()
 
         # Before a PropertyNotify letter is report
         # from worker we see a worker as an offline
@@ -56,33 +61,28 @@ class Worker:
         self.counters = [0, 0, 0]
         self.__clock = datetime.now()
 
+    def active(self) -> None:
         # Prevent permanent blocking from waiting for PropertyNotify from worker
         self.sock.settimeout(10)
 
-        # Worker is created while a connection is created between
-        # worker and server. The first letter from worker to server
-        # must a PropertyNotify type
         try:
             l = self.__recv()
 
-            # May happen if messages from worker is not valid
             if l is None:
                 raise WorkerInitFailed()
 
         except socket.timeout:
             raise WorkerInitFailed()
 
-        # After PropertyNotify is received reset timeout value to default
         self.sock.settimeout(None)
 
         if Letter.typeOfLetter(l) == Letter.PropertyNotify:
             self.max = l.propNotify_MAX()
-            self.processing = l.propNotify_PROC()
             self.ident = l.propNotify_IDENT()
             self.state = Worker.STATE_ONLINE
             self.__clock = datetime.utcnow()
         else:
-            raise Exception
+            raise WorkerInitFailed()
 
     def sockSet(self, sock: socket.socket) -> None:
         self.sock = sock
@@ -91,15 +91,18 @@ class Worker:
         return self.sock
 
     def waitCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_WAITING]
 
     def offlineCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_OFFLINE]
 
     def onlineCounter(self) -> int:
+        self.__counterSync()
         return self.counters[Worker.STATE_ONLINE]
 
-    def counterSync(self) -> None:
+    def __counterSync(self) -> None:
         delta = datetime.utcnow() - self.__clock
         self.counters[self.state] = delta.seconds
 
@@ -109,6 +112,9 @@ class Worker:
 
         self.state = s
         self.__clock = datetime.utcnow()
+
+    def getAddress(self) -> Tuple[str, int]:
+        return self.address
 
     def getIdent(self) -> str:
         return self.ident
@@ -123,41 +129,47 @@ class Worker:
         return self.state == Worker.STATE_OFFLINE
 
     def isFree(self) -> bool:
-        return self.processing == 0
+        return self.inProcTask.numOfTasks() == 0
 
     def isAbleToAccept(self) -> bool:
-        return self.processing < self.max
+        return self.inProcTask.numOfTasks() < self.max
 
     def searchTask(self, tid: str) -> Optional[Task]:
-        with self.lock:
-            return self.inProcTask.search(tid)
+        return self.inProcTask.search(tid)
 
     def inProcTasks(self) -> List[Task]:
         return self.inProcTask.toList()
 
     def removeTask(self, tid: str) -> None:
-        with self.lock:
-            self.processing -= 1
-            self.inProcTask.remove(tid)
+        self.inProcTask.remove(tid)
+
+    def removeTaskWithCond(self, predicate:Callable[[Task], bool]) -> None:
+        return self.inProcTask.removeTasks(predicate)
+
+    def maxNumOfTask(self) -> int:
+        return self.max
 
     def numOfTaskProc(self) -> int:
-        return self.processing
+        return self.inProcTask.numOfTasks()
 
-    def do(self, task: Task) -> None:
-        if not self.isAbleToAccept():
-            raise Exception
-
-        # Task assign
-        letter = Letter(Letter.NewTask, {"ident":self.ident, "tid":task.id()}, \
-                        task.content)
+    def control(self, cmd:Command) -> None:
+        letter = cmd.toLetter()
         self.__send(letter)
 
-        # Register task into task group
-        task.stateChange(Task.STATE_IN_PROC)
+    def do(self, task: Task) -> None:
+        letter = task.toLetter()
 
-        with self.lock:
-            self.processing += 1
-            self.inProcTask.newTask(task)
+        if letter is None:
+            print("letter is None")
+            return None
+
+        self.__send(letter)
+        print("Master Send to "+self.getIdent()+":"+letter.toString())
+
+        # Register task into task group
+        task.toProcState()
+
+        self.inProcTask.newTask(task)
 
     # Provide ability to cancel task in queue or
     # processed task
@@ -165,35 +177,27 @@ class Worker:
     def cancel(self, id: str) -> str:
         pass
 
+    def status(self) -> Dict:
+        status_dict = { "max":self.max,
+                        "sock":self.sock,
+                        "processing":self.inProcTask.numOfTasks(),
+                        "inProcTask":self.inProcTask.toList_(),
+                        "ident":self.ident}
+        return status_dict
+
     @staticmethod
     def receving(sock: socket.socket) -> Optional[Letter]:
-        content = b''
-        remain = Letter.BINARY_HEADER_LEN
-
-        while remain > 0:
-            chunk = sock.recv(remain)
-            if chunk == b'':
-                raise Exception
-
-            content += chunk
-            remain = Letter.letterBytesRemain(content)
-
-        return Letter.parse(content)
+        return letter_receving(sock)
 
     @staticmethod
     def sending(sock: socket.socket, l: Letter) -> None:
-        jBytes = l.toBytesWithLength()
-        totalSent = 0
-        length = len(jBytes)
-
-        while totalSent < length:
-            sent = sock.send(jBytes[totalSent:])
-            if sent == 0:
-                raise Exception
-            totalSent += sent
+        return letter_sending(sock, l)
 
     def __recv(self) -> Optional[Letter]:
         return Worker.receving(self.sock)
 
     def __send(self, l: Letter) -> None:
-        Worker.sending(self.sock, l)
+        try:
+            with self.sendLock: Worker.sending(self.sock, l)
+        except:
+            traceback.print_exc()

@@ -10,16 +10,15 @@ from functools import reduce
 from django.shortcuts import render
 from django.template import RequestContext
 
-from .misc.verControl import RevSync
-from .misc.dispatcher import Dispatcher
-from .misc.worker import Task
+from .master.verControl import RevSync
+from .master.dispatcher import Dispatcher
+from .master.worker import Task
 
-import manager.misc.components as Components
-
-from .misc.basic.type import *
+from .basic.type import *
 
 from datetime import datetime
 
+import manager.master.master as S
 import traceback
 
 # Models
@@ -29,14 +28,10 @@ from .models import Revisions, Versions
 def index(request):
     return render(request, 'index.html')
 
-def verRegPage(request):
-    return render(request, 'verRegister.html')
-
-def verGenPage(request):
-    return render(request, 'verGeneration.html')
+def verManagerPage(request):
+    return render(request, 'verManager.html')
 
 def register(request):
-    print(request.POST)
     try:
         verName = request.POST['Version']
         revision = request.POST['verChoice']
@@ -63,18 +58,26 @@ def newRev(request):
 def generation(request):
     import os
 
-    dispatcher = Components.dispatcher
+    dispatcher = S.ServerInstance.getModule('Dispatcher')
 
     try:
         verIdent = request.POST['verSelect']
         dateTime = request.POST['Datetime']
+        extra_info = {}
+
+        if "logFrom" in request.POST and 'logTo' in request.POST:
+            logFrom = request.POST['logFrom']
+            logTo = request.POST['logTo']
+
+            extra_info['logFrom'] = logFrom
+            extra_info['logTo'] = logTo
+
         version = Versions.objects.get(pk=verIdent)
 
         if version == None:
             return HttpResponseBadRequest()
 
-        task = Task(verIdent,
-                    {"sn":version.sn, "vsn":verIdent, "datetime":dateTime})
+        task = Task(verIdent, version.sn, verIdent, extra = extra_info)
 
         if dispatcher.dispatch(task) == False:
             return HttpResponseBadRequest()
@@ -86,18 +89,22 @@ def generation(request):
     return HttpResponse()
 
 def isGenerationDone(request):
-    dispatcher = Components.dispatcher
+    dispatcher = S.ServerInstance.getModule('Dispatcher')
 
     verIdent = request.POST['verSelect']
 
     if not dispatcher.isTaskExists(verIdent):
-        print(verIdent + " Not Exists")
         return HttpResponseBadRequest()
 
     if dispatcher.isTaskFinished(verIdent):
         resultUrl = dispatcher.retrive(verIdent)
         return HttpResponse(resultUrl)
     elif dispatcher.isTaskInProc(verIdent) or dispatcher.isTaskPrepare(verIdent):
+
+        # Update last counter of Task. This counter will
+        # give help to remove outdated tasks
+        dispatcher.taskLastUpdate(verIdent)
+
         return HttpResponseNotModified()
     elif dispatcher.isTaskFailure(verIdent):
         dispatcher.removeTask(verIdent)
