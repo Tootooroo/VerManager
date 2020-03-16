@@ -4,8 +4,12 @@
 
 import manager.master.components as Components
 
+
 from typing import *
 
+from manager.basic.type import State, Ok, Error
+from manager.basic.util import map_strict
+from manager.basic.mmanager import ModuleDaemon
 from threading import Thread
 from manager.models import Revisions
 from django.http import HttpRequest
@@ -24,7 +28,9 @@ import traceback
 
 revSyncner = None
 
-class RevSync(Thread):
+M_NAME = "RevSyncner"
+
+class RevSync(ModuleDaemon):
     # This queue will fill by new revision that merged into
     # repository after RevSync started and RevSync will
     # put such revision into model so the revision database
@@ -32,22 +38,37 @@ class RevSync(Thread):
     revQueue = queue.Queue(maxsize=10) # type: queue.Queue
 
     def __init__(self, sInst:Any) -> None:
-        Thread.__init__(self)
+        global M_NAME
+
+        ModuleDaemon.__init__(self, M_NAME)
+
+        self.__stop = False
 
         self.__sInst = sInst
 
-        cfgs = sInst.getModule(INFO_M_NAME)
+    def stop(self) -> None:
+        self.__stop = True
+
+    def connectToGitlab(self) -> State:
+        cfgs = self.__sInst.getModule(INFO_M_NAME)
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
 
         self.__project_id = cfgs.getConfig("Project_ID")
 
         if url == "" or token == "":
-            return None
+            return Error
         # fixme: repo url and token key must not a constant just place these in
         #        configuration file
         self.gitlabRef = gitlab.Gitlab(url, token);
-        self.gitlabRef.auth()
+
+        try:
+            self.gitlabRef.auth()
+        except Exception:
+            return Error
+
+        return Ok
+
 
     def revTransfer(rev, tz):
         revision = Revisions(sn=rev.id,
@@ -89,7 +110,8 @@ class RevSync(Thread):
         # Fill revisions just retrived into model
         config = self.__sInst.getModule('Config')
         tz = config.getConfig('TimeZone')
-        list(map(lambda rev: RevSync.revTransfer(rev, tz), revisions))
+
+        map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
 
         return True
 
@@ -124,13 +146,21 @@ class RevSync(Thread):
     # is for the purpose of quick response to where request come
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
-    def run(self):
+    def run(self) -> None:
+
+        if self.connectToGitlab() is Error:
+            return None
+
         self.revDBInit()
 
         config = self.__sInst.getModule('Config')
         tz = config.getConfig('TimeZone')
 
         while True:
+
+            if self.__stop is True:
+                return None
+
             request = RevSync.revQueue.get(block=True, timeout=None)
 
             # Premise of these code work correct is a merge request
@@ -140,7 +170,7 @@ class RevSync(Thread):
             # database
             body = self.gitlabWebHooksChecking(request)
 
-            if body == None:
+            if body is None:
                 continue
 
             last_commit = body['object_attributes']['last_commit']
@@ -152,12 +182,3 @@ class RevSync(Thread):
             rev = Revisions(sn = sn_, author = author_, comment = comment_,
                             dateTime = date_time_)
             rev.save()
-
-def revSyncSpawn():
-    try :
-        revSyncner = RevSync()
-
-        revSyncner.revDBInit()
-        revSyncner.start()
-    except Exception:
-        pass

@@ -76,13 +76,14 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Log, logHandler)
         self.addModule(eventListener)
 
-        logger = Logger("./logger")
+        logger = Logger(LOGGER_M_NAME)
         self.addModule(logger)
 
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        #revSyncner = RevSync(self)
+        revSyncner = RevSync(self)
+        self.addModule(revSyncner)
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
         workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher, workerRoom]))
