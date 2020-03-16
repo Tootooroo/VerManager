@@ -35,10 +35,10 @@ class Task:
     STATE_FAILURE = 3
 
     STATE_TOPOLOGY = {
-        STATE_PREPARE:[STATE_IN_PROC, STATE_FAILURE],
-        STATE_IN_PROC:[STATE_FINISHED, STATE_FAILURE],
-        STATE_FINISHED:[STATE_FAILURE],
-        STATE_FAILURE:[]
+        STATE_PREPARE:[STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],
+        STATE_IN_PROC:[STATE_IN_PROC, STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
+        STATE_FINISHED:[STATE_FINISHED, STATE_FAILURE],
+        STATE_FAILURE:[STATE_FAILURE]
     } # type: Dict[int, List[int]]
 
 
@@ -475,11 +475,13 @@ class TaskGroup:
         return Ok
 
     def toList(self) -> List[Task]:
-        with self.__lock:
-            task_dicts = list(self.__tasks.values())
-            task_lists = list(map(lambda d: list(d.values()), task_dicts))
+        with self.__lock: return self.__toList_non_lock()
 
-            return reduce(lambda acc, cur: acc + cur, task_lists)
+    def __toList_non_lock(self) -> List[Task]:
+        task_dicts = list(self.__tasks.values())
+        task_lists = list(map(lambda d: list(d.values()), task_dicts))
+
+        return reduce(lambda acc, cur: acc + cur, task_lists)
 
     def toList_(self) -> List[str]:
         l = self.toList()
@@ -503,7 +505,7 @@ class TaskGroup:
 
     def removeTasks(self, predicate:Callable[[Task], bool]) -> None:
         with self.__lock:
-            for t in self.toList():
+            for t in self.__toList_non_lock():
                 ret = predicate(t)
 
                 if ret is True:
