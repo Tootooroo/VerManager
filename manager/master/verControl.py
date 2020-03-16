@@ -108,7 +108,7 @@ class RevSync(ModuleDaemon):
         Revisions.objects.all().delete()  # type: ignore
 
         # Fill revisions just retrived into model
-        config = self.__sInst.getModule('Config')
+        config = self.__sInst.getModule(INFO_M_NAME)
         tz = config.getConfig('TimeZone')
 
         map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
@@ -153,7 +153,7 @@ class RevSync(ModuleDaemon):
 
         self.revDBInit()
 
-        config = self.__sInst.getModule('Config')
+        config = self.__sInst.getModule(INFO_M_NAME)
         tz = config.getConfig('TimeZone')
 
         while True:
