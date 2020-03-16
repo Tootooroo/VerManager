@@ -672,6 +672,7 @@ class LogRegLetter(Letter):
             self,
             Letter.LogRegister,
             {"ident": ident, "logId": logId},
+            {}
         )
 
     @staticmethod
