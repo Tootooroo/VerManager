@@ -350,6 +350,9 @@ class UnitTest(TestCase):
 
         time.sleep(10)
 
+        task5 = Task("127", "123", "127")
+        dispatcher.dispatch(task5)
+
         listener = workerRoom.postListener()
         assert(listener is not None)
 
@@ -357,6 +360,10 @@ class UnitTest(TestCase):
 
         l_client = list(filter(lambda c: c.getIdent() == l_ident, workers))[0]
         l_client.stop()
+
+        time.sleep(2)
+        for w in workerRoom.getWorkers():
+            self.assertEqual(0, len(w.inProcTasks()))
 
         time.sleep(20)
 
