@@ -211,8 +211,7 @@ class Processor(Module):
                                    CmdResponseLetter.STATE_SUCCESS,
                                    extra = {"isListener":"true"})
         server.transfer(letter)
-
-        return Processor.__postProvider_config(address, port, info, cInst)
+        return Ok
 
     @staticmethod
     def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:

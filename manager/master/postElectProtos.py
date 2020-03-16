@@ -56,8 +56,6 @@ class RandomElectProtocol(PostElectProtocol):
             if l.getState() is CmdResponseLetter.STATE_FAILED:
                 pass
 
-            p.role = Role_Provider
-
         self.isInit = True
 
         return Ok
@@ -68,7 +66,6 @@ class RandomElectProtocol(PostElectProtocol):
             return (Ok, "")
 
         listener = reduce(self.__random_elect, self.group)
-
         if listener in self.__blackList:
             return (Error, "")
 
@@ -93,7 +90,7 @@ class RandomElectProtocol(PostElectProtocol):
         if state == CmdResponseLetter.STATE_FAILED:
             return (Error, l.getIdent())
 
-        self.group.setRole(ident, Role_Listener)
+        self.group.setListener(listener)
 
         return (Ok, l.getIdent())
 

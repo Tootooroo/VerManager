@@ -39,99 +39,44 @@ class ElectGroup:
     def __iter__(self) -> ElectGroup_iter:
         workers = self.__providers.copy()
 
-        if self.__listener is not None:
-            workers[self.__listener.getIdent()] = self.__listener
-
         iter = workers.__iter__()
         return ElectGroup_iter(iter, workers)
 
     def numOfWorkers(self) -> int:
         num_of_providers = len(self.__providers)
-
-        if self.__listener is not None:
-            return 1 + num_of_providers
-
         return num_of_providers
+
+    def setListener(self, lis:Optional[Worker]) -> None:
+        if lis is not None:
+            lis.role = Role_Listener
+        self.__listener = lis
 
     def getListener(self) -> Optional[Worker]:
         return self.__listener
 
-    def setRole(self, ident:str, role:PostRole) -> State:
-        # The worker is a listener
-        if ident not in self.__providers:
-            if self.__listener is None:
-                return Error
+    def isListener(self, ident) -> bool:
+        if self.__listener is None:
+            return False
+        return ident == self.__listener.getIdent()
 
-            listener_ident = self.__listener.getIdent()
-
-            if ident != listener_ident:
-                return Error
-            else:
-
-                if role == Role_Listener:
-                    self.__listener.role = Role_Listener
-                else:
-                    self.__listener.role = Role_Provider
-                    self.__providers[listener_ident] = self.__listener
-                    self.__listener = None
-        else:
-            # The worker in a provider
-            worker = self.__providers[ident]
-
-            if role == Role_Listener:
-                worker.role = Role_Listener
-
-                if self.__listener is not None:
-                    l_ident = self.__listener.getIdent()
-                    self.__providers[l_ident] = self.__listener
-
-                self.__listener = worker
-                del self.__providers [worker.getIdent()]
-            else:
-                worker.role = Role_Provider
-
-        return Ok
-
-    def removeWorker(self, ident:str) -> State:
-
-        # If the removed worker is listener
-        if self.__listener is not None:
-            ident_listener = self.__listener.getIdent()
-
-            if ident == ident_listener:
-                self.__listener = None
-
-                return Ok
-
-        # If the removed worker is provider
+    def removeProvider(self, ident:str) -> State:
         if ident not in self.__providers:
             return Error
-
-        del self.__providers[ident]
-
+        del self.__providers [ident]
         return Ok
 
-    def addWorker(self, w:Worker) -> State:
+    def addProvider(self, w:Worker) -> State:
         ident = w.getIdent()
 
-        if  ident in self.__providers:
+        if ident in self.__providers:
             return Error
 
+        w.role = Role_Provider
         self.__providers[ident] = w
-
         return Ok
 
     def getProviders(self) -> List[Worker]:
-
-        if self.__listener is None:
-            return list(self.__providers.values())
-
-        listener_ident = self.__listener.getIdent()
-        worker_list = list(self.__providers.values())
-
-        providers = list(filter(lambda w: w.getIdent() != listener_ident, worker_list))
-
-        return providers
+        return list(self.__providers.values())
 
     def getProvider(self, ident:str) -> Optional[Worker]:
         if ident not in self.__providers:
@@ -192,14 +137,20 @@ class PostManager:
 
         self.__eProtocol.group = self.__eGroup
 
-    def removeWorker(self, ident:str) -> State:
-        return self.__eGroup.removeWorker(ident)
+    def getListener(self) -> Optional[Worker]:
+        return self.__eGroup.getListener()
 
-    def addWorker(self, w:Worker) -> State:
-        return self.__eGroup.addWorker(w)
+    def setListener(self, lis:Optional[Worker]) -> None:
+        self.__eGroup.setListener(lis)
 
-    def setRole(self, ident:str, role:PostRole) -> State:
-        return self.__eGroup.setRole(ident, role)
+    def isListener(self, ident:str) -> bool:
+        return self.__eGroup.isListener(ident)
+
+    def removeProvider(self, ident:str) -> State:
+        return self.__eGroup.removeProvider(ident)
+
+    def addProvider(self, w:Worker) -> State:
+        return self.__eGroup.addProvider(w)
 
     def proto_init(self) -> State:
         return self.__eProtocol.init()
@@ -215,6 +166,3 @@ class PostManager:
 
     def relations(self) -> Tuple[str, List[str]]:
         return self.__eProtocol.relations()
-
-    def getListener(self) -> Optional[Worker]:
-        return self.__eGroup.getListener()
