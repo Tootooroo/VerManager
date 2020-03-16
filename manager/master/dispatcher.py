@@ -24,9 +24,7 @@ from manager.master.workerRoom import WorkerRoom
 
 from datetime import datetime
 
-from manager.master.logger import Logger
-
-from manager.master.logger import M_NAME as LOGGER_M_NAME
+from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 class Dispatcher(ModuleDaemon):
 
@@ -55,12 +53,24 @@ class Dispatcher(ModuleDaemon):
         self.__workerLock = Lock()
         self.__numOfWorkers = 0
 
+        self.__logger = None # type: Optional[Logger]
+
+    def __dispatch_logging(self, msg:str) -> None:
+        if self.__logger is None:
+            self.__logger = self.__sInst.getModule(LOGGER_M_NAME)
+
+            if self.__logger is None:
+                return None
+
+        Logger.putLog(self.__logger, "dispatcher", msg)
+
     # Dispatch a task to a worker of
     # all by overhead of workers
     #
     # return True if task is assign successful otherwise return False
     def __dispatch(self, task: Task) -> bool:
         if isinstance(task, SuperTask):
+            self.__dispatch_logging("Task " + task.id() + " is a SuperTask.")
             return self.__dispatchSuperTask(task)
 
         ret = self.__do_dispatch(task)
@@ -84,12 +94,16 @@ class Dispatcher(ModuleDaemon):
 
         # No workers satisfiy the condition.
         if workers == []:
-            print("Unable to accept")
+            self.__dispatch_logging("Task " + task.id() +
+                                    " dispatch failed: No available worker")
             return False
 
         try:
             workers[0].do(task)
         except:
+            self.__dispatch_logging("Task " + task.id() +
+                                    " dispatch failed: Worker is\
+                                      unable to do the task.")
             return False
 
         return True
@@ -110,11 +124,18 @@ class Dispatcher(ModuleDaemon):
                 sub.stateChange(Task.STATE_IN_PROC)
 
         if ret is True:
+            self.__dispatch_logging("SuperTask " + task.id() +
+                                    " is dispatched completly")
             task.stateChange(Task.STATE_IN_PROC)
+        else:
+            self.__dispatch_logging("SuperTask " + task.id() +
+                                    " is not dispatched completly")
 
         return ret
 
     def dispatch(self, task: Task) -> bool:
+        self.__dispatch_logging("Dispatch task " + task.id())
+
         if task.id() in self.__tasks:
             task = self.__tasks[task.id()]
             task.refs += 1
@@ -137,8 +158,13 @@ class Dispatcher(ModuleDaemon):
     def redispatch(self, task: Task) -> bool:
         taskId = task.id()
 
+        self.__dispatch_logging("Redispatch task " + taskId)
+
         if taskId in self.__tasks:
-            task.stateChange(Task.STATE_PREPARE)
+            ret = task.stateChange(Task.STATE_PREPARE)
+            if ret is Error:
+                return False
+
             del self.__tasks [taskId]
 
         with self.dispatchLock:
@@ -176,11 +202,6 @@ class Dispatcher(ModuleDaemon):
 
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        logger = self.__sInst.getModule(LOGGER_M_NAME)
-
-        if not logger is None:
-            logger.log_register("dispatcher")
-
         counter = 0
 
 
@@ -198,27 +219,31 @@ class Dispatcher(ModuleDaemon):
                 counter += 1
                 continue
 
-            Logger.putLog(logger, "dispatcher", "Task arrived")
+            self.__dispatch_logging("Task arrived")
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
 
             if workers == []:
-                Logger.putLog(logger, "dispatcher", "No acceptable worker")
+                self.__dispatch_logging("No acceptable worker")
                 time.sleep(0.1)
                 continue
 
             task = self.taskWait.pop()
 
-            Logger.putLog(logger, "dispatcher", "Dispatch task: " + task.id())
+            # Task can be drop via setting its state to STATE_FAILURE
+            if task.state == Task.STATE_FAILURE:
+                continue
+
+            self.__dispatch_logging("Dispatch task: " + task.id())
 
             if not self.__dispatch(task):
-                Logger.putLog(logger, "dispatcher",
-                              "Dispatcher task " + task.id() + " failed. Reappend")
-
+                self.__dispatch_logging("Dispatch task " + task.id() +
+                                        " failed. append to tail of queue")
                 self.taskWait.append(task)
 
             if len(self.taskWait) == 0:
+                self.__dispatch_logging("TaskWait Queue is empty.")
                 self.taskEvent.clear()
 
     def __taskAging(self) -> None:
@@ -231,6 +256,7 @@ class Dispatcher(ModuleDaemon):
         tasks_outdated = list(filter(lambda t: True if t.refs == 0 else cond_long(t), tasks))
 
         idents_outdated = list(map(lambda t: t.id(), tasks_outdated))
+        self.__dispatch_logging("Outdate tasks:" + str(idents_outdated))
 
         for ident in idents_outdated:
             if not ident in self.__tasks:
@@ -242,8 +268,11 @@ class Dispatcher(ModuleDaemon):
             # will not be aging even thought
             # their counter is out of date.
             if t.isProc() or t.isPrepare():
+                self.__dispatch_logging(
+                    "Task " + ident + "is in processing/Prepare. Abort to remove")
                 continue
 
+            self.__dispatch_logging("Remove task " + ident)
             del self.__tasks [ident]
 
     # Cancel a task identified by taskId
@@ -337,11 +366,14 @@ def workerLost_redispatch(w: Worker, args:Any) -> None:
         if w.role is Role_Listener and t.isAChild():
             parent = t.getParent()
             assert(parent is not None)
-            parent.toState_force(Task.STATE_FAILURE)
+            # Change state to failure must success
+            assert(parent.toState_force(Task.STATE_FAILURE) is Ok)
+
+            continue
 
         dispatcher.redispatch(t)
 
-    workers = workerRoom.getWorkerWithCond(lambda ws: ws)
+    workers = workerRoom.getWorkerWithCond(lambda w_set: w_set)
 
     # Remove all tasks in failure state.
     if w.role is Role_Listener:

@@ -11,7 +11,7 @@ from manager.master.task import Task, SuperTask, SingleTask, PostTask
 
 from manager.basic.commands import PostConfigCmd
 from manager.basic.storage import Storage, StoChooser
-from manager.master.logger import Logger
+from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom
 from manager.master.workerRoom import M_NAME as WORKER_ROOM_MOD_NAME
@@ -162,7 +162,7 @@ def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         traceback.print_exc()
 
 def logHandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = eventListener.getModule('Logger')
+    logger = eventListener.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
@@ -171,7 +171,7 @@ def logHandler(eventListener: EventListener, letter: Letter) -> None:
         Logger.putLog(logger, logId, logMsg)
 
 def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = eventListener.getModule('Logger')
+    logger = eventListener.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logger.log_register(logId)
