@@ -76,7 +76,8 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Log, logHandler)
         self.addModule(eventListener)
 
-        logger = Logger(LOGGER_M_NAME)
+        logDir = info.getConfig('LogDir')
+        logger = Logger(logDir)
         self.addModule(logger)
 
         storage = Storage(info.getConfig('Storage'), self)

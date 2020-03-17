@@ -15,71 +15,53 @@ TimeZone: +8:00
 WaitingInterval: 10
 
 BuildSet:
-  RepoUrl: git@gpon.git.com:gpon/olt.git
-  ProjectName: olt
-
   Builds:
     GL5610:
         cmd:
-        - ...
-        - ...
+        - echo ll > ll
         output:
-        - ...
+        - ./ll
 
     GL5610-v2:
         cmd:
-        - ...
-        - ...
+        - echo ll2 > ll2
         output:
-        - ...
+        - ./ll2
 
     GL5610-v3:
         cmd:
-        - ...
-        - ...
+        - echo ll3 > ll3
         output:
-        - ...
+        - ./ll3
 
     GL8900:
         cmd:
-        - ...
-        - ...
+        - echo ll4 > ll4
         output:
-        - ...
+        - ./ll4
 
   Posts:
-    GL5610_V2_V3:
-        group:
+    P1:
+      group:
         - GL5610
         - GL5610-v2
         - GL5610-v3
-        cmd:
-        - link_GL5610.bat
-        output:
-        - "C:\\pack.rar"
+      cmd:
+        - cat ll ll2 ll3 > post
+      output:
+        - ./post
 
-    GL8900:
-        group:
+    P2:
+      group:
         - GL8900
-        cmd:
-        - link_GL8900.bat
-        output:
-        - "C:\\pack.rar"
+      cmd:
+        - cat ll4 > post_gl8900
+        - echo 8900 >> post_gl8900
+      output:
+        - ./post_gl8900
 
   Merge:
     cmd:
-      - ...
-      - ...
+      - cat * > total
     output:
-      - ...
-
-Build:
-  RepoUrl: git@gpon.git.com:gpon/olt.git
-  ProjectName: olt
-
-  cmd:
-    - ...
-    - ...
-
-  output:
-    - ...
+      - ./total
