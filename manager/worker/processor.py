@@ -316,7 +316,6 @@ class Processor(Module):
             if result.isSuccess is False:
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
-                continue
             else:
                 if needPost == "false":
                     self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
