@@ -558,9 +558,23 @@ class PropLetter(Letter):
 
 class BinaryLetter(Letter):
 
+    TYPE_FIELD_LEN = 2
+    LENGTH_FIELD_LEN = 4
+    FILE_NAME_FIELD_LEN = 32
+    TASK_ID_FIELD_LEN = 64
+    PARENT_FIELD_LEN = 64
+    MENU_FIELD_LEN = 30
+
+    class FIELD_LENGTH_EXCEPTION(Exception): pass
+
     def __init__(self, tid: str, bStr: bytes, menu: str = "",
                  fileName: str = "", parent: str = "",
                  last: str = "false") -> None:
+
+        BinaryLetter.field_length_check(BinaryLetter.FILE_NAME_FIELD_LEN, fileName)
+        BinaryLetter.field_length_check(BinaryLetter.TASK_ID_FIELD_LEN, tid)
+        BinaryLetter.field_length_check(BinaryLetter.PARENT_FIELD_LEN, parent)
+        BinaryLetter.field_length_check(BinaryLetter.MENU_FIELD_LEN, menu)
 
         Letter.__init__(
             self,
@@ -568,6 +582,11 @@ class BinaryLetter(Letter):
             {"tid": tid, "fileName": fileName, "parent": parent, "menu": menu},
             {"bytes": bStr}
         )
+
+    @staticmethod
+    def field_length_check(l, field):
+        if len(field) > l:
+            raise BinaryLetter.FIELD_LENGTH_EXCEPTION
 
     @staticmethod
     def parse(s: bytes) -> Optional['BinaryLetter']:
@@ -589,6 +608,7 @@ class BinaryLetter(Letter):
         return bStr
 
     def binaryPack(self) -> Optional[bytes]:
+
         tid = self.getHeader('tid')
         fileName = self.getHeader('fileName')
         content = self.getContent("bytes")
@@ -598,14 +618,16 @@ class BinaryLetter(Letter):
         if type(content) is str:
             return None
 
-        extend_bytes = lambda n, bs: b" " * n + bs
+        extend_bytes = lambda n, bs: b' ' * n + bs
 
-        type_field = (1).to_bytes(2, "big")
-        len_field = len(content).to_bytes(4, "big")
-        tid_field = extend_bytes(64 - len(tid), tid.encode())
-        parent_field = extend_bytes(64 - len(parent), parent.encode())
-        name_field = extend_bytes(32 - len(fileName), fileName.encode())
-        menu_field = extend_bytes(30 - len(menu), menu.encode())
+        type_field = (1).to_bytes(BinaryLetter.TYPE_FIELD_LEN, "big")
+        len_field = len(content).to_bytes(BinaryLetter.LENGTH_FIELD_LEN, "big")
+        tid_field = extend_bytes(BinaryLetter.TASK_ID_FIELD_LEN - len(tid), tid.encode())
+        parent_field = extend_bytes(BinaryLetter.PARENT_FIELD_LEN -
+                                    len(parent), parent.encode())
+        name_field = extend_bytes(BinaryLetter.FILE_NAME_FIELD_LEN -
+                                  len(fileName), fileName.encode())
+        menu_field = extend_bytes(BinaryLetter.MENU_FIELD_LEN - len(menu), menu.encode())
 
         # Safe here content must not str and must a bytes
         # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String

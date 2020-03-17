@@ -53,3 +53,14 @@ def pathSeperator() -> str:
 
 def map_strict(f:Callable, args:List[Any]) -> List[Any]:
     return list(map(f, args))
+
+def excepHandle(excep, handler:Callable) -> Callable:
+
+    def handle(f:Callable) -> None:
+        def handling(*args, **kwargs):
+            try:
+                f(*args, **kwargs)
+            except excep:
+                handler()
+
+    return handle

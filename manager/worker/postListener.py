@@ -579,12 +579,21 @@ class PostProcessor(Thread):
 
             with open(output, "rb") as binFile:
                 for bytes in binFile:
-                    binaryLetter = BinaryLetter(
-                        post.getVersion(), bytes,
-                        parent = version,
-                        fileName = fileName)
 
-                    server.transfer(binaryLetter)
+                    try:
+                        binaryLetter = BinaryLetter(
+                            post.getVersion(), bytes,
+                            parent = version,
+                            fileName = fileName)
+
+                        server.transfer(binaryLetter)
+
+                    except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                        response.setState(Letter.RESPONSE_STATE_FAILURE)
+                        server.transfer(response)
+
+                        wDir.cleanup()
+                        return None
 
                 binaryLetter.setBytes(b"")
                 server.transfer(binaryLetter)

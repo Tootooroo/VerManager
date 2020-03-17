@@ -173,6 +173,8 @@ class Server(Module):
             return Server.SOCK_OK
         except socket.timeout:
             return Server.SOCK_TIMEOUT
+        except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+            return Server.SOCK_PARSE_ERROR
         except:
 
             if self.__reconnectWrapper(retry) == Server.SOCK_OK:

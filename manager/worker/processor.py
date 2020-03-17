@@ -13,7 +13,7 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
-from ..basic.util import partition
+from ..basic.util import partition, excepHandle
 
 from ..basic.mmanager import Module
 
@@ -327,11 +327,16 @@ class Processor(Module):
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
                         server.transfer(response)
                     else:
-                        self.__transBinaryTo(tid, path,
-                                         lambda l: provider.provide(l),
-                                         mid=menu,
-                                         parent=version)
-                        server.transfer(response)
+                        try:
+                            self.__transBinaryTo(tid, path,
+                                            lambda l: provider.provide(l),
+                                            mid=menu,
+                                            parent=version)
+                            server.transfer(response)
+
+                        except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                            response.setState(Letter.RESPONSE_STATE_FAILURE)
+                            server.transfer(response)
 
             self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]
