@@ -151,7 +151,7 @@ class WorkerRoom(ModuleDaemon):
                 self.__pManager.addProvider(workerInWait)
                 self.__changePoint()
 
-                map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks) # type: ignore
+                map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
 
                 Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
 
@@ -166,7 +166,7 @@ class WorkerRoom(ModuleDaemon):
             self.__pManager.addProvider(acceptedWorker)
             self.__changePoint()
 
-            map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks) # type: ignore
+            map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
@@ -249,7 +249,7 @@ class WorkerRoom(ModuleDaemon):
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
 
-            map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks) # type: ignore
+            map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)
 
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         logger = self.__serverInst.getModule(LOGGER_M_NAME)
@@ -274,7 +274,7 @@ class WorkerRoom(ModuleDaemon):
             if self.__pManager.isListener(ident):
                 self.__pManager.setListener(None)
 
-            map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks) # type: ignore
+            map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
 
         for w in outOfTime:
             del self.__workers_waiting [w.getIdent()]
