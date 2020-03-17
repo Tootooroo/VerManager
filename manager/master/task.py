@@ -481,6 +481,9 @@ class TaskGroup:
         task_dicts = list(self.__tasks.values())
         task_lists = list(map(lambda d: list(d.values()), task_dicts))
 
+        if len(task_lists) == 0:
+            return []
+
         return reduce(lambda acc, cur: acc + cur, task_lists)
 
     def toList_(self) -> List[str]:
