@@ -265,7 +265,7 @@ class Dispatcher(ModuleDaemon):
             t = self.__tasks[ident]
 
             # Task in proc or prepare status
-            # will not be aging even thought
+            # will not be aging even though
             # their counter is out of date.
             if t.isProc() or t.isPrepare():
                 self.__dispatch_logging(

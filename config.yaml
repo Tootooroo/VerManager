@@ -47,7 +47,7 @@ BuildSet:
         - GL5610-v2
         - GL5610-v3
       cmd:
-        - cat ll ll2 ll3 > post
+        - cat <version> <datetime> ll3 > post
       output:
         - ./post
 

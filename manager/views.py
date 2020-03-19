@@ -71,6 +71,7 @@ def generation(request):
 
             extra_info['logFrom'] = logFrom
             extra_info['logTo'] = logTo
+            extra_info['datetime'] = dateTime
 
         version = Versions.objects.get(pk=verIdent)
 

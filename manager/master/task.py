@@ -282,8 +282,27 @@ class SuperTask(Task):
         # Function to attach version ident to SingleTask's tid.
         prefix = lambda ident: self.id() + "__" + ident
 
+        # fixme: should provide a command object so we can easily to
+        #        handle variable in command.
+        varPairs = [] # type: List[Tuple[str, str]]
+        extra = self.getExtra()
+
+        if extra is not None:
+            if datetime in extra:
+                datetime = extra['datetime']
+            else:
+                datetime = ""
+
+            version = self.getVSN()
+
+            varPairs = [("<version>", version), ("<datetime>", datetime)]
+
         # Build children which type is SingleTask
         for build in builds:
+
+            if varPairs != []:
+                build.varAssign(varPairs)
+
             st = SingleTask(prefix(build.getIdent()), sn = self.sn, revision = self.vsn,
                             build = build,
                             extra = self.extra)
@@ -303,11 +322,18 @@ class SuperTask(Task):
         # Get posts from BuildSet and attach version to member's id.
         posts = self.__buildSet.getPosts()
         for post in posts:
+            if varPairs != []:
+                post.varAssign(varPairs)
+
+            cmds = post.getCmds()
             members = post.getMembers()
             members = list(map(lambda member: prefix(member), members))
             post.setMembers(members)
 
         merge = self.__buildSet.getMerge()
+        if varPairs != []:
+            merge.varAssign(varPairs)
+
         pt = PostTask(self.vsn, posts, frags, merge)
         pt.setParent(self)
 
@@ -481,10 +507,7 @@ class TaskGroup:
         task_dicts = list(self.__tasks.values())
         task_lists = list(map(lambda d: list(d.values()), task_dicts))
 
-        if len(task_lists) == 0:
-            return []
-
-        return reduce(lambda acc, cur: acc + cur, task_lists)
+        return reduce(lambda acc, cur: acc + cur, task_lists, [])
 
     def toList_(self) -> List[str]:
         l = self.toList()

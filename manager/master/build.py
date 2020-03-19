@@ -27,6 +27,9 @@ class Build:
     def getCmd(self) -> List[str]:
         return self.__cmds
 
+    def setCmd(self, cmds:List[str]) -> None:
+        self.__cmds = cmds
+
     def getCmdStr(self) -> str:
         return str(self.__cmds).replace("'", "\"")
 
@@ -39,6 +42,10 @@ class Build:
     @staticmethod
     def isValid(build:Dict) -> bool:
         return 'cmd' in build and 'output' in build
+
+    def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
+        f = lambda cmd, var: cmd.replace(var[0], var[1])
+        self.__cmds = [reduce(f, varPairs, cmd) for cmd in self.__cmds]
 
 class Post:
 
@@ -59,6 +66,15 @@ class Post:
     def getBuild(self) -> Build:
         return self.__build
 
+    def getCmds(self) -> List[str]:
+        return self.__build.getCmd()
+
+    def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
+        self.__build.varAssign(varPairs)
+
+    def setCmds(self, cmds:List[str]) -> None:
+        self.__build.setCmd(cmds)
+
     def toMenuLetter(self, version:str) -> MenuLetter:
         cmds = self.__build.getCmd()
         output = self.__build.getOutput()
@@ -74,6 +90,12 @@ class Merge:
 
     def getCmds(self) -> List[str]:
         return self.__build.getCmd()
+
+    def setCmds(self, cmds:List[str]) -> None:
+        self.__build.setCmd(cmds)
+
+    def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
+        self.__build.varAssign(varPairs)
 
     def getOutput(self) -> str:
         return self.__build.getOutput()

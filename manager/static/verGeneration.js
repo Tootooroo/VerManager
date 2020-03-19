@@ -101,6 +101,8 @@ function fillVerList() {
         ver_options.map(function(option) {
             select.appendChild(option);
         });
+
+        return null;
     };
 
     xhr.setRequestHeader('X-CSRFToken', csrftoken);
