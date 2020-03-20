@@ -19,25 +19,25 @@ BuildSet:
   Builds:
     GL5610:
         cmd:
-        - echo ll > ll
+        - echo ll <version> <datetime> > ll
         output:
         - ./ll
 
     GL5610-v2:
         cmd:
-        - echo ll2 > ll2
+        - echo ll2 <version> <datetime> > ll2
         output:
         - ./ll2
 
     GL5610-v3:
         cmd:
-        - echo ll3 > ll3
+        - echo ll3 <version> <datetime> > ll3
         output:
         - ./ll3
 
     GL8900:
         cmd:
-        - echo ll4 > ll4
+        - echo ll4 <version> <datetime> > ll4
         output:
         - ./ll4
 
@@ -48,7 +48,7 @@ BuildSet:
         - GL5610-v2
         - GL5610-v3
       cmd:
-        - cat ll ll2 ll3 > post
+        - cat ll ll2 ll3 <version> <datetime> > post
       output:
         - ./post
 
@@ -56,13 +56,13 @@ BuildSet:
       group:
         - GL8900
       cmd:
-        - cat ll4 > post_gl8900
-        - echo 8900 >> post_gl8900
+        - cat ll4 <version> <datetime> > post_gl8900
+        - echo 8900 <version> <datetime> >> post_gl8900
       output:
         - ./post_gl8900
 
   Merge:
     cmd:
-      - cat * > total
+      - cat * <version> <datetime> > total
     output:
       - ./total

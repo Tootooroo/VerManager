@@ -289,7 +289,7 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
-    def test_dispatcher(self):
+    def tes_dispatcher(self):
 
         import os
 
@@ -417,9 +417,11 @@ class UnitTest(TestCase):
         self.assertTrue(not os.path.exists("./Storage/box/file5"))
 
 
-    def tes_build(self):
+    def test_build(self):
         from manager.basic.info import Info
         from manager.master.build import Build, BuildSet
+
+        from functools import reduce
 
         info = Info("./config_test.yaml")
 
@@ -429,8 +431,21 @@ class UnitTest(TestCase):
 
         bs = BuildSet(buildSet)
 
-        b = bs.getBuild("GL5610")
+        # VarAssign testing
+        builds = bs.getBuilds()
+        for build in builds:
+            build.varAssign([("<version>", "Ver"), ("<datetime>", "Date")])
 
+        ret = []
+        for build in builds:
+            vars = ["Ver", "Date"]
+            ret = [reduce(lambda acc, cur: acc and (cur in cmd), vars, True) for cmd in build.getCmd()]
+
+        self.assertTrue(False not in ret)
+
+
+        # Get a Build and test it.
+        b = bs.getBuild("GL5610")
         self.assertTrue("GL5610", b.getIdent())
 
         builds = bs.getBuilds()
@@ -444,7 +459,7 @@ class UnitTest(TestCase):
         self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v3'))
 
         bs_GL8900 = bs.belongTo('GL8900')
-        self.assertEqual("GL8900_OEM", bs_GL8900[0])
+        self.assertEqual("P2", bs_GL8900[0])
         self.assertTrue(len(bs_GL8900[1]) == 1)
         self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
 

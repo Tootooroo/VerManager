@@ -288,7 +288,7 @@ class SuperTask(Task):
         extra = self.getExtra()
 
         if extra is not None:
-            if datetime in extra:
+            if "datetime" in extra:
                 datetime = extra['datetime']
             else:
                 datetime = ""
