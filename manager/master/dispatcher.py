@@ -9,6 +9,7 @@ M_NAME = "Dispatcher"
 
 from typing import *
 from functools import reduce
+from datetime import datetime
 
 from threading import Lock, Event
 from manager.master.build import Build, BuildSet
@@ -17,14 +18,76 @@ from manager.master.worker import Worker
 from manager.master.postElection import Role_Listener, Role_Provider
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
-from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask
+from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask, TaskType
 from manager.basic.type import *
-
 from manager.master.workerRoom import WorkerRoom
-
-from datetime import datetime
-
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
+
+class TrackUnit:
+    """
+    TrackUnit is a box to hold reference to Object of Task and
+    Object of Worker which is processing the task.
+
+    TrackUnit should provide a expressive interface to enable
+    information query from these objects.
+
+    """
+
+    def __init__(self, t:Task, w:Optional[Worker] = None) -> None:
+        self._task = t
+        self._worker = w # type: Optional[Worker]
+
+    def onWhichWorker(self) -> Optional[Worker]:
+        if self._worker is None:
+            return None
+        return self._worker
+
+    def taskStatus(self) -> TaskType:
+        return self._task.taskState()
+
+    def setWorker(self, w:Worker) -> None:
+        self._worker = w
+
+
+class TaskTracker:
+    """
+    TaskTracker is a database that store informations about tasks
+    that live in Dispatcher. These informations should contain
+    Tasks's status and which worker is the task working on.
+
+    Caution: TrackUnit's purpose is provide an easy way to query
+            informations about task and relations between task
+            and another objects. You should not to edit task via
+            TrackUnit.
+    """
+
+    def __init__(self) -> None:
+        self._tasks = {} # type: Dict[str, TrackUnit]
+
+    def track(self, t:Task) -> None:
+        self._tasks[t.id()] = TrackUnit(t)
+
+    def isInTrack(self, t_name) -> bool:
+        return t_name in self._tasks
+
+    def untrack(self, t_name:str) -> None:
+        if t_name not in self._tasks:
+            return None
+        del self._tasks [t_name]
+
+    def onWorker(self, t_name:str, worker:Worker) -> None:
+        self._tasks[t_name].setWorker(worker)
+
+    def whichWorker(self, t_name:str) -> Optional[Worker]:
+        if t_name not in self._tasks:
+            return None
+        return self._tasks[t_name].onWhichWorker()
+
+    def status(self, t_name) -> Optional[TaskType]:
+        if t_name not in self._tasks:
+            return None
+        return self._tasks[t_name].taskStatus()
+
 
 class Dispatcher(ModuleDaemon):
 
@@ -42,9 +105,9 @@ class Dispatcher(ModuleDaemon):
 
         self.dispatchLock = Lock()
 
-        # For query purposes
-        # { taskId : Task }
         self.__tasks = {} # type: Dict[str, Task]
+
+        self._taskTracker = TaskTracker()
 
         self.__workers = workerRoom
 

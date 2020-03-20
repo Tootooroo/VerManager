@@ -420,6 +420,7 @@ class Stuff:
     def __init__(self, version:str, menu:str, stuffName:str,
                  # Where's structure: (BoxName, FileName)
                  where:Tuple[str, str]) -> None:
+
         self.__version = version
         self.__menu = menu
         self.__stuffName = stuffName
@@ -680,8 +681,10 @@ class PostProcessor(Thread):
             tid = letter.getTid()
             version = letter.getParent()
             stoId = PostProcessor.__stoIdGen(tid, version)
+            menu = letter.getMenu()
+            fileName = letter.getFileName()
 
-            # the last binary letter
+            # The last binary letter
             if content == b"":
                 if stoId not in self.__chooserSet:
                     continue
@@ -689,9 +692,6 @@ class PostProcessor(Thread):
                 self.__chooserSet[stoId].close()
                 del self.__chooserSet [stoId]
 
-                tid = letter.getTid()
-                menu = letter.getMenu()
-                fileName = letter.getFileName()
 
                 stuff = Stuff(version, menu, tid, (version, fileName))
                 self.__stuffs.addStuff(stuff)

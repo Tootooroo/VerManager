@@ -90,6 +90,9 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             if taskId in chooserSet:
                 chooser = chooserSet[taskId]
                 del chooserSet [taskId]
+        elif state == Task.STATE_FAILURE:
+            print("Failed. remove Task " + taskId)
+            worker.removeTask(taskId)
 
 def responseHandler_ResultStore(eventListener: EventListener,
                                 task: Task) -> None:

@@ -1,12 +1,11 @@
 # util.py
 
 import platform
+import subprocess
 
 from typing import Any, Callable
 from threading import Thread
-
 from functools import reduce
-
 from typing import *
 
 def spawnThread(f:Callable[[Any], None], args: Any = None) -> Thread:
@@ -51,6 +50,12 @@ def pathSeperator() -> str:
     else:
         return "/"
 
+def packShellCommands(commands:List[str]) -> str:
+    if platform.system() == 'Windows':
+        return "&&".join(commands)
+    else:
+        return ";".join(commands)
+
 def map_strict(f:Callable, args:List[Any]) -> List[Any]:
     return list(map(f, args))
 
@@ -64,3 +69,19 @@ def excepHandle(excep, handler:Callable) -> Callable:
                 handler()
 
     return handle
+
+
+# If shell command is not executed success then return None
+# otherwise return returncode of the shell command.
+def execute_shell_command(command:str) -> Optional[int]:
+
+    command_args = command.split(" ")
+
+    try:
+        proc_handle = subprocess.Popen(command_args)
+    except FileNotFoundError as e:
+        return None
+
+    returncode = proc_handle.wait()
+
+    return returncode
