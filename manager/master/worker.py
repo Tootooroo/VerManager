@@ -19,6 +19,7 @@ from manager.basic.letter import Letter, NewLetter, \
     receving as letter_receving, sending as letter_sending
 from manager.basic.type import Ok, Error
 from manager.basic.commands import Command
+from threading import Lock
 
 from manager.master.build import Post
 

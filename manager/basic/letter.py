@@ -319,7 +319,7 @@ class NewLetter(Letter):
     def getDatetime(self) -> str:
         return self.getContent('datetime')
 
-    def getExtra(self) -> Dict[str, str]:
+    def getExtra(self) -> Dict[str, Any]:
         return self.getContent('extra')
 
 CmdType = int
@@ -347,7 +347,7 @@ class CommandLetter(Letter):
     def getTarget(self) -> str:
         return self.getHeader('target')
 
-    def getExtra(self) -> str:
+    def getExtra(self) -> Any:
         return self.getHeader('extra')
 
     def content_(self, key:str) -> str:
@@ -391,7 +391,7 @@ class CmdResponseLetter(Letter):
     def getTarget(self) -> str:
         return self.getHeader('target')
 
-    def getExtra(self, key: str) -> str:
+    def getExtra(self, key: str) -> Any:
         return self.getContent('extra')[key]
 
 class PostTaskLetter(Letter):
@@ -558,6 +558,9 @@ class PropLetter(Letter):
 
 class BinaryLetter(Letter):
 
+    TYPE_DATA = 1
+    TYPE_BROKEN = 2
+
     TYPE_FIELD_LEN = 2
     LENGTH_FIELD_LEN = 4
     FILE_NAME_FIELD_LEN = 32
@@ -635,7 +638,6 @@ class BinaryLetter(Letter):
         packet = type_field + len_field + name_field + tid_field + parent_field + menu_field + content
 
         return packet
-
 
     def getTid(self) -> str:
         return self.getHeader('tid')

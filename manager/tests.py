@@ -289,7 +289,7 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
-    def tes_dispatcher(self):
+    def test_dispatcher(self):
 
         import os
 

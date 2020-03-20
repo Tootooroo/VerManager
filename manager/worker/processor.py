@@ -13,7 +13,8 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
-from ..basic.util import partition, excepHandle
+from ..basic.util import partition, excepHandle, pathSeperator, execute_shell_command, \
+    packShellCommands
 
 from ..basic.mmanager import Module
 
@@ -35,11 +36,6 @@ CommandHandler = Callable[[CommandLetter, Info, Any], State]
 
 M_NAME = "Processor"
 LOG_ID = "Processor"
-
-if platform.system() == 'Windows':
-    sep = "\\"
-else:
-    sep = "/"
 
 class Result:
 
@@ -139,37 +135,45 @@ class Processor(Module):
         try:
             repo_url = info.getConfig("REPO_URL")
             projName = info.getConfig("PROJECT_NAME")
-
-            # Get repo
-            #os.system("git clone -b master " + repo_url)
-
-            #os.chdir(projName)
-
             revision = reqLetter.getContent('sn')
-
-            # Checkout to specific revision
-            #os.system("git checkout -f " + revision)
-
             version = reqLetter.getContent('vsn')
             version_date = reqLetter.getContent('datetime')
 
-            cmds_str =  ""
-            if platform.system() == "Windows":
-                cmds_str = "&&".join(building_cmds)
-            else:
-                cmds_str = ";".join(building_cmds)
+            result = Result(tid, menuId, result_path, needPost, version, False)
 
-            cmds_str = cmds_str.replace("<vsn>", version)
-            cmds_str = cmds_str.replace("datetime>", version_date)
+            # Get repo
+            returncode = execute_shell_command("git clone -b " + repo_url)
+            # The shell command is invalid
+            if returncode is None:
+                return result
+            elif returncode is not 0 and returncode is not 128:
+                return result
 
-            # Run commands
-            os.system(cmds_str)
+            # Go into project's root directory.
+            os.chdir(projName)
+
+            # Checkout to specific revision
+            returncode = execute_shell_command("git checkout -f " + revision)
+            if returncode is None or returncode is not 0:
+                return result
+
+
+            # Pack all building commands into a single string
+            # so all of them will be executed in the same shell
+            # environment.
+            cmds_str = packShellCommands(building_cmds)
+
+            # Run building commands
+            returncode = execute_shell_command(cmds_str)
+            if returncode is None or returncode is not 0:
+                return result
 
         except Exception:
             traceback.print_exc()
-            isSuccess = False
+            return result
 
-        return Result(tid, menuId, result_path, needPost, version, isSuccess)
+        result.isSuccess = True
+        return result
 
     def proc_post(self, postTaskLetter:PostTaskLetter) -> State:
         listener = self.__cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
@@ -309,19 +313,21 @@ class Processor(Module):
             menu = result.menuId
 
             server = self.__cInst.getModule(SERVER_M_NAME)
+            provider = self.__cInst.getModule(POST_PROVIDER_M_NAME)
 
             response = ResponseLetter(ident = self.__cInst.getIdent(), tid = tid,
                                       state = Letter.RESPONSE_STATE_FINISHED)
 
             if result.isSuccess is False:
+                # Tell to master this task is failed.
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
+
             else:
+                # Transfer Binary
                 if needPost == "false":
                     self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
-                    server.transfer(response)
                 else:
-                    provider = self.__cInst.getModule(POST_PROVIDER_M_NAME)
                     if provider is None:
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
                         server.transfer(response)
@@ -331,11 +337,11 @@ class Processor(Module):
                                             lambda l: provider.provide(l),
                                             mid=menu,
                                             parent=version)
-                            server.transfer(response)
-
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
-                            server.transfer(response)
+
+                # Notify to master
+                server.transfer(response)
 
             self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]
@@ -345,10 +351,11 @@ class Processor(Module):
     def __transBinaryTo(self, tid:str, path:str,
                         transferRtn:Callable[[BinaryLetter], Any],
                         mid:str = "", parent:str = "") -> None:
-        global sep
+
+        seperator = pathSeperator()
 
         with open(path, "rb") as binFile:
-            fileName = path.split(sep)[-1]
+            fileName = path.split(seperator)[-1]
             for line in binFile:
                 binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
                                          fileName=fileName, parent=parent)

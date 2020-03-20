@@ -17,6 +17,7 @@ from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.basic.storage import Storage
 from manager.master.exceptions import INVALID_CONFIGURATIONS
 from manager.master.verControl import RevSync
+from manager.master.taskTracker import TaskTracker
 
 from manager.basic.info import M_NAME as INFO_M_NAME
 
@@ -83,8 +84,12 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
+        tracker = TaskTracker()
+        self.addModule(tracker)
+
         revSyncner = RevSync(self)
         self.addModule(revSyncner)
+
 
         workerRoom.hookRegister((workerRegister, [eventListener]))
         workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher, workerRoom]))

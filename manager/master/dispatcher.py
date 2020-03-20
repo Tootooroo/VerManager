@@ -9,6 +9,7 @@ M_NAME = "Dispatcher"
 
 from typing import *
 from functools import reduce
+from datetime import datetime
 
 from threading import Lock, Event
 from manager.master.build import Build, BuildSet
@@ -17,14 +18,11 @@ from manager.master.worker import Worker
 from manager.master.postElection import Role_Listener, Role_Provider
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
-from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask
+from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask, TaskType
 from manager.basic.type import *
-
 from manager.master.workerRoom import WorkerRoom
-
-from datetime import datetime
-
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
+from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
 
 class Dispatcher(ModuleDaemon):
 
@@ -42,9 +40,9 @@ class Dispatcher(ModuleDaemon):
 
         self.dispatchLock = Lock()
 
-        # For query purposes
-        # { taskId : Task }
-        self.__tasks = {} # type: Dict[str, Task]
+        taskTracker = inst.getModule(TRACKER_M_NAME)
+        assert(taskTracker is not None)
+        self._taskTracker = taskTracker
 
         self.__workers = workerRoom
 
@@ -75,7 +73,7 @@ class Dispatcher(ModuleDaemon):
 
         ret = self.__do_dispatch(task)
         if ret is True:
-            self.__tasks[task.id()] = task
+            self._taskTracker.track(task)
             return ret
 
         return False
@@ -136,9 +134,11 @@ class Dispatcher(ModuleDaemon):
     def dispatch(self, task: Task) -> bool:
         self.__dispatch_logging("Dispatch task " + task.id())
 
-        if task.id() in self.__tasks:
-            task = self.__tasks[task.id()]
-            task.refs += 1
+        if self._taskTracker.isInTrack(task.id()):
+            task_exists = self._taskTracker.getTask(task.id())
+
+            assert(task_exists is not None)
+            task_exists.refs += 1
 
             return True
 
@@ -149,7 +149,7 @@ class Dispatcher(ModuleDaemon):
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
-                self.__tasks[task.id()] = task
+                self._taskTracker.track(task)
 
                 self.taskEvent.set()
 
@@ -160,17 +160,17 @@ class Dispatcher(ModuleDaemon):
 
         self.__dispatch_logging("Redispatch task " + taskId)
 
-        if taskId in self.__tasks:
+        if self._taskTracker.isInTrack(taskId):
             ret = task.stateChange(Task.STATE_PREPARE)
             if ret is Error:
                 return False
 
-            del self.__tasks [taskId]
+            self._taskTracker.untrack(taskId)
 
         with self.dispatchLock:
             if self.__do_dispatch(task) is False:
                 self.taskWait.insert(0, task)
-                self.__tasks[task.id()] = task
+                self._taskTracker.track(task)
                 self.taskEvent.set()
 
         return True
@@ -247,7 +247,7 @@ class Dispatcher(ModuleDaemon):
                 self.taskEvent.clear()
 
     def __taskAging(self) -> None:
-        tasks = list(self.__tasks.values())
+        tasks = self._taskTracker.tasks()
 
         current = datetime.utcnow()
         cond_long = lambda t: (current - t.last()).seconds > 60
@@ -259,10 +259,11 @@ class Dispatcher(ModuleDaemon):
         self.__dispatch_logging("Outdate tasks:" + str(idents_outdated))
 
         for ident in idents_outdated:
-            if not ident in self.__tasks:
+            if not self._taskTracker.isInTrack(ident):
                 continue
 
-            t = self.__tasks[ident]
+            t = self._taskTracker.getTask(ident)
+            assert(t is not None)
 
             # Task in proc or prepare status
             # will not be aging even though
@@ -273,7 +274,7 @@ class Dispatcher(ModuleDaemon):
                 continue
 
             self.__dispatch_logging("Remove task " + ident)
-            del self.__tasks [ident]
+            self._taskTracker.untrack(ident)
 
     # Cancel a task identified by taskId
     # and taskId is unique
@@ -281,26 +282,26 @@ class Dispatcher(ModuleDaemon):
         pass
 
     # Cancel all tasks processing on a worker
-    def cancelOnWorker(self, wId: str) -> None:
+    def cancelOnWorker(self, wId: str) -> None
         pass
 
     def removeTask(self, taskId: str) -> None:
-        if taskId in self.__tasks:
-            del self.__tasks [taskId]
+        self._taskTracker.untrack(taskId)
 
     def getTask(self, taskId:str) -> Optional[Task]:
-        if not taskId in self.__tasks:
-            return None
-        return self.__tasks[taskId]
+        return self._taskTracker.getTask(taskId)
 
     # Use to get result of task
     # after the call of this method task will be
     # remove from __tasks
     def retrive(self, taskId: str) -> Optional[str]:
-        if not taskId in self.__tasks:
+        if not self._taskTracker.isInTrack(taskId):
             return None
 
-        task = self.__tasks[taskId]
+        task = self._taskTracker.getTask(taskId)
+        if task is None:
+            return None
+
         if not task.isFinished():
             return None
 
@@ -310,20 +311,26 @@ class Dispatcher(ModuleDaemon):
         return task.data
 
     def taskState(self, taskId: str) -> int:
-        if not taskId in self.__tasks:
+        if not self._taskTracker.isInTrack(taskId):
             return Error
 
-        task = self.__tasks[taskId]
+        task = self._taskTracker.getTask(taskId)
+        if task is None:
+            return Error
+
         return task.taskState()
 
     def isTaskExists(self, taskId: str) -> bool:
-        return taskId in self.__tasks
+        return self._taskTracker.isInTrack(taskId)
 
     def __isTask(self, taskId: str, state: Callable) -> bool:
-        if not taskId in self.__tasks:
+        if not self._taskTracker.isInTrack(taskId):
             return False
 
-        task = self.__tasks[taskId]
+        task = self._taskTracker.getTask(taskId)
+        if task is None:
+            return False
+
         return state(task)
 
     def isTaskPrepare(self, taskId: str) -> bool:
@@ -339,10 +346,13 @@ class Dispatcher(ModuleDaemon):
         return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
 
     def taskLastUpdate(self, taskId: str) -> None:
-        if not taskId in self.__tasks:
+        if not self._taskTracker.isInTrack(taskId):
             return None
 
-        task = self.__tasks[taskId]
+        task = self._taskTracker.getTask(taskId)
+        if task is None:
+            return None
+
         task.lastUpdate()
 
     def addWorkers(self, w: Worker) -> State:
