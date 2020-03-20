@@ -11,6 +11,8 @@ from manager.master.task import Task, SuperTask, SingleTask, PostTask
 
 from manager.basic.commands import PostConfigCmd
 from manager.basic.storage import Storage, StoChooser
+
+from manager.master.taskTracker import M_NAME as TRACKER_M_NAME, TaskTracker
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom
@@ -55,7 +57,9 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    workers = eventListener.getModule('WorkerRoom')
+    workers = eventListener.getModule('WorkerRoom') # type: Optional[WorkerRoom]
+    assert(workers is not None)
+
     worker = workers.getWorker(ident)
 
     if worker is None:
@@ -90,8 +94,28 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             if taskId in chooserSet:
                 chooser = chooserSet[taskId]
                 del chooserSet [taskId]
+
         elif state == Task.STATE_FAILURE:
-            print("Failed. remove Task " + taskId)
+
+            # If this task is a member of SuperTask
+            # then we need to cancel all tasks that
+            # belong to the SuperTask
+            if isinstance(task, SingleTask) or isinstance(task, PostTask):
+                super = task.getParent()
+                assert(super is not None)
+                children = super.getChildren()
+
+                tracker = eventListener.getModule(TRACKER_M_NAME) # type: Optional[TaskTracker]
+                assert(tracker is not None)
+
+                for child in children:
+                    process_worker = tracker.whichWorker(child.id())
+
+                    # Tell to worker that task should be canceled.
+                    process_worker.control()
+
+
+            # Remove Task from worker
             worker.removeTask(taskId)
 
 def responseHandler_ResultStore(eventListener: EventListener,
