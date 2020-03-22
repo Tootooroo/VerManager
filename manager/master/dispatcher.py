@@ -40,7 +40,7 @@ class Dispatcher(ModuleDaemon):
 
         self.dispatchLock = Lock()
 
-        taskTracker = inst.getModule(TRACKER_M_NAME)
+        taskTracker = inst.getModule(TRACKER_M_NAME) # type: Optional[TaskTracker]
         assert(taskTracker is not None)
         self._taskTracker = taskTracker
 
@@ -276,13 +276,33 @@ class Dispatcher(ModuleDaemon):
             self.__dispatch_logging("Remove task " + ident)
             self._taskTracker.untrack(ident)
 
-    # Cancel a task identified by taskId
-    # and taskId is unique
+    # Cancel a task
+    # This method cannot cancel a member of a SuperTask
+    # but this method can cancel a SuperTask.
     def cancel(self, taskId: str) -> None:
-        pass
+
+        task = self._taskTracker.getTask(taskId)
+
+        if isinstance(task, SingleTask):
+            if task.isAChild():
+                # This task is a member of a SuperTask
+                # cancel a member of a SuperTask here
+                # is not allowed.
+                return None
+
+            theWorker = self._taskTracker.whichWorker(task.id())
+            if theWorker is not None:
+                theWorker.cancel(task.id())
+
+        elif isinstance(task, PostTask):
+            # PostTask must a member of a SuperTask
+            return None
+
+        elif isinstance(task, SuperTask):
+            pass
 
     # Cancel all tasks processing on a worker
-    def cancelOnWorker(self, wId: str) -> None
+    def cancelOnWorker(self, wId: str) -> None:
         pass
 
     def removeTask(self, taskId: str) -> None:

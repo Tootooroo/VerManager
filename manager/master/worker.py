@@ -175,8 +175,13 @@ class Worker:
     # Provide ability to cancel task in queue or
     # processed task
     # Note: sn here should be a verion sn
-    def cancel(self, id: str) -> str:
-        pass
+    def cancel(self, id: str) -> None:
+
+        if not self.inProcTask.isExists(id):
+            return None
+
+        self.control()
+
 
     def status(self) -> Dict:
         status_dict = { "max":self.max,

@@ -135,8 +135,8 @@ class Letter:
     format = '{"type": "%s", "header": %s, "content": %s}'
 
     def __init__(self, type_:  str,
-                 header:  Dict[str, str] = {},
-                 content:  Dict[str, Any] = {}) -> None:
+                 header:  Dict[str, str],
+                 content:  Dict[str, Any]) -> None:
 
         self.type_ = type_
 
@@ -269,9 +269,9 @@ class NewLetter(Letter):
 
     def __init__(self, tid: str, sn: str,
                  vsn: str, datetime: str,
+                 extra: Dict,
                  menu: str = "",
                  parent: str = "",
-                 extra: Dict = {},
                  needPost: str = "") -> None:
         Letter.__init__(
             self,
@@ -322,12 +322,18 @@ class NewLetter(Letter):
     def getExtra(self) -> Dict[str, Any]:
         return self.getContent('extra')
 
+
+class CancelLetter(Letter):
+
+    def __init__(self, taskId:str) -> None:
+        Letter.__init__(self, Letter.TaskCancel, {"taskId":taskId}, {})
+
 CmdType = int
 CmdSubType = int
 
 class CommandLetter(Letter):
 
-    def __init__(self, type: str, target: str = "", extra: str = "", content: Dict[str, str] = {}) -> None:
+    def __init__(self, type: str, content: Dict[str, str], target: str = "", extra: str = "") -> None:
         Letter.__init__(self, Letter.Command,
                         {"type": type, "target": target, "extra": extra},
                         content)
@@ -358,8 +364,8 @@ class CmdResponseLetter(Letter):
     STATE_SUCCESS = "s"
     STATE_FAILED  = "f"
 
-    def __init__(self, wIdent: str, type: str, state: str, reason: str = "", target: str = "",
-                 extra: Dict[str, str] = {})  -> None:
+    def __init__(self, wIdent: str, type: str, state: str, extra: Dict[str, str],
+                 reason: str = "", target: str = "")  -> None:
         Letter.__init__(self, Letter.CmdResponse,
                         {"ident": wIdent, "type": type, "state": state, "target": target},
                         {"reason": reason, "extra": extra})
@@ -396,7 +402,7 @@ class CmdResponseLetter(Letter):
 
 class PostTaskLetter(Letter):
 
-    def __init__(self, ver:str, cmds:List[str], output:str, menus:Dict = {}, frags:List = []) -> None:
+    def __init__(self, ver:str, cmds:List[str], output:str, menus:Dict, frags:List) -> None:
         Letter.__init__(self, Letter.Post,
                         {"version":ver, "output":output},
                         {"cmds":cmds, "Menus":menus, "Fragments":frags})

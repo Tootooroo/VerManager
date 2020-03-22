@@ -216,7 +216,7 @@ class SuperTask(Task):
     def toPreState(self) -> State:
         isAbleTo = True
         for c in self.__children:
-            isAbleTo &= c.isPrepare()
+            isAbleTo = isAbleTo and c.isPrepare()
         if isAbleTo:
             self.state = Task.STATE_PREPARE
             return Ok
@@ -248,7 +248,7 @@ class SuperTask(Task):
         for c in self.__children:
             c_ret = c.stateChange(state)
             if c_ret is Error:
-                ret &= False
+                ret = ret and False
 
         if ret is False:
             return Error
@@ -347,7 +347,7 @@ class SingleTask(Task):
 
     def __init__(self, id:str, sn:str, revision:str,
                  build:Build,
-                 extra:Dict = {}):
+                 extra:Dict = {}) -> None:
 
         Task.__init__(self, id, sn, revision, extra)
 
@@ -403,7 +403,7 @@ class PostTask(Task):
 
     Type = 3
 
-    def __init__(self, version:str, groups:List[Post], frags:List[str], merge:Merge):
+    def __init__(self, version:str, groups:List[Post], frags:List[str], merge:Merge) -> None:
         Task.__init__(self, version, "", version)
 
         self.type = PostTask.Type

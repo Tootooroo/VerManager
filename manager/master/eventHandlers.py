@@ -12,7 +12,7 @@ from manager.master.task import Task, SuperTask, SingleTask, PostTask
 from manager.basic.commands import PostConfigCmd
 from manager.basic.storage import Storage, StoChooser
 
-from manager.master.taskTracker import M_NAME as TRACKER_M_NAME, TaskTracker
+from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME, Dispatcher
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom
@@ -101,6 +101,14 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             # then we need to cancel all tasks that
             # belong to the SuperTask
             if isinstance(task, SingleTask) or isinstance(task, PostTask):
+
+                if task.isAChild():
+                    dispatcher = eventListener.getModule(DISPATCHER_M_NAME) # type: Dispatcher
+
+                    parent = task.getParent()
+                    dispatcher.cancel(parent.id())
+
+                """
                 super = task.getParent()
                 assert(super is not None)
                 children = super.getChildren()
@@ -113,6 +121,7 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
                     # Tell to worker that task should be canceled.
                     process_worker.control()
+                """
 
 
             # Remove Task from worker
