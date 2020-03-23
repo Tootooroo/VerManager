@@ -75,8 +75,9 @@ class Processor(Module):
         # Query purpose
         self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
 
+        self.__manager = Manager()
         # Collections of event used to stop building processing.
-        self.__shell_events = [Manager().Event()] # type: List[Event]
+        self.__shell_events = {} # type: Dict[str, Event]
 
     def logging(self, msg:str) -> None:
         global LOG_ID
@@ -190,9 +191,9 @@ class Processor(Module):
 
             while True:
                 try:
-                    #if stop.is_set():
-                    #    handle.terminate()
-                    #    return result
+                    if stop.is_set():
+                        handle.terminate()
+                        return result
 
                     returncode = handle.wait(1)
                 except subprocess.TimeoutExpired:
@@ -327,8 +328,11 @@ class Processor(Module):
                                 tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
         s.transfer(response)
 
+        event = self.__manager.Event()
+        self.__shell_events[tid] = event
+
         res = self.__pool.apply_async(Processor.do_proc,
-                                        (reqLetter, self.__info, self.__shell_events[0]))
+                                        (reqLetter, self.__info, event))
         self.__numOfTasksInProc += 1
 
         self.__allTasks.append((tid, version, res))
