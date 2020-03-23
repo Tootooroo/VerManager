@@ -66,6 +66,9 @@ class ServerInst(Thread):
         workerRoom = WorkerRoom(self.__address, self.__port, self)
         self.addModule(workerRoom)
 
+        tracker = TaskTracker()
+        self.addModule(tracker)
+
         dispatcher = Dispatcher(workerRoom, self)
         self.addModule(dispatcher)
 
@@ -83,9 +86,6 @@ class ServerInst(Thread):
 
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
-
-        tracker = TaskTracker()
-        self.addModule(tracker)
 
         revSyncner = RevSync(self)
         self.addModule(revSyncner)

@@ -106,23 +106,8 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
                     dispatcher = eventListener.getModule(DISPATCHER_M_NAME) # type: Dispatcher
 
                     parent = task.getParent()
-                    dispatcher.cancel(parent.id())
-
-                """
-                super = task.getParent()
-                assert(super is not None)
-                children = super.getChildren()
-
-                tracker = eventListener.getModule(TRACKER_M_NAME) # type: Optional[TaskTracker]
-                assert(tracker is not None)
-
-                for child in children:
-                    process_worker = tracker.whichWorker(child.id())
-
-                    # Tell to worker that task should be canceled.
-                    process_worker.control()
-                """
-
+                    if parent is not None:
+                        dispatcher.cancel(parent.id())
 
             # Remove Task from worker
             worker.removeTask(taskId)
@@ -138,6 +123,7 @@ def responseHandler_ResultStore(eventListener: EventListener,
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
     try:
+
         taskId = task.id()
         chooser = chooserSet[taskId]
         extra = task.getExtra()

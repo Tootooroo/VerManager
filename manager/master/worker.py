@@ -9,14 +9,14 @@ import traceback
 
 from typing import Tuple, Optional, List, Dict, Callable
 
-from .task import Task, TaskGroup
+from .task import Task, TaskGroup, SingleTask, PostTask
 from datetime import datetime, timedelta
 
 from functools import reduce
 from threading import Thread, Lock
 
 from manager.basic.letter import Letter, NewLetter, \
-    receving as letter_receving, sending as letter_sending
+    receving as letter_receving, sending as letter_sending, CancelLetter
 from manager.basic.type import Ok, Error
 from manager.basic.commands import Command
 from threading import Lock
@@ -177,10 +177,20 @@ class Worker:
     # Note: sn here should be a verion sn
     def cancel(self, id: str) -> None:
 
-        if not self.inProcTask.isExists(id):
+        task = self.inProcTask.search(id)
+        if task is None:
             return None
 
-        self.control()
+        letter = CancelLetter(id, CancelLetter.TYPE_SINGLE)
+
+        if isinstance(task, SingleTask):
+            letter.setType(CancelLetter.TYPE_POST)
+            self.__send(letter)
+
+        elif isinstance(task, PostTask):
+            self.__send(letter)
+
+        self.inProcTask.remove(id)
 
 
     def status(self) -> Dict:

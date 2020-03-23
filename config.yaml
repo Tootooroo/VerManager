@@ -18,6 +18,7 @@ BuildSet:
   Builds:
     GL5610:
         cmd:
+        - sleep 5
         - echo ll > ll
         output:
         - ./ll

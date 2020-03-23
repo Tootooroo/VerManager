@@ -54,16 +54,14 @@ class PostConfigCmd(Command):
         return cmdLetter
 
     @staticmethod
-    def fromLetter(l:Letter) -> Optional['PostConfigCmd']:
+    def fromLetter(l:CommandLetter) -> Optional['PostConfigCmd']:
 
         if not isinstance(l, CommandLetter):
             return None
 
-        type = l.getHeader('type')
-        subType = l.getHeader('extra')
-
         address = l.getContent('address')
         port = int(l.getContent('port'))
         role = l.getContent('role')
+
 
         return PostConfigCmd(address, port, role)

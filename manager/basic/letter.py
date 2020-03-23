@@ -325,8 +325,29 @@ class NewLetter(Letter):
 
 class CancelLetter(Letter):
 
-    def __init__(self, taskId:str) -> None:
-        Letter.__init__(self, Letter.TaskCancel, {"taskId":taskId}, {})
+    TYPE_SINGLE = "Single"
+    TYPE_POST   = "Post"
+
+    def __init__(self, taskId:str, type:str) -> None:
+        Letter.__init__(self, Letter.TaskCancel, {"taskId":taskId, "type":type}, {})
+
+    @staticmethod
+    def parse(s:bytes) -> Optional['CancelLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.TaskCancel:
+            return None
+
+        return CancelLetter(header['taskId'], header['type'])
+
+    def getIdent(self) -> str:
+        return self.getHeader('taskId')
+
+    def getType(self) -> str:
+        return self.getHeader('type')
+
+    def setType(self, type:str) -> None:
+        self.setHeader('type', type)
 
 CmdType = int
 CmdSubType = int
@@ -345,7 +366,7 @@ class CommandLetter(Letter):
         if type_ != Letter.Command:
             return None
 
-        return CommandLetter(header['type'], header['target'], header['extra'], content)
+        return CommandLetter(header['type'], content, header['target'], header['extra'])
 
     def getType(self) -> str:
         return self.getHeader('type')
@@ -378,9 +399,9 @@ class CmdResponseLetter(Letter):
             return None
 
         return CmdResponseLetter(header['ident'], header['type'], header['state'],
+                                 content['extra'],
                                  target = header['target'],
-                                 reason = content['reason'],
-                                 extra = content['extra'])
+                                 reason = content['reason'])
 
     def getIdent(self) -> str:
         return self.getHeader('ident')

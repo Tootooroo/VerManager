@@ -133,7 +133,8 @@ class UnitTest(TestCase):
         dateStr = str(datetime.utcnow())
         newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
                               datetime=dateStr, menu="Menu",
-                              parent="123456", needPost="true")
+                              parent="123456", needPost="true",
+                              extra = {})
         self.assertEqual("sn_1", newLetter.getSN())
         self.assertEqual("vsn_1", newLetter.getVSN())
         self.assertEqual(dateStr, newLetter.getDatetime())
@@ -191,7 +192,7 @@ class UnitTest(TestCase):
         self.assertEqual("/home/test/test.py", menuLetter_parsed.getOutput())
 
         # commandLetter Test
-        commandLetter = CommandLetter("cmd_type", "T", "extra_information", content = {"1":"1"})
+        commandLetter = CommandLetter("cmd_type", {"1":"1"}, "T", "extra_information")
 
         self.assertEqual("cmd_type", commandLetter.getType())
         self.assertEqual("T", commandLetter.getTarget())
@@ -209,7 +210,7 @@ class UnitTest(TestCase):
         # CmdResponseLetter Test
         cmdResponseLetter = CmdResponseLetter("wIdent", "post",
                                               CmdResponseLetter.STATE_SUCCESS, reason = "NN",
-                                              target = "tt")
+                                              target = "tt", extra = {})
 
         self.assertEqual("wIdent", cmdResponseLetter.getIdent())
         self.assertEqual("post", cmdResponseLetter.getType())
@@ -289,6 +290,34 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
+    def tes_dispatcher_error(self):
+
+        # Create a server
+        sInst = ServerInst("127.0.0.1", 8077, "./config_cancel_test.yaml")
+        sInst.start()
+
+        time.sleep(1)
+
+        # Create workers
+        client1 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W1")
+        client2 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W2")
+        client3 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W3")
+        client4 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W4")
+
+        workers = [client1, client2, client3, client4]
+        for worker in workers: worker.start()
+
+        time.sleep(15)
+
+        dispatcher = sInst.getModule("Dispatcher") # type: Optional[Dispatcher]
+        self.assertTrue(dispatcher is not None)
+
+        task1 = Task("error_vsn", "rev", "error_vsn")
+        dispatcher.dispatch(task1)
+
+        time.sleep(30)
+
+
     def test_dispatcher(self):
 
         import os
@@ -321,6 +350,8 @@ class UnitTest(TestCase):
         # Dispatch task
         task1 = Task("122", "123", "122")
         dispatcher.dispatch(task1)
+
+        time.sleep(1)
 
         # To check that whether the task dispatch to one of four workers
         #w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )

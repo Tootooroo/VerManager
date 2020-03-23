@@ -4,16 +4,20 @@ import time
 import os
 import traceback
 import platform
+import subprocess
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
-from multiprocessing import Pool
+from multiprocessing import Pool, Manager
 from multiprocessing.pool import AsyncResult
+from threading import Event
 
 from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
-    LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter
+    LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
+    CancelLetter
+
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
-from ..basic.util import partition, excepHandle, pathSeperator, execute_shell_command, \
+from ..basic.util import partition, excepHandle, pathSeperator, execute_shell, \
     packShellCommands
 
 from ..basic.mmanager import Module
@@ -71,6 +75,9 @@ class Processor(Module):
         # Query purpose
         self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
 
+        # Collections of event used to stop building processing.
+        self.__shell_events = [Manager().Event()] # type: List[Event]
+
     def logging(self, msg:str) -> None:
         global LOG_ID
 
@@ -101,8 +108,6 @@ class Processor(Module):
 
     def proc(self, reqLetter:Letter) -> None:
 
-        self.logging("Receive letter:" + reqLetter.type_)
-
         # fixme: need to deal with exception of command or
         #        newtask
         if isinstance(reqLetter, CommandLetter):
@@ -111,9 +116,32 @@ class Processor(Module):
             self.proc_newtask(reqLetter)
         elif isinstance(reqLetter, PostTaskLetter):
             self.proc_post(reqLetter)
+        elif isinstance(reqLetter, CancelLetter):
+            self.proc_cancel(reqLetter)
+
+    def proc_cancel(self, letter:CancelLetter) -> State:
+        ident = letter.getIdent()
+        type = letter.getType()
+
+        if type == CancelLetter.TYPE_SINGLE:
+            if ident in self.__shell_events:
+                pass
+            else:
+                return Error
+
+        elif type == CancelLetter.TYPE_POST:
+            post_listener = self.__cInst.getModule(POST_LISTENER_M_NAME) \
+                # type: Optional[PostListener]
+
+            if post_listener is None:
+                return Error
+            else:
+                post_listener.postRemove(ident)
+
+        return Ok
 
     @staticmethod
-    def do_proc(reqLetter: NewLetter, info: Info) -> Result:
+    def do_proc(reqLetter: NewLetter, info: Info, stop:Event) -> Result:
         isSuccess = True
         try:
             workerName = info.getConfig('WORKER_NAME')
@@ -141,32 +169,39 @@ class Processor(Module):
 
             result = Result(tid, menuId, result_path, needPost, version, False)
 
-            # Get repo
-            returncode = execute_shell_command("git clone -b " + repo_url)
-            # The shell command is invalid
-            if returncode is None:
-                return result
-            elif returncode is not 0 and returncode is not 128:
-                return result
-
-            # Go into project's root directory.
-            os.chdir(projName)
-
-            # Checkout to specific revision
-            returncode = execute_shell_command("git checkout -f " + revision)
-            if returncode is None or returncode is not 0:
-                return result
-
+            commands = [
+                # Command to get repo
+                #"git clone -b " + repo_url,
+                # Go into project root
+                #"cd " + projName,
+                # Checkout the version
+                # "git checkout -f " + revision
+            ] + building_cmds
 
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
             # environment.
-            cmds_str = packShellCommands(building_cmds)
+            cmds_str = packShellCommands(commands)
 
             # Run building commands
-            returncode = execute_shell_command(cmds_str)
-            if returncode is None or returncode is not 0:
+            handle = execute_shell(cmds_str)
+            if handle is None:
                 return result
+
+            while True:
+                try:
+                    #if stop.is_set():
+                    #    handle.terminate()
+                    #    return result
+
+                    returncode = handle.wait(1)
+                except subprocess.TimeoutExpired:
+                    continue
+
+                if returncode is not 0 and returncode is not 128:
+                    return result
+                else:
+                    break
 
         except Exception:
             traceback.print_exc()
@@ -277,6 +312,9 @@ class Processor(Module):
             return Error
 
         tid = reqLetter.getHeader('tid')
+        if tid in self.__shell_events:
+            return Error
+
         version = reqLetter.getContent('vsn')
 
         if self.isReqInProc(tid, version):
@@ -286,10 +324,11 @@ class Processor(Module):
 
         # Notify master this task is change into in_processing state
         response = ResponseLetter(ident=self.__cInst.getIdent(),
-                                  tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
+                                tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
         s.transfer(response)
 
-        res = self.__pool.apply_async(Processor.do_proc, (reqLetter, self.__info))
+        res = self.__pool.apply_async(Processor.do_proc,
+                                        (reqLetter, self.__info, self.__shell_events[0]))
         self.__numOfTasksInProc += 1
 
         self.__allTasks.append((tid, version, res))
@@ -304,6 +343,10 @@ class Processor(Module):
         self.__allTasks = not_readies
 
         for (tid, version, res) in readies:
+
+            if tid in self.__shell_events:
+                del self.__shell_events [tid]
+
             result = res.get() # type: Result
 
             version = result.version

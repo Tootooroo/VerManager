@@ -70,17 +70,19 @@ def excepHandle(excep, handler:Callable) -> Callable:
 
     return handle
 
+def execute_shell(command:str) -> Optional[subprocess.Popen]:
+    try:
+        return subprocess.Popen(command, shell=True)
+    except FileNotFoundError:
+        return None
 
 # If shell command is not executed success then return None
 # otherwise return returncode of the shell command.
 def execute_shell_command(command:str) -> Optional[int]:
 
-    command_args = command.split(" ")
-
-    try:
-        proc_handle = subprocess.Popen(command_args)
-    except FileNotFoundError as e:
-        return None
+    proc_handle = execute_shell(command)
+    if proc_handle is None:
+        return proc_handle
 
     returncode = proc_handle.wait()
 

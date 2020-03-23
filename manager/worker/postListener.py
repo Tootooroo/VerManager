@@ -58,8 +58,11 @@ class PostListener(ModuleDaemon):
         self.__processor = PostProcessor(cInst)
 
     def postAppend(self, postLetter:'PostTaskLetter') -> None:
-        post = Post.fromPostLetter(postLetter)
+        post = Post.fromPostLetter(postLetter) # type: Post
         self.__processor.appendPost(post)
+
+    def postRemove(self, version:str) -> None:
+        self.__processor.removePost(version)
 
     def run(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -608,6 +611,13 @@ class PostProcessor(Thread):
         with self.__post_lock:
             self.__posts.append(post)
 
+    def removePost(self, version:str) -> None:
+        with self.__post_lock:
+
+            for post in self.__posts:
+                if post.getVersion() == version:
+                    self.__posts.remove(post)
+
     # Retrive information and binary file from workers and store into __pends
     def __post_collect_stuffs(self, args = None) -> None:
 
@@ -722,15 +732,10 @@ class PostProcessor(Thread):
 
         for post in posts:
             if post.match(stuff):
-                break
+                self.__post_lock.release()
+                return True
 
-            self.__post_lock.release ()
-            return False
-
-        self.__post_lock.release()
-
-        return True
-
+        return False
 
     @staticmethod
     def __stoIdGen(tid:str, parent:str) -> str:

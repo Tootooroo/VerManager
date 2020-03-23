@@ -79,6 +79,7 @@ class Dispatcher(ModuleDaemon):
         return False
 
     def __do_dispatch(self, task: Task) -> bool:
+
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and __tasks otherwise append to taskWait
@@ -97,7 +98,11 @@ class Dispatcher(ModuleDaemon):
             return False
 
         try:
-            workers[0].do(task)
+            worker = workers[0]
+            print(worker.getIdent())
+            self._taskTracker.onWorker(task.id(), worker)
+
+            worker.do(task)
         except:
             self.__dispatch_logging("Task " + task.id() +
                                     " dispatch failed: Worker is\
@@ -113,6 +118,8 @@ class Dispatcher(ModuleDaemon):
         for sub in subTasks:
             if not sub.isPrepare():
                 continue
+
+            self._taskTracker.track(sub)
 
             do_ret = self.__do_dispatch(sub)
 
@@ -145,12 +152,12 @@ class Dispatcher(ModuleDaemon):
         # Bind task with a build or buildSet
         task = self.__bind(task)
 
+        self._taskTracker.track(task)
+
         with self.dispatchLock:
             if self.__dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
-                self._taskTracker.track(task)
-
                 self.taskEvent.set()
 
             return True
@@ -280,7 +287,6 @@ class Dispatcher(ModuleDaemon):
     # This method cannot cancel a member of a SuperTask
     # but this method can cancel a SuperTask.
     def cancel(self, taskId: str) -> None:
-
         task = self._taskTracker.getTask(taskId)
 
         if isinstance(task, SingleTask):
@@ -299,7 +305,13 @@ class Dispatcher(ModuleDaemon):
             return None
 
         elif isinstance(task, SuperTask):
-            pass
+            children = task.getChildren()
+
+            import pdb; pdb.set_trace()
+            for child in children:
+                theWorker = self._taskTracker.whichWorker(task.id())
+                if theWorker is not None:
+                    theWorker.cancel(task.id())
 
     # Cancel all tasks processing on a worker
     def cancelOnWorker(self, wId: str) -> None:
