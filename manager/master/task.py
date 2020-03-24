@@ -181,8 +181,8 @@ class SuperTask(Task):
         return self.__children
 
     def getChild(self, ident:str) -> Optional[Task]:
-        maybe_the_child = list(
-            filter(lambda w: w.id() == ident, self.__children))
+        maybe_the_child = list(filter(lambda w: w.id() == ident,
+                                      self.__children))
 
         count = len(maybe_the_child)
         if count is 1:
@@ -200,7 +200,8 @@ class SuperTask(Task):
         builds_list = builds[1]
 
         for b in builds_list:
-            child = self.getChild(b.getIdent())
+            ident = self.getVSN() + "__" + b.getIdent()
+            child = self.getChild(ident)
 
             if child is None:
                 return None
