@@ -2,6 +2,7 @@
 #
 # This module define a object that deal with Revisions
 
+import django.db.utils
 import manager.master.components as Components
 
 
@@ -105,13 +106,19 @@ class RevSync(ModuleDaemon):
         # repository may be rebased so that the structure of it is very
         # different with datas in database so just remove these data and
         # load from server again
-        Revisions.objects.all().delete()  # type: ignore
+        try:
+            Revisions.objects.all().delete()  # type: ignore
 
-        # Fill revisions just retrived into model
-        config = self.__sInst.getModule(INFO_M_NAME)
-        tz = config.getConfig('TimeZone')
+            # Fill revisions just retrived into model
+            config = self.__sInst.getModule(INFO_M_NAME)
+            tz = config.getConfig('TimeZone')
 
-        map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
+            map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
+
+        except django.db.utils.ProgrammingError:
+            return False
+        except Exception:
+            traceback.print_exc()
 
         return True
 
@@ -151,7 +158,8 @@ class RevSync(ModuleDaemon):
         if self.connectToGitlab() is Error:
             return None
 
-        self.revDBInit()
+        if self.revDBInit() == False:
+            return None
 
         config = self.__sInst.getModule(INFO_M_NAME)
         tz = config.getConfig('TimeZone')
