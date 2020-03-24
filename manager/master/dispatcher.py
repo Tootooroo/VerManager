@@ -1,7 +1,7 @@
 # dispatcher.py
 #
-# Responsbility to version generation works dispatch,
-# load-balance, queue supported
+# Responsbility to task dispatch
+# Support for load-balance, queue supported, aging.
 
 import time
 
@@ -99,7 +99,6 @@ class Dispatcher(ModuleDaemon):
 
         try:
             worker = workers[0]
-            print(worker.getIdent())
             self._taskTracker.onWorker(task.id(), worker)
 
             worker.do(task)
@@ -257,12 +256,12 @@ class Dispatcher(ModuleDaemon):
         tasks = self._taskTracker.tasks()
 
         current = datetime.utcnow()
-        cond_long = lambda t: (current - t.last()).seconds > 60
+        cond_is_timeout = lambda t: (current - t.last()).seconds > 5
 
         # For a task that refs reduce to 0 do aging instance otherwise wait 1 min
-        tasks_outdated = list(filter(lambda t: True if t.refs == 0 else cond_long(t), tasks))
+        tasks_outdated = [t for t in tasks if t.refs == 0 or cond_is_timeout(t)]
 
-        idents_outdated = list(map(lambda t: t.id(), tasks_outdated))
+        idents_outdated = [t.id() for t in tasks_outdated]
         self.__dispatch_logging("Outdate tasks:" + str(idents_outdated))
 
         for ident in idents_outdated:
@@ -276,9 +275,11 @@ class Dispatcher(ModuleDaemon):
             # will not be aging even though
             # their counter is out of date.
             if t.isProc() or t.isPrepare():
-                self.__dispatch_logging(
-                    "Task " + ident + "is in processing/Prepare. Abort to remove")
-                continue
+
+                if self.__workers.getNumOfWorkers() is not 0:
+                    self.__dispatch_logging(
+                        "Task " + ident + "is in processing/Prepare. Abort to remove")
+                    continue
 
             self.__dispatch_logging("Remove task " + ident)
             self._taskTracker.untrack(ident)
@@ -327,6 +328,9 @@ class Dispatcher(ModuleDaemon):
 
     def getTask(self, taskId:str) -> Optional[Task]:
         return self._taskTracker.getTask(taskId)
+
+    def getTaskInWaits(self) -> List[Task]:
+        return self.taskWait
 
     # Use to get result of task
     # after the call of this method task will be
