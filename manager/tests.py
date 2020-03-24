@@ -248,7 +248,6 @@ class UnitTest(TestCase):
         self.assertEqual(3, wr.getNumOfWorkers())
 
         time.sleep(15)
-        print(wr.postRelations())
 
         # Reconnect tests case
         client1.disconnect()
@@ -290,7 +289,29 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
-    def test_dispatcher_error(self):
+    def test_dispatcher_aging(self):
+        s = ServerInst("127.0.0.1", 8099, "./config_test.yaml")
+        s.start()
+
+        time.sleep(1)
+
+        dispatcher = s.getModule("Dispatcher")
+        self.assertTrue(dispatcher is not None)
+
+        taskId = "TaskingAging"
+        dispatcher.dispatch(Task(taskId, "Rev", "Ver"))
+
+        t = dispatcher.getTask(taskId)
+        self.assertTrue(t is not None)
+
+        # Aging interval is 5 seconds
+        time.sleep(8)
+
+        t = dispatcher.getTask(taskId)
+        self.assertTrue(t is None)
+
+
+    def tes_dispatcher_error(self):
 
         from multiprocessing import Process
 
@@ -325,8 +346,7 @@ class UnitTest(TestCase):
 
         time.sleep(30)
 
-
-    def tes_dispatcher(self):
+    def test_dispatcher(self):
 
         import os
         from multiprocessing import Process
@@ -335,7 +355,6 @@ class UnitTest(TestCase):
             c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
                        name = name)
             c.start()
-
             c.join()
 
         # Create a server
@@ -390,10 +409,16 @@ class UnitTest(TestCase):
         task4 = Task("126", "123", "126")
         dispatcher.dispatch(task4)
 
+        time.sleep(5)
+
         self.assertTrue(os.path.exists("./Storage/122/total"))
         self.assertTrue(os.path.exists("./Storage/124/total"))
         self.assertTrue(os.path.exists("./Storage/125/total"))
         self.assertTrue(os.path.exists("./Storage/126/total"))
+
+        for path in ["./Storage/" + sub for sub in ["122", "124", "125", "126"]]:
+            os.remove(path+"/total")
+            os.rmdir(path)
 
         time.sleep(10)
 
@@ -440,6 +465,7 @@ class UnitTest(TestCase):
 
         for file in files:
             storage.delete(boxName, file)
+
         self.assertTrue(not os.path.exists("./Storage/box/file1"))
         self.assertTrue(not os.path.exists("./Storage/box/file2"))
         self.assertTrue(not os.path.exists("./Storage/box/file3"))
@@ -493,10 +519,10 @@ class UnitTest(TestCase):
         self.assertTrue(len(bs_GL8900[1]) == 1)
         self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
 
-    def tes_task(self):
+    def test_task(self):
         from manager.basic.info import Info
         from manager.master.build import Build, BuildSet
-        from manager.master.task import Task, SuperTask, SingleTask
+        from manager.master.task import Task, SuperTask, SingleTask, PostTask
         from manager.basic.letter import MenuLetter
 
         info = Info("./config_test.yaml")
@@ -506,19 +532,19 @@ class UnitTest(TestCase):
         bs = BuildSet(buildSet)
 
         # Create a taks object
-        t = SuperTask("VersionToto", "ABC", "VersionToto", buildSet = bs)
+        t = SuperTask("VersionToto", "ABC", "VersionToto", bs)
 
         # Get a group which GL5610 reside in
         groupOfGL5610 = t.getGroupOf("GL5610")
 
         # GL5610-v2 should in this group
-        GL5610_v2 = list(filter(lambda t: t.id() == "GL5610-v2", groupOfGL5610))
+        GL5610_v2 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v2", groupOfGL5610))
         self.assertTrue(len(GL5610_v2) == 1)
         # Check the parent of GL5610-v2
         self.assertTrue(GL5610_v2[0].isAChild() and GL5610_v2[0].getParent().id() == "VersionToto")
 
         # GL5610-v3 should in this group too
-        GL5610_v3 = list(filter(lambda t: t.id() == "GL5610-v3", groupOfGL5610))
+        GL5610_v3 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v3", groupOfGL5610))
         self.assertTrue(len(GL5610_v3) == 1)
         # Check the parent of GL5610-v3
         self.assertTrue(GL5610_v3[0].isAChild() and GL5610_v3[0].getParent().id() == "VersionToto")
@@ -527,46 +553,46 @@ class UnitTest(TestCase):
         groupOfGL8900 = t.getGroupOf("GL8900")
         self.assertTrue(len(groupOfGL8900) == 1)
         # Check the parent of GL8900
-        self.assertTrue(groupOfGL8900[0].id() == "GL8900", groupOfGL8900[0].getParent().id() == "VersionToto")
+        self.assertTrue(groupOfGL8900[0].id() == "VersionToto__GL8900",
+                        groupOfGL8900[0].getParent().id() == "VersionToto")
 
         # Posts
         pt = t.getPostTask()
-        self.assertEqual("VersionToto", pt.id())
+        pt_ident = PostTask.genIdent("VersionToto")
+        self.assertEqual(pt_ident, pt.id())
         postLetter = pt.toLetter()
 
         self.assertEqual([], postLetter.frags())
         menus = postLetter.menus()
-        self.assertTrue("GL5610_OEM" in menus)
-        self.assertTrue("GL8900_OEM" in menus)
+        self.assertTrue("P1" in menus)
+        self.assertTrue("P2" in menus)
 
         # Menu GL5610 check
-        menu_GL5610 = postLetter.getMenu("GL5610_OEM")
+        menu_GL5610 = postLetter.getMenu("P1")
         depends = menu_GL5610.getDepends()
-        self.assertTrue("GL5610" in depends)
-        self.assertTrue("GL5610-v2" in depends)
-        self.assertTrue("GL5610-v3" in depends)
+        self.assertTrue("VersionToto__GL5610" in depends)
+        self.assertTrue("VersionToto__GL5610-v2" in depends)
+        self.assertTrue("VersionToto__GL5610-v3" in depends)
 
         cmds = menu_GL5610.getCmds()
-        self.assertEqual(["touch post"], cmds)
-
+        self.assertEqual(["cat ll ll2 ll3 VersionToto  > post"], cmds)
 
         # Menu GL8900 check
-        menu_GL8900 = postLetter.getMenu("GL8900_OEM")
+        menu_GL8900 = postLetter.getMenu("P2")
         depends_89 = menu_GL8900.getDepends()
-        self.assertTrue("GL8900" in depends_89)
+        self.assertTrue("VersionToto__GL8900" in depends_89)
 
         cmds = menu_GL8900.getCmds()
-        self.assertEqual(["touch post_gl8900"], cmds)
+        self.assertEqual(["cat ll4 VersionToto  > post_gl8900", "echo 8900 VersionToto  >> post_gl8900"], cmds)
 
         # Get children of the task
-        children = t.getChildren()
-        children_id = list(map(lambda t: t.id(), children))
+        children = [child.id() for child in t.getChildren()]
 
         # Check memebers
-        self.assertTrue("GL5610" in children_id)
-        self.assertTrue("GL5610-v2" in children_id)
-        self.assertTrue("GL5610-v3" in children_id)
-        self.assertTrue("GL8900" in children_id)
+        self.assertTrue("VersionToto__GL5610" in children)
+        self.assertTrue("VersionToto__GL5610-v2" in children)
+        self.assertTrue("VersionToto__GL5610-v3" in children)
+        self.assertTrue("VersionToto__GL8900" in children)
 
         # Convert child to letter
         # Format
@@ -576,7 +602,7 @@ class UnitTest(TestCase):
         v2Letter = GL5610_v2[0].toLetter()
 
         v2Tid = v2Letter.getHeader("tid")
-        self.assertEqual("GL5610-v2", v2Tid)
+        self.assertEqual("VersionToto__GL5610-v2", v2Tid)
 
         v2NeedPost = v2Letter.getHeader("needPost")
         self.assertEqual("true", v2NeedPost)
@@ -593,7 +619,7 @@ class UnitTest(TestCase):
         cmds = extra['cmds']
 
         self.assertEqual("./ll2", resultPath)
-        self.assertEqual(['touch ll2'], cmds)
+        self.assertEqual(['echo ll2 VersionToto  > ll2'], cmds)
 
     def tes_postListener(self):
 
