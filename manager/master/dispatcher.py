@@ -289,6 +289,9 @@ class Dispatcher(ModuleDaemon):
     def cancel(self, taskId: str) -> None:
         task = self._taskTracker.getTask(taskId)
 
+        if task is None:
+            return None
+
         if isinstance(task, SingleTask):
             if task.isAChild():
                 # This task is a member of a SuperTask
@@ -307,11 +310,13 @@ class Dispatcher(ModuleDaemon):
         elif isinstance(task, SuperTask):
             children = task.getChildren()
 
-            import pdb; pdb.set_trace()
             for child in children:
-                theWorker = self._taskTracker.whichWorker(task.id())
+                theWorker = self._taskTracker.whichWorker(child.id())
                 if theWorker is not None:
-                    theWorker.cancel(task.id())
+                    theWorker.cancel(child.id())
+                    child.stateChange(Task.STATE_FAILURE)
+
+        task.stateChange(Task.STATE_FAILURE)
 
     # Cancel all tasks processing on a worker
     def cancelOnWorker(self, wId: str) -> None:

@@ -184,10 +184,10 @@ class Worker:
         letter = CancelLetter(id, CancelLetter.TYPE_SINGLE)
 
         if isinstance(task, SingleTask):
-            letter.setType(CancelLetter.TYPE_POST)
             self.__send(letter)
 
         elif isinstance(task, PostTask):
+            letter.setType(CancelLetter.TYPE_POST)
             self.__send(letter)
 
         self.inProcTask.remove(id)

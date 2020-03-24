@@ -423,9 +423,9 @@ class CmdResponseLetter(Letter):
 
 class PostTaskLetter(Letter):
 
-    def __init__(self, ver:str, cmds:List[str], output:str, menus:Dict, frags:List) -> None:
+    def __init__(self, ident:str, ver:str, cmds:List[str], output:str, menus:Dict, frags:List) -> None:
         Letter.__init__(self, Letter.Post,
-                        {"version":ver, "output":output},
+                        {"ident":ident, "version":ver, "output":output},
                         {"cmds":cmds, "Menus":menus, "Fragments":frags})
 
     @staticmethod
@@ -435,8 +435,12 @@ class PostTaskLetter(Letter):
         if type_ != Letter.Post:
             return None
 
-        return PostTaskLetter(header['version'], content['cmds'], header['output'],
+        return PostTaskLetter(header['ident'], header['version'],
+                              content['cmds'], header['output'],
                               menus = content['Menus'], frags = content['Fragments'])
+
+    def getIdent(self) -> str:
+        return self.getHeader("ident")
 
     def getVersion(self) -> str:
         return self.getHeader("version")
@@ -753,7 +757,9 @@ validityMethods = {
     Letter.LogRegister    : logRegisterLetterValidity,
     Letter.NewMenu        : lambda letter:  True,
     Letter.Command        : lambda letter:  True,
-    Letter.CmdResponse    : lambda letter:  True
+    Letter.CmdResponse    : lambda letter:  True,
+    Letter.Post           : lambda letter:  True,
+    Letter.TaskCancel     : lambda letter:  True
 } # type:  Dict[str, Callable]
 
 parseMethods = {
@@ -766,7 +772,8 @@ parseMethods = {
     Letter.NewMenu        : MenuLetter,
     Letter.Command        : CommandLetter,
     Letter.CmdResponse    : CmdResponseLetter,
-    Letter.Post           : PostTaskLetter
+    Letter.Post           : PostTaskLetter,
+    Letter.TaskCancel     : CancelLetter
 } # type:  Any
 
 import socket

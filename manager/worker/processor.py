@@ -126,7 +126,7 @@ class Processor(Module):
 
         if type == CancelLetter.TYPE_SINGLE:
             if ident in self.__shell_events:
-                pass
+                self.sotp_task(ident)
             else:
                 return Error
 
@@ -134,9 +134,7 @@ class Processor(Module):
             post_listener = self.__cInst.getModule(POST_LISTENER_M_NAME) \
                 # type: Optional[PostListener]
 
-            if post_listener is None:
-                return Error
-            else:
+            if post_listener is not None:
                 post_listener.postRemove(ident)
 
         return Ok
@@ -308,6 +306,10 @@ class Processor(Module):
 
         return Ok
 
+    def sotp_task(self, taskId:str) -> None:
+        if taskId in self.__shell_events:
+            self.__shell_events[taskId].set()
+
     def proc_newtask(self, reqLetter:NewLetter) -> State:
         if not self.isAbleToProc():
             return Error
@@ -332,8 +334,7 @@ class Processor(Module):
         self.__shell_events[tid] = event
 
         res = self.__pool.apply_async(Processor.do_proc,
-                                        (reqLetter, self.__info, event))
-        self.__numOfTasksInProc += 1
+                                    (reqLetter, self.__info, event))
 
         self.__allTasks.append((tid, version, res))
         self.__allTasks_dict[version+tid] = res

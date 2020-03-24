@@ -290,7 +290,15 @@ class UnitTest(TestCase):
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
 
-    def tes_dispatcher_error(self):
+    def test_dispatcher_error(self):
+
+        from multiprocessing import Process
+
+        def clientStart(name:str) -> None:
+            c = Client("127.0.0.1", 8077, "./manager/worker/config.yaml",
+                        name = name)
+            c.start()
+            c.join()
 
         # Create a server
         sInst = ServerInst("127.0.0.1", 8077, "./config_cancel_test.yaml")
@@ -299,10 +307,10 @@ class UnitTest(TestCase):
         time.sleep(1)
 
         # Create workers
-        client1 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W1")
-        client2 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W2")
-        client3 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W3")
-        client4 = Client("127.0.0.1", 8077, "./manager/worker/config.yaml", name = "W4")
+        client1 = Process(target=clientStart, args = ("W1", ))
+        client2 = Process(target=clientStart, args = ("W2", ))
+        client3 = Process(target=clientStart, args = ("W3", ))
+        client4 = Process(target=clientStart, args = ("W4", ))
 
         workers = [client1, client2, client3, client4]
         for worker in workers: worker.start()
@@ -318,9 +326,17 @@ class UnitTest(TestCase):
         time.sleep(30)
 
 
-    def test_dispatcher(self):
+    def tes_dispatcher(self):
 
         import os
+        from multiprocessing import Process
+
+        def clientStart(name:str) -> None:
+            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
+                       name = name)
+            c.start()
+
+            c.join()
 
         # Create a server
         sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
@@ -329,10 +345,10 @@ class UnitTest(TestCase):
         time.sleep(1)
 
         # Create workers
-        client1 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W1")
-        client2 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W2")
-        client3 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W3")
-        client4 = Client("127.0.0.1", 8013, "./manager/worker/config.yaml", name = "W4")
+        client1 = Process(target=clientStart, args = ("W1", ))
+        client2 = Process(target=clientStart, args = ("W2", ))
+        client3 = Process(target=clientStart, args = ("W3", ))
+        client4 = Process(target=clientStart, args = ("W4", ))
 
         workers = [client1, client2, client3, client4]
 
@@ -380,23 +396,6 @@ class UnitTest(TestCase):
         self.assertTrue(os.path.exists("./Storage/126/total"))
 
         time.sleep(10)
-
-        task5 = Task("127", "123", "127")
-        dispatcher.dispatch(task5)
-
-        listener = workerRoom.postListener()
-        assert(listener is not None)
-
-        l_ident = listener.getIdent()
-
-        l_client = list(filter(lambda c: c.getIdent() == l_ident, workers))[0]
-        l_client.stop()
-
-        time.sleep(2)
-        for w in workerRoom.getWorkers():
-            self.assertEqual(0, len(w.inProcTasks()))
-
-        time.sleep(20)
 
 
     def test_storage(self):

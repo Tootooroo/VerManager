@@ -187,9 +187,10 @@ class Post:
     # 2. Contain informations that guid processor how
     #    to do post-processing.
 
-    def __init__(self, version:str, cmds:List[str], output:str,
+    def __init__(self, ident:str, version:str, cmds:List[str], output:str,
                  menus:List['PostMenu'], frags:List[str]):
 
+        self.__ident = ident
         self.__ver = version
         self.__cmds = cmds
         self.__output = output
@@ -198,6 +199,9 @@ class Post:
         self.__frags = {} # type: Dict[str, PostFrag]
         for frag in frags:
             self.__frags[frag] = PostFrag(frag)
+
+    def getIdent(self) -> str:
+        return self.__ident
 
     def getVersion(self) -> str:
         return self.__ver
@@ -256,8 +260,12 @@ class Post:
         f = lambda mid: PostMenu.fromMenuLetter(letter.getMenu(mid))
         menus = list(map(f, menus_ident))
 
-        return Post(letter.getVersion(), letter.getCmds(),
-                    letter.getOutput(), menus, letter.frags())
+        return Post(letter.getIdent(),
+                    letter.getVersion(),
+                    letter.getCmds(),
+                    letter.getOutput(),
+                    menus,
+                    letter.frags())
 
 
 class PostFrag:
@@ -564,8 +572,9 @@ class PostProcessor(Thread):
             post = statisfied_posts.get()
             self.logging("Post " + post.getVersion() + " is in processing")
 
+            postId = post.getIdent()
             version = post.getVersion()
-            response = ResponseLetter(workerIdent, version, Letter.RESPONSE_STATE_FINISHED)
+            response = ResponseLetter(workerIdent, postId, Letter.RESPONSE_STATE_FINISHED)
 
             wDir = self.do_post_processing(post)
             if wDir is None:
@@ -586,7 +595,7 @@ class PostProcessor(Thread):
 
                     try:
                         binaryLetter = BinaryLetter(
-                            post.getVersion(), bytes,
+                            postId, bytes,
                             parent = version,
                             fileName = fileName)
 
@@ -615,7 +624,7 @@ class PostProcessor(Thread):
         with self.__post_lock:
 
             for post in self.__posts:
-                if post.getVersion() == version:
+                if post.getIdent() == version:
                     self.__posts.remove(post)
 
     # Retrive information and binary file from workers and store into __pends

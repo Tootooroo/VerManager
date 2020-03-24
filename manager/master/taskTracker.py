@@ -23,8 +23,6 @@ class TrackUnit:
         self._worker = w # type: Optional[Worker]
 
     def onWhichWorker(self) -> Optional[Worker]:
-        if self._worker is None:
-            return None
         return self._worker
 
     def taskStatus(self) -> TaskType:

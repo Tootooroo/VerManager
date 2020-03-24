@@ -226,7 +226,7 @@ class SuperTask(Task):
     def toFinState(self) -> State:
         isAbleTo = True
         for c in self.__children:
-            isAbleTo = c.isFinished()
+            isAbleTo = isAbleTo and c.isFinished()
         if isAbleTo:
             self.state = Task.STATE_FINISHED
             return Ok
@@ -334,7 +334,7 @@ class SuperTask(Task):
         if varPairs != []:
             merge.varAssign(varPairs)
 
-        pt = PostTask(self.vsn, posts, frags, merge)
+        pt = PostTask(PostTask.genIdent(self.vsn), self.vsn, posts, frags, merge)
         pt.setParent(self)
 
         children.append(pt)
@@ -403,14 +403,20 @@ class PostTask(Task):
 
     Type = 3
 
-    def __init__(self, version:str, groups:List[Post], frags:List[str], merge:Merge) -> None:
-        Task.__init__(self, version, "", version)
+    def __init__(self, ident:str, version:str,
+                 groups:List[Post], frags:List[str], merge:Merge) -> None:
+
+        Task.__init__(self, ident, "", version)
 
         self.type = PostTask.Type
         self.__postGroups = groups
         self.__frags = frags
         self.__merge = merge
         self.__parent = None # type: Optional[SuperTask]
+
+    @staticmethod
+    def genIdent(ident:str) -> str:
+        return ident+"__Post"
 
     def setParent(self, parent:SuperTask) -> None:
         self.__parent = parent
@@ -433,7 +439,8 @@ class PostTask(Task):
         posts = self.__postGroups
         menuLetters = list(map(lambda p: p.toMenuLetter(version), posts))
 
-        postTaskLetter = PostTaskLetter(self.vsn,
+        postTaskLetter = PostTaskLetter(self.vsn+"__Post",
+                                        self.vsn,
                                         self.__merge.getCmds(),
                                         self.__merge.getOutput(),
                                         frags=self.__frags,
@@ -442,7 +449,6 @@ class PostTask(Task):
             postTaskLetter.addMenu(menuLetter)
 
         return postTaskLetter
-
 
 
 # Every task in TaskGroup must be unique in the TaskGroup

@@ -79,6 +79,7 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             if isinstance(task, SingleTask):
                 if task.getParent() is None:
                     responseHandler_ResultStore(eventListener, task)
+
             elif isinstance(task, PostTask):
                 super = task.getParent()
                 assert(super is not None)
@@ -103,7 +104,8 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
             if isinstance(task, SingleTask) or isinstance(task, PostTask):
 
                 if task.isAChild():
-                    dispatcher = eventListener.getModule(DISPATCHER_M_NAME) # type: Dispatcher
+                    dispatcher = eventListener.getModule(DISPATCHER_M_NAME) \
+                        # type: Dispatcher
 
                     parent = task.getParent()
                     if parent is not None:
@@ -124,7 +126,13 @@ def responseHandler_ResultStore(eventListener: EventListener,
     # Send email to notify that task id done
     try:
 
-        taskId = task.id()
+        if isinstance(task, SuperTask):
+            # Binary file correspond to a SuperTask
+            # is transfer from PostListener.
+            taskId = PostTask.genIdent(task.id())
+        else:
+            taskId = task.id()
+
         chooser = chooserSet[taskId]
         extra = task.getExtra()
 
