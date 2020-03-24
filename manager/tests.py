@@ -290,6 +290,14 @@ class UnitTest(TestCase):
         Logger.putLog(logger, "Test", "123")
 
     def test_dispatcher_aging(self):
+        from manager.master.dispatcher import Dispatcher
+
+        def taskUpdate(d:Dispatcher):
+            i = 0
+            while i < 3:
+                d.taskLastUpdate("TaskEternel")
+                time.sleep(1)
+
         s = ServerInst("127.0.0.1", 8099, "./config_test.yaml")
         s.start()
 
@@ -298,17 +306,28 @@ class UnitTest(TestCase):
         dispatcher = s.getModule("Dispatcher")
         self.assertTrue(dispatcher is not None)
 
-        taskId = "TaskingAging"
+        taskId = "TaskAging"
         dispatcher.dispatch(Task(taskId, "Rev", "Ver"))
 
-        t = dispatcher.getTask(taskId)
-        self.assertTrue(t is not None)
+        taskId_eternel = "TaskEternel"
+        dispatcher.dispatch(Task(taskId_eternel, "rev", "Ver"))
+
+        spawnThread(taskUpdate, dispatcher)
+
+        t_aging = dispatcher.getTask(taskId)
+        self.assertTrue(t_aging is not None)
+
+        t_eternel = dispatcher.getTask(taskId_eternel)
+        self.assertTrue(t_eternel is not None)
 
         # Aging interval is 5 seconds
         time.sleep(8)
 
-        t = dispatcher.getTask(taskId)
-        self.assertTrue(t is None)
+        t_aging = dispatcher.getTask(taskId)
+        self.assertTrue(t_aging is None)
+
+        t_eternel = dispatcher.getTask(taskId_eternel)
+        self.assertTrue(t_eternel is not None)
 
 
     def tes_dispatcher_error(self):
