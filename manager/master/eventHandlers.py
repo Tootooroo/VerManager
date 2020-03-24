@@ -49,7 +49,6 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
     global chooserSet
 
-    print(letter.toString())
     if letter.typeOfLetter() != Letter.Response:
         return None
 
@@ -88,7 +87,6 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
                 responseHandler_ResultStore(eventListener, super)
 
-            print("Remove Task " + taskId)
             worker.removeTask(taskId)
 
             # Close chooser

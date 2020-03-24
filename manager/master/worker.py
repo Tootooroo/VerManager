@@ -161,11 +161,9 @@ class Worker:
         letter = task.toLetter()
 
         if letter is None:
-            print("letter is None")
             return None
 
         self.__send(letter)
-        print("Master Send to "+self.getIdent()+":"+letter.toString())
 
         # Register task into task group
         task.toProcState()
