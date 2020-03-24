@@ -118,7 +118,7 @@ class RevSync(ModuleDaemon):
         except django.db.utils.ProgrammingError:
             return False
         except Exception:
-            traceback.print_exc()
+            pass
 
         return True
 
