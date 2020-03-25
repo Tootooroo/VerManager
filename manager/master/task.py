@@ -382,7 +382,7 @@ class SingleTask(Task):
             needPost = "true"
             group = self.__parent.getGroupOf(self.id()) # type: ignore
         else:
-            parent_id = ""
+            parent_ident = ""
             needPost = "false"
 
         menu = ""

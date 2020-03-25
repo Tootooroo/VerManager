@@ -79,7 +79,7 @@ class RevSync(ModuleDaemon):
         try:
             revision.save()
         except:
-            traceback.print_exc()
+            pass
 
         return revision
 
