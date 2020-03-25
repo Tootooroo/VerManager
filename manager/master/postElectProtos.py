@@ -26,6 +26,9 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group is None:
             return Error
 
+        if self.group.numOfWorkers() is 0:
+            return Error
+
         ret = Error
 
         # Listener elect
@@ -63,6 +66,9 @@ class RandomElectProtocol(PostElectProtocol):
     def __elect_listener(self) -> Tuple[State, str]:
 
         if self.group is None:
+            return (Ok, "")
+
+        if self.group.numOfWorkers() == 0:
             return (Ok, "")
 
         listener = reduce(self.__random_elect, self.group)
