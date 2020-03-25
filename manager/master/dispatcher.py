@@ -4,6 +4,7 @@
 # Support for load-balance, queue supported, aging.
 
 import time
+import traceback
 
 M_NAME = "Dispatcher"
 
@@ -56,6 +57,7 @@ class Dispatcher(ModuleDaemon):
     def __dispatch_logging(self, msg:str) -> None:
         if self.__logger is None:
             self.__logger = self.__sInst.getModule(LOGGER_M_NAME)
+            self.__logger.log_register("dispatcher")
 
             if self.__logger is None:
                 return None
@@ -201,7 +203,11 @@ class Dispatcher(ModuleDaemon):
                     task.setBuild(buildSet)
             except:
                 pass
-            task = task.transform()
+
+            try:
+                task = task.transform()
+            except:
+                traceback.print_exc()
 
         return task
 
@@ -238,15 +244,14 @@ class Dispatcher(ModuleDaemon):
             task = self.taskWait.pop()
 
             # Task can be drop via setting its state to STATE_FAILURE
-            if task.state == Task.STATE_FAILURE:
-                continue
+            if task.state != Task.STATE_FAILURE:
 
-            self.__dispatch_logging("Dispatch task: " + task.id())
+                self.__dispatch_logging("Dispatch task: " + task.id())
 
-            if not self.__dispatch(task):
-                self.__dispatch_logging("Dispatch task " + task.id() +
-                                        " failed. append to tail of queue")
-                self.taskWait.append(task)
+                if not self.__dispatch(task):
+                    self.__dispatch_logging("Dispatch task " + task.id() +
+                                            " failed. append to tail of queue")
+                    self.taskWait.append(task)
 
             if len(self.taskWait) == 0:
                 self.__dispatch_logging("TaskWait Queue is empty.")
