@@ -58,7 +58,11 @@ class ProviderPorts(abc.ABC):
 
     @abc.abstractmethod
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
-        """ Waiting for a ready provider """
+        """
+        Waiting for a ready provider
+
+        timeout: timeout's unit is second
+        """
 
     @abc.abstractmethod
     def isExists(sefl, fd) -> bool:
@@ -90,6 +94,10 @@ class WindowsPorts(ProviderPorts):
 
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
 
+        if self.__providers is []:
+            time.sleep(timeout)
+            return []
+
         readies_r, readies_w, readies_x = \
             select.select(self.__providers, [], [], timeout)
 
@@ -119,6 +127,7 @@ class LinuxPorts(ProviderPorts):
             return None
 
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
+        timeout_seconds = timeout * 1000
         readies = self.__providers.poll(timeout)
         return [(self.__socks[fd], event) for (fd, event) in readies]
 
