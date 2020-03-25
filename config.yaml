@@ -17,52 +17,69 @@ WaitingInterval: 10
 BuildSet:
   Builds:
     GL5610:
-        cmd:
-        - sleep 5
-        - echo ll > ll
-        output:
-        - ./ll
-
-    GL5610-v2:
-        cmd:
-        - echo ll2 > ll2
-        output:
-        - ./ll2
+      cmd:
+        - .\GBN\src\gcom_gpon_build_boot.bat 1
+        - .\GBN\src\gcom_gpon_build_host.bat 1
+        - cd .\BSP\config\image
+        - rar a -r 5610gpon NOBRAND_OEM_TiNetS5610_10gpon
+        - cd ..\..\..
+      output:
+        - .\BSP\config\image\5610gpon.rar
 
     GL5610-v3:
-        cmd:
-        - echo ll3 > ll3
-        output:
-        - ./ll3
+      cmd:
+        - .\GBN\src\gcom_gpon_build_boot.bat 2
+        - .\GBN\src\gcom_gpon_build_host.bat 2
+        - cd .\BSP\config\image
+        - rar a -r 5610gpon_v3 NOBRAND_OEM_TiNetS5610_10gpon_v3
+        - cd ..\..\..
+      output:
+        - .\BSP\config\image\5610gpon_v3.rar
 
-    GL8900:
-        cmd:
-        - echo ll4 > ll4
-        output:
-        - ./ll4
+    GL8900_Line:
+      cmd:
+        - .\GBN\src\gcom_gpon_build_boot.bat 6
+        - .\GBN\src\gcom_gpon_build_host.bat 6
+        - cd .\BSP\config\image
+        - rar a -r 8900_line NOBRAND_OEM_gcom_gpon_8900_line
+        - cd ..\..\..
+      output:
+        - .\BSP\config\image\8900_line.rar
+
+    GL8900_ctrl:
+      cmd:
+        - .\GBN\src\gcom_gpon_build_boot.bat 5
+        - .\GBN\src\gcom_gpon_build_host.bat 5
+        - cd .\BSP\config\image
+        - rar a -r 8900_ctrl NOBRAND_OEM_gcom_gpon_8900_ctrl
+        - cd ..\..\..
+      output:
+        - .\BSP\config\image\8900_ctrl.rar
 
   Posts:
-    P1:
+    GL5610_link:
       group:
         - GL5610
-        - GL5610-v2
         - GL5610-v3
       cmd:
-        - cat <version> <datetime> ll3 > post
+        - rar x 5610gpon.rar
+        - rar x 5610gpon_v3.rar
+        - link_hybrid_gl5610.bat
       output:
-        - ./post
+        - ./pack
 
-    P2:
+    GL8900_link:
       group:
-        - GL8900
+        - GL8900_line
+        - GL8900_ctrl
       cmd:
-        - cat ll4 > post_gl8900
-        - echo 8900 >> post_gl8900
+        - rar x 8900_line.rar
+        - rar x 8900_ctrl.rar
       output:
-        - ./post_gl8900
+        - ./pack
 
   Merge:
     cmd:
-      - cat * > total
+      - rar a -r <version> pack
     output:
-      - ./total
+      - ./<version>.rar
