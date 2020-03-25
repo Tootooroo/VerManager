@@ -8,6 +8,7 @@ import time
 import select
 import traceback
 
+from datetime import datetime
 from ..basic.util import spawnThread
 from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
     ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter
@@ -437,6 +438,11 @@ class Stuff:
         self.__stuffName = stuffName
         self.__where = where
 
+        self.__last = datetime.utcnow()
+
+    def elapsed(self) -> int:
+        return (datetime.utcnow() - self.__last).seconds
+
     def version(self) -> str:
         return self.__version
 
@@ -652,20 +658,20 @@ class PostProcessor(Thread):
             #        a stuff if it's counter's value is bigger than
             #        a specific value.
             if isPaired is False:
-                self.__stuffs.addStuff(stuff)
-
-            self.logging("Stuff " + stuff.name() + " paired")
+                # Only retry to pair stuff within last 5 seconds.
+                if stuff.elapsed() < 5:
+                    self.__stuffs.addStuff(stuff)
+            else:
+                self.logging("Stuff " + stuff.name() + " paired")
 
             # After match we need to check is there a menu which
             # collect all stuffs of it need
-            self.__post_lock.acquire()
 
-            for post in self.__posts:
-                if post.isSatisfied():
-                    self.__satisfiedPosts.put(post)
-                    self.__posts.remove(post)
-
-            self.__post_lock.release()
+            with self.__post_lock:
+                for post in self.__posts:
+                    if post.isSatisfied():
+                        self.__satisfiedPosts.put(post)
+                        self.__posts.remove(post)
 
 
 
@@ -737,12 +743,11 @@ class PostProcessor(Thread):
     def __post_stuff_pair(self, stuff:Stuff) -> bool:
         posts = self.__posts
 
-        self.__post_lock.acquire()
 
-        for post in posts:
-            if post.match(stuff):
-                self.__post_lock.release()
-                return True
+        with self.__post_lock:
+            for post in posts:
+                if post.match(stuff):
+                    return True
 
         return False
 

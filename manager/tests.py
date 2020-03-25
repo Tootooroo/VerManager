@@ -471,7 +471,7 @@ class UnitTest(TestCase):
             c.join()
 
         # Create a server
-        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
+        sInst = ServerInst("127.0.0.1", 8013, "./config_test_frags.yaml")
         sInst.start()
 
         time.sleep(1)

@@ -316,9 +316,10 @@ class SuperTask(Task):
 
             children.append(st)
 
-        # Build a child which type is PostTask
+        # Build frags
         allBuilds_ident = list(map(lambda b: b.getIdent(), self.__buildSet.getBuilds()))
-        frags = list(filter(lambda bid: self.__buildSet.belongTo(bid) is None, allBuilds_ident))
+        predicate = lambda ident: self.__buildSet.belongTo(ident) is None
+        frags = [prefix(ident) for ident in allBuilds_ident if predicate(ident)]
 
         # Get posts from BuildSet and attach version to member's id.
         posts = self.__buildSet.getPosts()
