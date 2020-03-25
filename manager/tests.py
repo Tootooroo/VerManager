@@ -524,13 +524,14 @@ class UnitTest(TestCase):
 
         time.sleep(5)
 
-        self.assertTrue(os.path.exists("./Storage/122/total"))
-        self.assertTrue(os.path.exists("./Storage/124/total"))
-        self.assertTrue(os.path.exists("./Storage/125/total"))
-        self.assertTrue(os.path.exists("./Storage/126/total"))
+        self.assertTrue(os.path.exists("./Storage/122/122total"))
+        self.assertTrue(os.path.exists("./Storage/124/124total"))
+        self.assertTrue(os.path.exists("./Storage/125/125total"))
+        self.assertTrue(os.path.exists("./Storage/126/126total"))
 
         for path in ["./Storage/" + sub for sub in ["122", "124", "125", "126"]]:
-            os.remove(path+"/total")
+            fileName = path.split("/")[-1] + "total"
+            os.remove(path+"/"+fileName)
             os.rmdir(path)
 
         time.sleep(10)

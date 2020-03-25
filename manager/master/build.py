@@ -46,6 +46,7 @@ class Build:
     def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
         f = lambda cmd, var: cmd.replace(var[0], var[1])
         self.__cmds = [reduce(f, varPairs, cmd) for cmd in self.__cmds]
+        self.__output = [reduce(f, varPairs, output) for output in self.__output]
 
 class Post:
 

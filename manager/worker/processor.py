@@ -170,11 +170,11 @@ class Processor(Module):
 
             commands = [
                 # Command to get repo
-                #"git clone -b " + repo_url,
+                "git clone -b " + repo_url,
                 # Go into project root
-                #"cd " + projName,
+                "cd " + projName,
                 # Checkout the version
-                # "git checkout -f " + revision
+                "git checkout -f " + revision
             ] + building_cmds
 
             # Pack all building commands into a single string
