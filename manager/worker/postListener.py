@@ -1,5 +1,6 @@
 # postListener.py
 
+import abc
 import socket
 import tempfile
 import os
@@ -43,8 +44,87 @@ else:
     path_sep = "/"
 
 
-class DISCONN(Exception):
-    pass
+class DISCONN(Exception): pass
+
+class ProviderPorts(abc.ABC):
+
+    @abc.abstractmethod
+    def register(self, sock:socket.socket) -> None:
+        """ Register a socket """
+
+    @abc.abstractmethod
+    def unregister(self, fd:int) -> None:
+        """ Unregister a socket """
+
+    @abc.abstractmethod
+    def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
+        """ Waiting for a ready provider """
+
+    @abc.abstractmethod
+    def isExists(sefl, fd) -> bool:
+        """ Is a fd correspond to a provider is registered """
+
+class WindowsPorts(ProviderPorts):
+
+    def __init__(self) -> None:
+        self.__providers = [] # type: List[socket.socket]
+
+    def register(self, sock:socket.socket) -> None:
+        if self.isExists(sock.fileno()):
+            return None
+
+        self.__providers.append(sock)
+
+    def unregister(self, fd:int) -> None:
+        if not self.isExists(fd):
+            return None
+
+        self.__providers = [
+            provider
+            for provider in self.__providers
+            if provider.fileno() != fd
+        ]
+
+    def isExists(self, fd:int) -> bool:
+        return fd in [sock.fileno() for sock in self.__providers]
+
+    def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
+
+        readies_r, readies_w, readies_x = \
+            select.select(self.__providers, [], [], timeout)
+
+        return list(zip(readies_r, [0] * len(readies_r)))
+
+
+class LinuxPorts(ProviderPorts):
+
+    def __init__(self) -> None:
+        self.__socks = {} # type: Dict[int, socket.socket]
+        self.__providers = select.poll()
+
+    def register(self, sock:socket.socket) -> None:
+        fd = sock.fileno()
+
+        if fd in self.__socks:
+            return None
+
+        self.__socks[fd] = sock
+        self.__providers.register(fd, select.POLLIN)
+
+    def unregister(self, fd) -> None:
+        if fd in self.__socks:
+            del self.__socks [fd]
+            self.__providers.unregister(fd)
+        else:
+            return None
+
+    def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
+        readies = self.__providers.poll(timeout)
+        return [(self.__socks[fd], event) for (fd, event) in readies]
+
+    def isExists(self, fd:int) -> bool:
+        return fd in self.__socks
+
 
 class PostListener(ModuleDaemon):
 
@@ -471,8 +551,6 @@ class PostProcessor(Thread):
 
         self.__cInst = cInst
 
-        self.__socks = {} # type: Dict[int, socket.socket]
-
         # List of menu from server
         # after command of menu is
         # executed the menu will
@@ -484,7 +562,12 @@ class PostProcessor(Thread):
 
         self.__satisfiedPosts = Queue(10) # type: Queue[Post]
 
-        self.__providers = select.poll()
+        system = platform.system()
+        if system == 'Windows':
+            self.__providers = WindowsPorts() # type: ProviderPorts
+        elif system == 'Linux':
+            self.__providers = LinuxPorts()
+
         self.__inProcReq = [] # type: List[ReqIdent]
 
         cfgs = cInst.getModule(INFO_M_NAME)
@@ -637,11 +720,10 @@ class PostProcessor(Thread):
     def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
-            providers = self.__providers.poll(100)
+            providers = self.__providers.wait(100)
 
             # Build stuffs from binary from providers
-            for fd, event in providers:
-                sock = self.__socks[fd]
+            for sock, event in providers:
                 self.__build_stuff(sock)
 
             # Pair stuffs with menus
@@ -774,11 +856,10 @@ class PostProcessor(Thread):
 
         fd = sock.fileno()
 
-        if fd in self.__socks:
+        if self.__providers.isExists(fd):
             return Error
 
-        self.__socks[fd] = sock
-        self.__providers.register(fd, select.POLLIN)
+        self.__providers.register(sock)
 
         return Ok
 
@@ -791,10 +872,9 @@ class PostProcessor(Thread):
         else:
             fd = descriptor
 
-        if not fd in self.__socks:
+        if not self.__providers.isExists(fd):
             return Error
 
-        del self.__socks [fd]
         self.__providers.unregister(fd)
 
         return Ok
