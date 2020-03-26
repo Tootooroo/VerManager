@@ -30,7 +30,7 @@ class StoChooser:
         self.__path = path
 
         try:
-            self.__fd = open(path, "a+b")
+            self.__fd = open(path, "wb")
         except FileNotFoundError:
             raise STORAGE_IDENT_NOT_FOUND
 

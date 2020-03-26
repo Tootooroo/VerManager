@@ -8,6 +8,7 @@ import platform
 import time
 import select
 import traceback
+import shutil
 
 from datetime import datetime
 from ..basic.util import spawnThread
@@ -603,7 +604,7 @@ class PostProcessor(Thread):
 
     def do_post_processing(self, post:Post) -> Optional[str]:
 
-        buildDir = "Biuld"
+        buildDir = "Build"
 
         if not os.path.exists(buildDir):
             os.mkdir(buildDir)
@@ -679,6 +680,7 @@ class PostProcessor(Thread):
             wDir = self.do_post_processing(post)
             if wDir is None:
                 self.logging("Post " + post.getVersion() + " is failed")
+
                 # Notify master this post is failed.
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
@@ -706,6 +708,8 @@ class PostProcessor(Thread):
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                             server.transfer(response)
 
+                            # Remove working directory
+                            shutil.rmtree(wDir)
                             return None
 
                     lastBin  = BinaryLetter(
@@ -718,6 +722,9 @@ class PostProcessor(Thread):
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
 
             server.transfer(response)
+
+            # Remove working directory
+            shutil.rmtree(wDir)
 
 
     def appendPost(self, post:Post) -> None:
