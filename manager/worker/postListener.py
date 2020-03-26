@@ -789,8 +789,7 @@ class PostProcessor(Thread):
                 self.__rmSock(sock)
                 break
             except BlockingIOError as e:
-                if e.errno == 11:
-                    break
+                break
             except Exception:
                 traceback.print_exc()
 
