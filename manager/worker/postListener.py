@@ -601,7 +601,7 @@ class PostProcessor(Thread):
         log_letter = LogLetter(self.__cInst.getIdent(), LOG_ID, msg)
         self.__server.transfer(log_letter)
 
-    def do_post_processing(self, post:Post) -> Optional[tempfile.TemporaryDirectory]:
+    def do_post_processing(self, post:Post) -> Optional[str]:
 
         buildDir = "Biuld"
 
@@ -620,8 +620,6 @@ class PostProcessor(Thread):
                 return None
 
         # fixme: need to copy frags to working directory
-
-
         cmds = post.getCmds()
         cmds.insert(0, "cd " + buildDir)
         cmds_str = sep.join(cmds)
@@ -631,7 +629,7 @@ class PostProcessor(Thread):
         except:
             return None
 
-        return workingDir
+        return buildDir
 
     def __do_menu(self, menu:PostMenu, workDir:FilePath) -> State:
         command = menu.getCmd()
@@ -708,7 +706,6 @@ class PostProcessor(Thread):
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                             server.transfer(response)
 
-                            wDir.cleanup()
                             return None
 
                     lastBin  = BinaryLetter(

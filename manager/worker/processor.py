@@ -5,6 +5,7 @@ import os
 import traceback
 import platform
 import subprocess
+import queue
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool, Manager
@@ -358,7 +359,11 @@ class Processor(Module):
             version = result.version
             tid = result.tid
             needPost = result.needPost
-            path = result.path
+
+            # Build path to result
+            projName = self.__info.getConfig("PROJECT_NAME")
+            path = projName + pathSeperator() + result.path
+
             menu = result.menuId
 
             server = self.__cInst.getModule(SERVER_M_NAME)
@@ -387,6 +392,10 @@ class Processor(Module):
                                             mid=menu,
                                             parent=version)
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                            response.setState(Letter.RESPONSE_STATE_FAILURE)
+                        except FileNotFoundError:
+                            response.setState(Letter.RESPONSE_STATE_FAILURE)
+                        except queue.Full:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
 
                 # Notify to master
