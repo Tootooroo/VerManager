@@ -231,31 +231,33 @@ class Dispatcher(ModuleDaemon):
                 counter += 1
                 continue
 
-            self.__dispatch_logging("Task arrived")
+            if len(self.taskWait) == 0:
+                self.__dispatch_logging("TaskWait Queue is empty.")
+                self.taskEvent.clear()
+
+                continue
+
+            task = self.taskWait.pop()
+            self.__dispatch_logging("Task " + task.id() + " arrived")
+
+            if task.state == Task.STATE_FAILURE:
+                continue
 
             # Is there any workers acceptable
             workers = self.__workers.getWorkerWithCond(acceptableWorkers)
 
             if workers == []:
                 self.__dispatch_logging("No acceptable worker")
-                time.sleep(0.1)
-                continue
-
-            task = self.taskWait.pop()
-
-            # Task can be drop via setting its state to STATE_FAILURE
-            if task.state != Task.STATE_FAILURE:
-
+                self.taskWait.append(task)
+                time.sleep(1)
+            else:
+                # Task can be drop via setting its state to STATE_FAILURE
                 self.__dispatch_logging("Dispatch task: " + task.id())
 
-                if not self.__dispatch(task):
+                if self.__dispatch(task) is False:
                     self.__dispatch_logging("Dispatch task " + task.id() +
                                             " failed. append to tail of queue")
                     self.taskWait.append(task)
-
-            if len(self.taskWait) == 0:
-                self.__dispatch_logging("TaskWait Queue is empty.")
-                self.taskEvent.clear()
 
     def __taskAging(self) -> None:
         tasks = self._taskTracker.tasks()
@@ -318,9 +320,11 @@ class Dispatcher(ModuleDaemon):
 
             for child in children:
                 theWorker = self._taskTracker.whichWorker(child.id())
+
                 if theWorker is not None:
                     theWorker.cancel(child.id())
-                    child.stateChange(Task.STATE_FAILURE)
+
+                child.stateChange(Task.STATE_FAILURE)
 
         task.stateChange(Task.STATE_FAILURE)
 
@@ -426,8 +430,8 @@ def workerLost_redispatch(w: Worker, args:Any) -> None:
             assert(parent.toState_force(Task.STATE_FAILURE) is Ok)
 
             continue
-
-        dispatcher.redispatch(t)
+        else:
+            dispatcher.redispatch(t)
 
     workers = workerRoom.getWorkerWithCond(lambda w_set: w_set)
 
