@@ -94,7 +94,7 @@ class WindowsPorts(ProviderPorts):
 
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
 
-        if self.__providers is []:
+        if self.__providers == []:
             time.sleep(timeout)
             return []
 
