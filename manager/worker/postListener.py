@@ -738,7 +738,7 @@ class PostProcessor(Thread):
     def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
-            providers = self.__providers.wait(100)
+            providers = self.__providers.wait(5)
 
             # Build stuffs from binary from providers
             for sock, event in providers:

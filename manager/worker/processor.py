@@ -169,13 +169,14 @@ class Processor(Module):
             result = Result(tid, menuId, result_path, needPost, version, False)
 
             commands = [
-                # Command to get repo
-                "git clone -b " + repo_url,
                 # Go into project root
                 "cd " + projName,
                 # Checkout the version
                 "git checkout -f " + revision
             ] + building_cmds
+
+            if not os.path.exists(projName):
+                commands = ["git clone -b master " + repo_url] + commands
 
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
