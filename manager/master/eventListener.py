@@ -11,7 +11,7 @@ from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker, Task
 from manager.basic.type import *
 from manager.master.workerRoom import WorkerRoom
-from manager.basic.letter import Letter
+from manager.basic.letter import Letter, BinaryLetter
 
 from manager.master.logger import M_NAME as LOGGER_M_NAME
 from manager.master.workerRoom import M_NAME as WORKER_M_NAME
@@ -150,6 +150,8 @@ class EventListener(ModuleDaemon):
                     continue
 
                 if letter != None:
+                    if not isinstance(letter, BinaryLetter):
+                        logger.log_put(letterLog, "Receive: " + letter.toString())
                     self.Acceptor(letter)
 
 # Hooks

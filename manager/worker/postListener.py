@@ -165,10 +165,10 @@ class PostListener(ModuleDaemon):
             (wSock, addr) = s.accept()
 
             wSock.setblocking(False)
-            wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
-            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-            wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            #wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
 
             self.__processor.req(wSock)
 
@@ -222,8 +222,8 @@ class PostProvider(Module):
             self.__sock.close()
             self.__sock = None
 
-    def provide(self, bin:BinaryLetter) -> State:
-        self.__stuffQ.put(bin)
+    def provide(self, bin:BinaryLetter, timeout=None) -> State:
+        self.__stuffQ.put(bin, timeout)
         return Ok
 
     def provide_step(self) -> State:
@@ -602,14 +602,18 @@ class PostProcessor(Thread):
         self.__server.transfer(log_letter)
 
     def do_post_processing(self, post:Post) -> Optional[tempfile.TemporaryDirectory]:
-        workingDir = tempfile.TemporaryDirectory()
+
+        buildDir = "Biuld"
+
+        if not os.path.exists(buildDir):
+            os.mkdir(buildDir)
 
         # Deal with menus
         menus = post.getMenus()
-        states = list(map(lambda menu: self.__do_menu(menu, workingDir.name), menus))
+        states = list(map(lambda menu: self.__do_menu(menu, buildDir), menus))
 
         for menu in post.getMenus():
-            if self.__do_menu(menu, workingDir.name) is Ok:
+            if self.__do_menu(menu, buildDir) is Ok:
                 self.logging("Menu " + menu.getIdent() + " is processed")
             else:
                 self.logging("Menu " + menu.getIdent() + " failed")
@@ -619,7 +623,7 @@ class PostProcessor(Thread):
 
 
         cmds = post.getCmds()
-        cmds.insert(0, "cd " + workingDir.name)
+        cmds.insert(0, "cd " + buildDir)
         cmds_str = sep.join(cmds)
 
         try:
@@ -686,32 +690,37 @@ class PostProcessor(Thread):
             fileName = output.split(path_sep)[-1]
 
             if output[0] == ".":
-                output = wDir.name + path_sep + output
+                output = "Build" + path_sep + output
 
-            with open(output, "rb") as binFile:
-                for bytes in binFile:
+            try:
+                with open(output, "rb") as binFile:
+                    for bytes in binFile:
 
-                    try:
-                        binaryLetter = BinaryLetter(
-                            postId, bytes,
-                            parent = version,
-                            fileName = fileName)
+                        try:
+                            binaryLetter = BinaryLetter(
+                                postId, bytes,
+                                parent = version,
+                                fileName = fileName)
 
-                        server.transfer(binaryLetter)
+                            server.transfer(binaryLetter)
 
-                    except BinaryLetter.FIELD_LENGTH_EXCEPTION:
-                        response.setState(Letter.RESPONSE_STATE_FAILURE)
-                        server.transfer(response)
+                        except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                            response.setState(Letter.RESPONSE_STATE_FAILURE)
+                            server.transfer(response)
 
-                        wDir.cleanup()
-                        return None
+                            wDir.cleanup()
+                            return None
 
-                binaryLetter.setBytes(b"")
-                server.transfer(binaryLetter)
+                    lastBin  = BinaryLetter(
+                        postId, b"",
+                        parent = version,
+                        fileName = fileName)
+                    server.transfer(lastBin)
+
+            except FileNotFoundError:
+                response.setState(Letter.RESPONSE_STATE_FAILURE)
 
             server.transfer(response)
-
-            wDir.cleanup()
 
 
     def appendPost(self, post:Post) -> None:

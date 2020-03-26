@@ -145,6 +145,7 @@ class WorkerRoom(ModuleDaemon):
 
                 workerInWait.sockSet(acceptedWorker.sockGet())
 
+                workerInWait.setState(Worker.STATE_ONLINE)
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
 

@@ -382,7 +382,7 @@ class Processor(Module):
                     else:
                         try:
                             self.__transBinaryTo(tid, path,
-                                            lambda l: provider.provide(l),
+                                            lambda l: provider.provide(l, 10),
                                             mid=menu,
                                             parent=version)
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
