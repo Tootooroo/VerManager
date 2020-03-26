@@ -88,7 +88,7 @@ class File:
         # If a file on disk is not exists. The object
         # should not be able to create.
         if not os.path.exists(path):
-            os.mknod(self.__path)
+            with open(self.__path, "wb") as f : pass
 
     def open(self) -> StoChooser:
         return StoChooser(self.__path)
