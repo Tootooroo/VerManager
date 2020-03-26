@@ -52,11 +52,10 @@ class Sender(ModuleDaemon):
                 cond.release()
                 return None
 
-            ret = Ok
+            ret = False
 
             for rtn in self.__send_rtns:
-                if rtn() == Error:
-                    ret = Error
+                ret = ret or rtn() is Ok
 
             if ret == Error:
                 time.sleep(0.01)
