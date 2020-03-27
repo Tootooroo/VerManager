@@ -36,7 +36,7 @@ BuildSet:
       output:
         - .\BSP\config\image\5610gpon_v3.rar
 
-    GL8900_Line:
+    GL8900_line:
       cmd:
         - .\GBN\src\gcom_gpon_build_boot.bat 6
         - .\GBN\src\gcom_gpon_build_host.bat 6

@@ -199,7 +199,7 @@ class Processor(Module):
                 except subprocess.TimeoutExpired:
                     continue
 
-                if returncode is not 0 and returncode is not 128:
+                if returncode != 0 and returncode != 128:
                     return result
                 else:
                     break

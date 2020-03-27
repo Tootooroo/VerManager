@@ -58,4 +58,4 @@ class Sender(ModuleDaemon):
                 ret = ret or rtn() is Ok
 
             if ret == Error:
-                time.sleep(0.01)
+                time.sleep(1)
