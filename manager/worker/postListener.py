@@ -13,7 +13,8 @@ import shutil
 from datetime import datetime
 from ..basic.util import spawnThread
 from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
-    ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter
+    ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter, \
+    receving
 from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
@@ -860,18 +861,7 @@ class PostProcessor(Thread):
 
     @staticmethod
     def __receving(sock: socket.socket) -> Optional[Letter]:
-        content = b''
-        remain = Letter.BINARY_HEADER_LEN
-
-        while remain > 0:
-            chunk = sock.recv(remain)
-            if chunk == b'':
-                raise DISCONN
-
-            content += chunk
-            remain = Letter.letterBytesRemain(content)
-
-        return Letter.parse(content)
+        return receving(sock)
 
     def __addSock(self, sock:socket.socket) -> State:
 
