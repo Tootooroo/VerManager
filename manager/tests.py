@@ -526,7 +526,7 @@ class UnitTest(TestCase):
         task4 = Task("126", "123", "126")
         dispatcher.dispatch(task4)
 
-        time.sleep(5)
+        time.sleep(10)
 
         self.assertTrue(os.path.exists("./Storage/122/122total"))
         self.assertTrue(os.path.exists("./Storage/124/124total"))

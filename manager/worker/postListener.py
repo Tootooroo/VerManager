@@ -244,7 +244,6 @@ class PostProvider(Module):
             try:
                 sending(self.__sock, bin)
             except Exception:
-                print("Disconn")
                 # Interrupted, try to reconnect
                 self.__sock = None
 
@@ -852,10 +851,7 @@ class PostProcessor(Thread):
 
     @staticmethod
     def __receving(sock: socket.socket) -> Optional[Letter]:
-        try:
-            return receving(sock)
-        except:
-            raise DISCONN
+        return receving(sock)
 
     def __addSock(self, sock:socket.socket) -> State:
 
