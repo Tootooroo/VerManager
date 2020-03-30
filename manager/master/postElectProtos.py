@@ -47,12 +47,21 @@ class RandomElectProtocol(PostElectProtocol):
 
         (host, port) = listener.getAddress()
 
-        providers = self.group.getProviders()
+        candidates = self.group.candidateDrags()
 
-        cmd_set_provider = PostConfigCmd(host, self.__proto_port, PostConfigCmd.ROLE_PROVIDER)
+        cmd_set_provider = PostConfigCmd(host, self.__proto_port,
+                                         PostConfigCmd.ROLE_PROVIDER)
 
-        for p in providers:
-            p.control(cmd_set_provider)
+        for c in candidates:
+
+            # Add to group as a provider
+            if c.role == Role_Listener:
+                self.group.addProvider(c)
+                c.role = Role_Listener
+            else:
+                self.group.addProvider(c)
+
+            c.control(cmd_set_provider)
             l = self.waitMsg()
 
             # fixme: Need to deal with failed of provider configure
@@ -71,7 +80,10 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group.numOfWorkers() == 0:
             return (Ok, "")
 
-        listener = reduce(self.__random_elect, self.group)
+        candidates = self.group.candidates()
+
+        listener = reduce(self.__random_elect, candidates)
+
         if listener in self.__blackList:
             return (Error, "")
 
@@ -111,11 +123,33 @@ class RandomElectProtocol(PostElectProtocol):
         listener = self.group.getListener()
 
         # Listener is still online.
+        candidates = self.group.candidateDrags()
+
         if listener is not None:
-            return Ok
+            if candidates == []:
+                return Ok
+            else:
+                host, port = listener.getAddress()
+                for candidate in candidates:
+                    self.group.addProvider(candidate)
+                    cmd_set_provider = PostConfigCmd(host, self.__proto_port,
+                                                     PostConfigCmd.ROLE_PROVIDER)
+                    candidate.control(cmd_set_provider)
+                    l = self.waitMsg()
+
+                    if l.getState() is CmdResponseLetter.STATE_FAILED:
+                        assert(False)
 
         # Reinit
         self.__isInit = False
+
+        # Move all providers into candidates
+        providers = self.group.getProviders()
+        for provider in providers:
+            provider.role = Role_Provider
+            self.group.removeProvider(provider.getIdent())
+            self.group.addCandidate(provider)
+
         self.init()
 
         return Ok

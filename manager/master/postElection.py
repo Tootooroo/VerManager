@@ -3,12 +3,13 @@
 from functools import reduce
 from queue import Queue
 
+from manager.basic.util import partition
 from manager.basic.letter import CmdResponseLetter
 from manager.basic.commands import PostConfigCmd
 from manager.basic.type import Ok, Error, State
 from manager.master.worker import Worker
 from typing import List, Dict, Optional, Callable, \
-    Iterator, Any, Tuple
+    Iterator, Any, Tuple, Generator
 
 PostRole = int
 ElectProtocolRtn = Callable[['ElectGroup', Any], None]
@@ -31,6 +32,7 @@ class ElectGroup:
     def __init__(self, workers:List[Worker] = []) -> None:
         self.__listener = None  # type: Optional[Worker]
         self.__providers = {}  # type: Dict[str, Worker]
+        self.__candidate = []  # type: List[Worker]
 
         for w in workers:
             # At begining all workers is provider
@@ -83,6 +85,47 @@ class ElectGroup:
             return None
 
         return self.__providers[ident]
+
+    def addCandidate(self, w:Worker) -> State:
+        if w in self.__candidate:
+            return Error
+
+        self.__candidate.append(w)
+
+        return Ok
+
+    def removeCandidate(self, ident:str) -> Optional[Worker]:
+        beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent == ident)
+
+        if beRemoved == []:
+            return None
+        else:
+            assert(len(beRemoved) == 1)
+
+            self.__candidate = remain
+            return beRemoved[0]
+
+    def removeCandidate_(self, w:Worker) -> State:
+
+        if w not in self.__candidate:
+            return Error
+        else:
+            self.__candidate.remove(w)
+            return Ok
+
+    def candidateDrags(self) -> Generator:
+        for candidate in self.__candidate:
+            self.removeCandidate_(candidate)
+            yield candidate
+
+    def getCandidate(self, ident:str) -> Optional[Worker]:
+        for candidate in self.__candidate:
+            if candidate.getIdent() == ident:
+                return candidate
+        return None
+
+    def candidates(self) -> List[Worker]:
+        return self.__candidate
 
     def isExists(self, ident:str) -> bool:
         return ident in self.__providers
@@ -151,6 +194,18 @@ class PostManager:
 
     def addProvider(self, w:Worker) -> State:
         return self.__eGroup.addProvider(w)
+
+    def addCandidate(self, w:Worker) -> State:
+        return self.__eGroup.addCandidate(w)
+
+    def removeCandidate(self, ident:str) -> Optional[Worker]:
+        return self.__eGroup.removeCandidate(ident)
+
+    def getCandidate(self, ident:str) -> Optional[Worker]:
+        return self.__eGroup.getCandidate(ident)
+
+    def candidates(self) -> List[Worker]:
+        return self.__eGroup.candidates()
 
     def proto_init(self) -> State:
         return self.__eProtocol.init()
