@@ -458,7 +458,9 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
     return [theWorker]
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
-    f_online_acceptable = lambda w: w.isOnline() and w.isAbleToAccept()
+    f_online_acceptable = lambda w: w.isOnline() and w.isAbleToAccept() and \
+        w.role is not None
+
     return list(filter(lambda w: f_online_acceptable(w), workers))
 
 def theListener(workers: List[Worker]) -> List[Worker]:
