@@ -80,4 +80,5 @@ class Receiver(ModuleDaemon):
                 traceback.print_exc()
 
             if not isinstance(reqLetter, int):
+                print(reqLetter.toString())
                 processor.proc(reqLetter)

@@ -230,7 +230,7 @@ class PostProvider(Module):
 
     def provide_step(self) -> State:
 
-        isDone = False
+        inProcessing = True
 
         if self.__sock is None:
             return Error
@@ -240,10 +240,11 @@ class PostProvider(Module):
         except Q_Empty:
             return Error
 
-        while isDone:
+        while inProcessing:
             try:
                 sending(self.__sock, bin)
             except Exception:
+                print("Disconn")
                 # Interrupted, try to reconnect
                 self.__sock = None
 
@@ -257,7 +258,7 @@ class PostProvider(Module):
 
                 continue
 
-            isDone = True
+            inProcessing = False
 
         return Ok
 
