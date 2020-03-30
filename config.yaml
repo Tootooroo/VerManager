@@ -72,6 +72,7 @@ BuildSet:
       group:
         - GL8900_line
         - GL8900_ctrl
+        - link_image_gl89.bat
       cmd:
         - rar x 8900_line.rar
         - rar x 8900_ctrl.rar
