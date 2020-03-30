@@ -480,9 +480,8 @@ class UnitTest(TestCase):
         client1 = Process(target=clientStart, args = ("W1", ))
         client2 = Process(target=clientStart, args = ("W2", ))
         client3 = Process(target=clientStart, args = ("W3", ))
-        client4 = Process(target=clientStart, args = ("W4", ))
 
-        workers = [client1, client2, client3, client4]
+        workers = [client1, client2, client3]
 
         # Activate workers
         list( map(lambda c: c.start(), workers) )
@@ -495,20 +494,25 @@ class UnitTest(TestCase):
         if not isinstance(dispatcher, Dispatcher):
             self.assertTrue(False)
 
+        from manager.master.workerRoom import M_NAME as WR_M_NAME
+        wr = sInst.getModule(WR_M_NAME)
+
+        if wr.postListener() is not None:
+            client4 = Process(target=clientStart, args = ("W4", ))
+            client4.start()
+
+            workers.append(client4)
+
+            # Wait at least WAITING_INTERVAL
+            time.sleep(15)
+
+
         # Dispatch task
         task1 = Task("122", "123", "122")
         dispatcher.dispatch(task1)
 
-        time.sleep(1)
-
-        # To check that whether the task dispatch to one of four workers
-        #w_set = list( filter(lambda w: w.inProcTasks() > 0, workers) )
-
         workerRoom = sInst.getModule("WorkerRoom")
         self.assertTrue(isinstance(workerRoom, WorkerRoom))
-
-        #status = workerRoom.statusOfWorker("W1")
-        #self.assertTrue(status["processing"] == 1 or status["processing"] == 2)
 
         # Now let us dispatch three more task to workers
         # if nothing wrong each of these workers should

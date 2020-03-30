@@ -48,6 +48,9 @@ class ElectGroup:
         num_of_providers = len(self.__providers)
         return num_of_providers
 
+    def numOfCandidates(self) -> int:
+        return len(self.__candidate)
+
     def setListener(self, lis:Optional[Worker]) -> None:
         if lis is not None:
             lis.role = Role_Listener
@@ -113,10 +116,12 @@ class ElectGroup:
             self.__candidate.remove(w)
             return Ok
 
-    def candidateDrags(self) -> Generator:
+    def candidateIter(self) -> Generator:
         for candidate in self.__candidate:
-            self.removeCandidate_(candidate)
             yield candidate
+
+    def removeAllCandidates(self) -> None:
+        self.__candidate = []
 
     def getCandidate(self, ident:str) -> Optional[Worker]:
         for candidate in self.__candidate:

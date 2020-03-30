@@ -149,7 +149,7 @@ class WorkerRoom(ModuleDaemon):
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
 
-                self.__pManager.addCandidate(workerInWait)
+                self.__pManager.addProvider(workerInWait)
                 self.__changePoint()
 
                 map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)

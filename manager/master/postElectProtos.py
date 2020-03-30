@@ -26,7 +26,7 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group is None:
             return Error
 
-        if self.group.numOfWorkers() is 0:
+        if self.group.numOfCandidates() is 0:
             return Error
 
         ret = Error
@@ -47,26 +47,24 @@ class RandomElectProtocol(PostElectProtocol):
 
         (host, port) = listener.getAddress()
 
-        candidates = self.group.candidateDrags()
+        candidates = self.group.candidateIter()
 
         cmd_set_provider = PostConfigCmd(host, self.__proto_port,
                                          PostConfigCmd.ROLE_PROVIDER)
-
         for c in candidates:
-
-            # Add to group as a provider
-            if c.role == Role_Listener:
-                self.group.addProvider(c)
-                c.role = Role_Listener
-            else:
-                self.group.addProvider(c)
-
             c.control(cmd_set_provider)
             l = self.waitMsg()
 
             # fixme: Need to deal with failed of provider configure
-            if l.getState() is CmdResponseLetter.STATE_FAILED:
-                pass
+            if l.getState() is CmdResponseLetter.STATE_SUCCESS:
+                # Add to group as a provider
+                if c.role == Role_Listener:
+                    self.group.addProvider(c)
+                    c.role = Role_Listener
+                else:
+                    self.group.addProvider(c)
+
+        self.group.removeAllCandidates()
 
         self.isInit = True
 
@@ -77,7 +75,7 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group is None:
             return (Ok, "")
 
-        if self.group.numOfWorkers() == 0:
+        if self.group.numOfCandidates() == 0:
             return (Ok, "")
 
         candidates = self.group.candidates()
@@ -123,14 +121,17 @@ class RandomElectProtocol(PostElectProtocol):
         listener = self.group.getListener()
 
         # Listener is still online.
-        candidates = self.group.candidateDrags()
+        candidates = self.group.candidates()
 
         if listener is not None:
             if candidates == []:
                 return Ok
             else:
+
+                candidate_drags = self.group.candidateIter()
+
                 host, port = listener.getAddress()
-                for candidate in candidates:
+                for candidate in candidate_drags:
                     self.group.addProvider(candidate)
                     cmd_set_provider = PostConfigCmd(host, self.__proto_port,
                                                      PostConfigCmd.ROLE_PROVIDER)
@@ -139,6 +140,10 @@ class RandomElectProtocol(PostElectProtocol):
 
                     if l.getState() is CmdResponseLetter.STATE_FAILED:
                         assert(False)
+
+                self.group.removeAllCandidates()
+
+                return Ok
 
         # Reinit
         self.__isInit = False
