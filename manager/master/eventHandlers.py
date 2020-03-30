@@ -83,9 +83,9 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
                 super = task.getParent()
                 assert(super is not None)
 
-                super.toFinState()
-
                 responseHandler_ResultStore(eventListener, super)
+
+                super.toFinState()
 
             worker.removeTask(taskId)
 
