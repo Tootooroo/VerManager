@@ -82,7 +82,7 @@ def execute_shell_command(command:str) -> Optional[int]:
 
     proc_handle = execute_shell(command)
     if proc_handle is None:
-        return proc_handle
+        return None
 
     returncode = proc_handle.wait()
 
