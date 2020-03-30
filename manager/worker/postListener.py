@@ -14,7 +14,7 @@ from datetime import datetime
 from ..basic.util import spawnThread
 from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
     ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter, \
-    receving
+    receving, sending
 from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
@@ -230,6 +230,8 @@ class PostProvider(Module):
 
     def provide_step(self) -> State:
 
+        isDone = False
+
         if self.__sock is None:
             return Error
 
@@ -238,36 +240,24 @@ class PostProvider(Module):
         except Q_Empty:
             return Error
 
-        byteStr = bin.toBytesWithLength()
-
-        totalSent = 0
-        length = len(byteStr)
-
-        if byteStr is None:
-            return Error
-
-        while totalSent < length:
+        while isDone:
             try:
-                sent = self.__sock.send(byteStr[totalSent:])
-
-                if sent == 0:
-                    return Error
-
-                totalSent += sent
-            except BrokenPipeError:
-                # Set __sock to None so we are
-                # able to reconnect to listener
-                # with a new socket
+                sending(self.__sock, bin)
+            except Exception:
+                # Interrupted, try to reconnect
                 self.__sock = None
-                self.reconnect()
 
-                # Failed to reconnect
-                if self.__sock is None:
-                    return Error
+                while self.__sock is None:
+                    self.reconnect()
+
+                    if self.__sock is not None:
+                        break
+
+                    time.sleep(3)
 
                 continue
-            except Exception:
-                traceback.print_exc()
+
+            isDone = True
 
         return Ok
 
@@ -861,7 +851,10 @@ class PostProcessor(Thread):
 
     @staticmethod
     def __receving(sock: socket.socket) -> Optional[Letter]:
-        return receving(sock)
+        try:
+            return receving(sock)
+        except:
+            raise DISCONN
 
     def __addSock(self, sock:socket.socket) -> State:
 
