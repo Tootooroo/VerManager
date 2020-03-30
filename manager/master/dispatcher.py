@@ -189,7 +189,6 @@ class Dispatcher(ModuleDaemon):
             # a build or BuildSet. If not bind just to
             # bind one with it.
             info = self.__sInst.getModule(INFO_M_NAME) # type: Info
-
             try:
                 build = Build(task.vsn ,info.getConfig("Build"))
                 if isinstance(build, Build):
@@ -258,6 +257,9 @@ class Dispatcher(ModuleDaemon):
                     self.__dispatch_logging("Dispatch task " + task.id() +
                                             " failed. append to tail of queue")
                     self.taskWait.append(task)
+
+                    time.sleep(1)
+
 
     def __taskAging(self) -> None:
         tasks = self._taskTracker.tasks()

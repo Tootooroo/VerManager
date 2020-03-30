@@ -150,6 +150,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
         logger = eventListener.getModule('Logger')
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
+        destFileName = ""
+
     url = cfgs.getConfig('GitlabUr')
     task.setData(url + "/static/" + destFileName)
 

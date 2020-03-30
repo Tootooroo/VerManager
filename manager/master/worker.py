@@ -161,7 +161,7 @@ class Worker:
         letter = task.toLetter()
 
         if letter is None:
-            return None
+            raise Exception
 
         self.__send(letter)
 
