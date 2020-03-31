@@ -735,7 +735,6 @@ class PostProcessor(Thread):
 
         while True:
             providers = self.__providers.wait(1)
-            print("Wait Provider")
 
             # Build stuffs from binary from providers
             for sock, event in providers:
@@ -791,6 +790,7 @@ class PostProcessor(Thread):
             except BlockingIOError as e:
                 break
             except Exception:
+                print("Except")
                 traceback.print_exc()
 
             # if parse error
@@ -853,7 +853,12 @@ class PostProcessor(Thread):
 
     @staticmethod
     def __receving(sock: socket.socket) -> Optional[Letter]:
-        return receving(sock)
+        try:
+            return receving(sock)
+        except BlockingIOError:
+            raise BlockingIOError
+        except Exception:
+            raise DISCONN
 
     def __addSock(self, sock:socket.socket) -> State:
 

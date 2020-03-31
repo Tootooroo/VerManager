@@ -1,6 +1,7 @@
 # sender.py
 
 import time
+from datetime import datetime
 
 from typing import Any, Callable, List
 
@@ -46,13 +47,24 @@ class Sender(ModuleDaemon):
 
         cond.acquire()
 
+        last = datetime.utcnow()
+        isIdle = lambda now,last: (now - last).seconds > 5
+        needToUpdate = lambda now,last: (now - last).seconds > 3
+
         while True:
             if self.__status == 1:
                 self.__status = 2
                 cond.release()
                 return None
 
+            now = datetime.utcnow()
             ret = False
 
             for rtn in self.__send_rtns:
                 ret = ret or rtn() is Ok
+
+                if needToUpdate(now, last):
+                    last = now
+
+            if isIdle(now, last):
+                time.sleep(1)
