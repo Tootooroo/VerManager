@@ -4,6 +4,7 @@
 
 import json
 
+import traceback
 from typing import Optional, Dict, \
     Any, List, Union, Tuple, Callable
 
@@ -238,7 +239,12 @@ class Letter:
 
     @staticmethod
     def __parse(s:  bytes) -> Optional['Letter']:
-        letter = s[2: ].decode()
+        try:
+            letter = s[2: ].decode()
+        except:
+            traceback.print_exc()
+            print(s)
+
         dict_ = json.loads(letter)
 
         type_ = dict_['type']
