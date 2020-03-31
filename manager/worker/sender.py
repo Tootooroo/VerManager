@@ -49,7 +49,6 @@ class Sender(ModuleDaemon):
 
         last = datetime.utcnow()
         isIdle = lambda now,last: (now - last).seconds > 5
-        needToUpdate = lambda now,last: (now - last).seconds > 3
 
         while True:
             if self.__status == 1:
