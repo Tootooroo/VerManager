@@ -57,5 +57,5 @@ class Sender(ModuleDaemon):
             for rtn in self.__send_rtns:
                 ret = ret or rtn() is Ok
 
-            if ret == Error:
+            if ret == False:
                 time.sleep(1)
