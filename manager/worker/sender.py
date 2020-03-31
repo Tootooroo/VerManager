@@ -58,12 +58,9 @@ class Sender(ModuleDaemon):
                 return None
 
             now = datetime.utcnow()
-            ret = False
 
             for rtn in self.__send_rtns:
-                ret = ret or rtn() is Ok
-
-                if needToUpdate(now, last):
+                if rtn() is Ok:
                     last = now
 
             if isIdle(now, last):
