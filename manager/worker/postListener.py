@@ -227,7 +227,7 @@ class PostProvider(Module):
     def provide(self, bin:BinaryLetter, timeout=None) -> State:
         print("Provide Start")
         self.__stuffQ.put(bin, timeout)
-        print("Provide done:"+bin.toString())
+        print("Provide done:")
         return Ok
 
     def provide_step(self) -> State:
