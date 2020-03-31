@@ -225,9 +225,7 @@ class PostProvider(Module):
             self.__sock = None
 
     def provide(self, bin:BinaryLetter, timeout=None) -> State:
-        print("Provide Start")
         self.__stuffQ.put(bin, timeout)
-        print("Provide done:")
         return Ok
 
     def provide_step(self) -> State:
@@ -245,7 +243,6 @@ class PostProvider(Module):
         while inProcessing:
             try:
                 sending(self.__sock, bin)
-                print("Provide_Step done")
             except Exception:
                 # Interrupted, try to reconnect
                 self.__sock = None
@@ -793,7 +790,6 @@ class PostProcessor(Thread):
             except BlockingIOError as e:
                 break
             except Exception:
-                print("Except")
                 traceback.print_exc()
 
             # if parse error
