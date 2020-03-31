@@ -227,10 +227,6 @@ class Letter:
 
     @staticmethod
     def parse(s :  bytes) -> Optional['Letter']:
-        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
-        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
-            return None
-
         # To check that is BinaryFile type or another
         if int.from_bytes(s[: 2], "big") == 1:
             return BinaryLetter.parse(s)
@@ -243,7 +239,7 @@ class Letter:
             letter = s[2: ].decode()
         except:
             traceback.print_exc()
-            print(s)
+            raise Exception
 
         dict_ = json.loads(letter)
 
