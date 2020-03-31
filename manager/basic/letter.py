@@ -211,15 +211,17 @@ class Letter:
     # If a letter is received completely return 0 otherwise return the remaining bytes
     @staticmethod
     def letterBytesRemain(s:  bytes) -> int:
-        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
-        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
-            return Letter.MAX_LEN
+        if len(s) < 2:
+            return 2 - len(s)
 
-        if int.from_bytes(s[: 2], "big") == 1:
-            length = int.from_bytes(s[2: 6], "big")
+        if int.from_bytes(s[:2], "big") == 1:
+            if len(s) < Letter.BINARY_HEADER_LEN:
+                return Letter.BINARY_HEADER_LEN
+
+            length = int.from_bytes(s[2:6], "big")
             return length - (len(s) - Letter.BINARY_HEADER_LEN)
         else:
-            length = int.from_bytes(s[: 2], "big")
+            length = int.from_bytes(s[:2], "big")
             return length - (len(s) - 2)
 
     @staticmethod
