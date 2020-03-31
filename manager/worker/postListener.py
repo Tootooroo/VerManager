@@ -248,6 +248,7 @@ class PostProvider(Module):
                 self.__sock = None
 
                 while self.__sock is None:
+                    print("Provide_ste: try to reconnect")
                     self.reconnect()
 
                     if self.__sock is not None:
@@ -733,7 +734,8 @@ class PostProcessor(Thread):
     def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
-            providers = self.__providers.wait(5)
+            providers = self.__providers.wait(1)
+            print("Wait Provider")
 
             # Build stuffs from binary from providers
             for sock, event in providers:
