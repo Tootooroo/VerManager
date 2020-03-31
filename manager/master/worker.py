@@ -213,5 +213,5 @@ class Worker:
     def __send(self, l: Letter) -> None:
         try:
             with self.sendLock: Worker.sending(self.sock, l)
-        except:
+        except Exception:
             traceback.print_exc()

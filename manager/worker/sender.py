@@ -48,7 +48,7 @@ class Sender(ModuleDaemon):
         cond.acquire()
 
         last = datetime.utcnow()
-        isIdle = lambda now,last: (now - last).seconds > 5
+        isIdle = lambda now,last: (now - last).seconds > 3
 
         while True:
             if self.__status == 1:
