@@ -217,7 +217,7 @@ class Letter:
 
         if int.from_bytes(s[:2], "big") == 1:
             if len(s) < Letter.BINARY_HEADER_LEN:
-                return Letter.BINARY_HEADER_LEN
+                return Letter.BINARY_HEADER_LEN - len(s)
 
             length = int.from_bytes(s[2:6], "big")
             return length - (len(s) - Letter.BINARY_HEADER_LEN)
@@ -674,7 +674,8 @@ class BinaryLetter(Letter):
         # Safe here content must not str and must a bytes
         # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String
         # | Parent(64 Bytes) : :  String | Menu (30 Bytes) : :  String | Content : :  Bytes |
-        packet = type_field + len_field + name_field + tid_field + parent_field + menu_field + content
+        packet = type_field + len_field + name_field + tid_field + \
+            parent_field + menu_field + content
 
         return packet
 
@@ -800,10 +801,7 @@ def receving(sock: socket.socket) -> Optional[Letter]:
         remain -= len(chunk)
         content += chunk
 
-    if chunk == (1).to_bytes(2, "big"):
-        remain = Letter.BINARY_HEADER_LEN - 2
-    else:
-        remain = int.from_bytes(chunk, "big")
+    remain = Letter.letterBytesRemain(content)
 
     while remain > 0:
         chunk = sock.recv(remain)
