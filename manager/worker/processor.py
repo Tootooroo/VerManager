@@ -172,6 +172,8 @@ class Processor(Module):
             commands = [
                 # Go into project root
                 "cd " + projName,
+                # Fetch from server
+                "git fetch",
                 # Checkout the version
                 "git checkout -f " + revision
             ] + building_cmds
