@@ -6,6 +6,7 @@ import traceback
 import platform
 import subprocess
 import queue
+import shutil
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool, Manager
@@ -400,6 +401,8 @@ class Processor(Module):
 
                 # Notify to master
                 server.transfer(response)
+
+            shutil.rmtree(projName)
 
             self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]
