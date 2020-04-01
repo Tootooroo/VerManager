@@ -131,8 +131,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
         else:
             taskId = task.id()
 
-        chooser = chooserSet[taskId]
         extra = task.getExtra()
+        chooser = chooserSet[taskId]
 
         cfgs = eventListener.getModule(INFO_M_NAME)
         resultDir = cfgs.getConfig("ResultDir")
@@ -145,6 +145,7 @@ def responseHandler_ResultStore(eventListener: EventListener,
             path = chooser.path()
             dest = resultDir + seperator + path.split(seperator)[-1]
             destFileName = shutil.copy(chooser.path(), dest)
+            destFileName = destFileName.split(seperator)[-1]
 
     except FileNotFoundError:
         logger = eventListener.getModule('Logger')

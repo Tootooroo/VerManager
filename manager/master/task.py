@@ -159,7 +159,7 @@ class Task:
         if isinstance(self.build, Build):
             return SingleTask(self.id(), self.sn, self.vsn, self.build, self.extra)
         elif isinstance(self.build, BuildSet):
-            return SuperTask(self.id(), self.sn, self.vsn, self.build)
+            return SuperTask(self.id(), self.sn, self.vsn, self.build, self.extra)
 
         raise TASK_TRANSFORM_ERROR
 
@@ -167,9 +167,9 @@ class SuperTask(Task):
 
     Type = 1
 
-    def __init__(self, id:str, sn:str, revision:str, buildSet:BuildSet) -> None:
+    def __init__(self, id:str, sn:str, revision:str, buildSet:BuildSet, extra:Dict) -> None:
 
-        Task.__init__(self, id, sn, revision)
+        Task.__init__(self, id, sn, revision, extra)
 
         self.type = SuperTask.Type
         self.__children = [] # type: List['Task']
