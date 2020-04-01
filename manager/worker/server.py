@@ -65,6 +65,7 @@ class Server(Module):
         port = self.__port
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
         try:
             self.sock.connect((host, port))

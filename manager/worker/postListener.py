@@ -167,10 +167,7 @@ class PostListener(ModuleDaemon):
             (wSock, addr) = s.accept()
 
             wSock.settimeout(3)
-            #wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
-            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-            #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
             self.__processor.req(wSock)
 
