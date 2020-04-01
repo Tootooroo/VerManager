@@ -166,6 +166,7 @@ class PostListener(ModuleDaemon):
         while True:
             (wSock, addr) = s.accept()
 
+            wSock.settimeout(3)
             #wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
@@ -786,13 +787,14 @@ class PostProcessor(Thread):
             except DISCONN:
                 self.__rmSock(sock)
                 break
+            except socket.timeout:
+                break
             except Exception:
                 traceback.print_exc()
 
             # if parse error
             if letter is None or not isinstance(letter, BinaryLetter):
                 return None
-
 
             content = letter.getContent('bytes')
             tid = letter.getTid()
@@ -853,6 +855,8 @@ class PostProcessor(Thread):
             return receving(sock)
         except BlockingIOError:
             raise BlockingIOError
+        except socket.timeout:
+            raise socket.timeout
         except Exception:
             raise DISCONN
 
