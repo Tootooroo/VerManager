@@ -166,7 +166,6 @@ class PostListener(ModuleDaemon):
         while True:
             (wSock, addr) = s.accept()
 
-            wSock.setblocking(False)
             #wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
             #wSock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
@@ -787,8 +786,6 @@ class PostProcessor(Thread):
             except DISCONN:
                 self.__rmSock(sock)
                 break
-            except BlockingIOError as e:
-                break
             except Exception:
                 traceback.print_exc()
 
@@ -807,7 +804,7 @@ class PostProcessor(Thread):
             # The last binary letter
             if content == b"":
                 if stoId not in self.__chooserSet:
-                    continue
+                    return None
 
                 self.__chooserSet[stoId].close()
                 del self.__chooserSet [stoId]
@@ -816,7 +813,7 @@ class PostProcessor(Thread):
                 stuff = Stuff(version, menu, tid, (version, fileName))
                 self.__stuffs.addStuff(stuff)
 
-                continue
+                return None
 
 
             if stoId not in self.__chooserSet:
