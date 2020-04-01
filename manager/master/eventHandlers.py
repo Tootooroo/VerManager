@@ -154,7 +154,7 @@ def responseHandler_ResultStore(eventListener: EventListener,
         destFileName = ""
 
     url = cfgs.getConfig('GitlabUr')
-    task.setData(url + "/static/" + destFileName)
+    task.setData(url + "/data/" + destFileName)
 
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
