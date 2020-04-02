@@ -198,19 +198,21 @@ class Server(Module):
             return Server.SOCK_DISCONN
 
     def __recv(self, retry:int = 0) -> Union[int, Letter]:
-        try:
-            letter = Server.__receving(self.sock)
-            if letter is None:
-                return Server.SOCK_PARSE_ERROR
-            return letter
 
-        except socket.timeout:
-            return Server.SOCK_TIMEOUT
+        while True:
+            try:
+                letter = Server.__receving(self.sock)
+                if letter is None:
+                    return Server.SOCK_PARSE_ERROR
+                return letter
 
-        except:
-            if self.__reconnectWrapper(retry) == Server.SOCK_OK:
-                return self.__recv(retry)
-            return Server.SOCK_DISCONN
+            except socket.timeout:
+                return Server.SOCK_TIMEOUT
+
+            except:
+                if self.__reconnectWrapper(retry) == Server.SOCK_OK:
+                    continue
+                return Server.SOCK_DISCONN
 
     @staticmethod
     def __receving(sock:socket.socket) -> Optional[Letter]:
