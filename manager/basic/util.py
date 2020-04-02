@@ -2,6 +2,7 @@
 
 import platform
 import subprocess
+import socket
 
 from typing import Any, Callable
 from threading import Thread
@@ -87,3 +88,17 @@ def execute_shell_command(command:str) -> Optional[int]:
     returncode = proc_handle.wait()
 
     return returncode
+
+def isWindows() -> bool:
+    return platform.system() == "Windows"
+
+def isLinux() -> bool:
+    return platform.system() == "Linux"
+
+def sockKeepalive(sock:socket.socket, timeout:int, intvl:int) -> None:
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    if isWindows():
+        sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, timeout*1000, intvl*1000)) # type: ignore
+    else:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, timeout)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, intvl)

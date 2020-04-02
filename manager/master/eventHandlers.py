@@ -34,7 +34,7 @@ def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = ""
         for log in changeLog:
             logFile.write(log)
 
-    zipFileName = vsn + "_with_log.rar"
+    zipFileName = vsn + ".rar"
 
     zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
     for aFile in ["./log.txt", filePath]:
@@ -131,29 +131,29 @@ def responseHandler_ResultStore(eventListener: EventListener,
         else:
             taskId = task.id()
 
-        chooser = chooserSet[taskId]
+        version = task.getVSN()
         extra = task.getExtra()
+        chooser = chooserSet[taskId]
 
         cfgs = eventListener.getModule(INFO_M_NAME)
         resultDir = cfgs.getConfig("ResultDir")
 
+        fileName = chooser.path().split(seperator)[-1]
+
         if extra is not None and "logFrom" in extra and "logTo" in extra:
-            destFileName = packDataWithChangeLog(taskId,
-                                                 chooser.path(), resultDir,
-                                                 extra['logFrom'], extra['logTo'])
+            fileName = packDataWithChangeLog(fileName,
+                                             chooser.path(), resultDir,
+                                             extra['logFrom'], extra['logTo'])
         else:
-            path = chooser.path()
-            dest = resultDir + seperator + path.split(seperator)[-1]
-            destFileName = shutil.copy(chooser.path(), dest)
+            dest = resultDir + seperator + fileName
+            shutil.copy(chooser.path(), dest)
 
     except FileNotFoundError:
         logger = eventListener.getModule('Logger')
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
-        destFileName = ""
-
     url = cfgs.getConfig('GitlabUr')
-    task.setData(url + "/static/" + destFileName)
+    task.setData(url + "/data/" + fileName)
 
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:

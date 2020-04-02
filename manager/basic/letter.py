@@ -4,6 +4,7 @@
 
 import json
 
+import traceback
 from typing import Optional, Dict, \
     Any, List, Union, Tuple, Callable
 
@@ -211,23 +212,21 @@ class Letter:
     # If a letter is received completely return 0 otherwise return the remaining bytes
     @staticmethod
     def letterBytesRemain(s:  bytes) -> int:
-        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
-        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
-            return Letter.MAX_LEN
+        if len(s) < 2:
+            return 2 - len(s)
 
-        if int.from_bytes(s[: 2], "big") == 1:
-            length = int.from_bytes(s[2: 6], "big")
+        if int.from_bytes(s[:2], "big") == 1:
+            if len(s) < Letter.BINARY_HEADER_LEN:
+                return Letter.BINARY_HEADER_LEN - len(s)
+
+            length = int.from_bytes(s[2:6], "big")
             return length - (len(s) - Letter.BINARY_HEADER_LEN)
         else:
-            length = int.from_bytes(s[: 2], "big")
+            length = int.from_bytes(s[:2], "big")
             return length - (len(s) - 2)
 
     @staticmethod
     def parse(s :  bytes) -> Optional['Letter']:
-        # Need at least BINARY_MIN_HEADER_LEN bytes to parse
-        if len(s) < Letter.BINARY_MIN_HEADER_LEN:
-            return None
-
         # To check that is BinaryFile type or another
         if int.from_bytes(s[: 2], "big") == 1:
             return BinaryLetter.parse(s)
@@ -236,7 +235,12 @@ class Letter:
 
     @staticmethod
     def __parse(s:  bytes) -> Optional['Letter']:
-        letter = s[2: ].decode()
+        try:
+            letter = s[2: ].decode()
+        except:
+            traceback.print_exc()
+            raise Exception
+
         dict_ = json.loads(letter)
 
         type_ = dict_['type']
@@ -666,7 +670,8 @@ class BinaryLetter(Letter):
         # Safe here content must not str and must a bytes
         # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String
         # | Parent(64 Bytes) : :  String | Menu (30 Bytes) : :  String | Content : :  Bytes |
-        packet = type_field + len_field + name_field + tid_field + parent_field + menu_field + content
+        packet = type_field + len_field + name_field + tid_field + \
+            parent_field + menu_field + content
 
         return packet
 
@@ -792,10 +797,7 @@ def receving(sock: socket.socket) -> Optional[Letter]:
         remain -= len(chunk)
         content += chunk
 
-    if chunk == (1).to_bytes(2, "big"):
-        remain = Letter.BINARY_HEADER_LEN - 2
-    else:
-        remain = int.from_bytes(chunk, "big")
+    remain = Letter.letterBytesRemain(content)
 
     while remain > 0:
         chunk = sock.recv(remain)

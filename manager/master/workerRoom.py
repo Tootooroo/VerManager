@@ -2,6 +2,7 @@
 #
 # Maintain connection with workers
 
+import time
 import socket
 from datetime import datetime
 
@@ -201,6 +202,8 @@ class WorkerRoom(ModuleDaemon):
             self.__waiting_worker_update()
             self.__waiting_worker_processing(self.__workers_waiting)
             self.__postProcessing()
+
+            time.sleep(0.01)
 
     def __postProcessing(self) -> None:
 

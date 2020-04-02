@@ -18,7 +18,7 @@
       <div class="container-fluid shadow-lg rounded-lg" id="RegisterBox" style="margin-left: 10px; padding: 20px">
         <form id="regForm" class="form-group" action="verRegister/register" method="post" target="dummyframe">
           {% csrf_token %}
-          <select id="verList" class="form-control" class="border border-grey rounded" size="40"></select>
+          <select form="regForm" id="verList" class="form-control" class="border border-grey rounded" size="40" name="verChoice"></select>
           <p>Version<input type="text" class="form-control" name="Version"></p>
         </form>
         <input id="registerBtn" class="btn btn-primary" type="submit" name="register" value="Register">

@@ -2,6 +2,7 @@
 
 import socket
 import time
+import platform
 
 from ..basic.mmanager import Module
 
@@ -9,6 +10,7 @@ from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
     receving as letter_receving, sending as letter_sending
 from ..basic.info import Info
 from ..basic.type import *
+from ..basic.util import sockKeepalive
 
 from typing import Any, Union, Optional
 from threading import Lock
@@ -65,6 +67,7 @@ class Server(Module):
         port = self.__port
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockKeepalive(self.sock, 10, 3)
 
         try:
             self.sock.connect((host, port))
@@ -197,19 +200,21 @@ class Server(Module):
             return Server.SOCK_DISCONN
 
     def __recv(self, retry:int = 0) -> Union[int, Letter]:
-        try:
-            letter = Server.__receving(self.sock)
-            if letter is None:
-                return Server.SOCK_PARSE_ERROR
-            return letter
 
-        except socket.timeout:
-            return Server.SOCK_TIMEOUT
+        while True:
+            try:
+                letter = Server.__receving(self.sock)
+                if letter is None:
+                    return Server.SOCK_PARSE_ERROR
+                return letter
 
-        except:
-            if self.__reconnectWrapper(retry) == Server.SOCK_OK:
-                return self.__recv(retry)
-            return Server.SOCK_DISCONN
+            except socket.timeout:
+                return Server.SOCK_TIMEOUT
+
+            except:
+                if self.__reconnectWrapper(retry) == Server.SOCK_OK:
+                    continue
+                return Server.SOCK_DISCONN
 
     @staticmethod
     def __receving(sock:socket.socket) -> Optional[Letter]:

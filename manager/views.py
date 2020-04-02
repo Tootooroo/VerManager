@@ -5,6 +5,7 @@ import time
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
+from django.views.decorators.csrf import csrf_exempt
 
 from functools import reduce
 from django.shortcuts import render
@@ -50,6 +51,7 @@ def register(request):
 
     return HttpResponseNotModified()
 
+@csrf_exempt
 def newRev(request):
     RevSync.revNewPush(request)
     return HttpResponse()
