@@ -11,7 +11,7 @@ import traceback
 import shutil
 
 from datetime import datetime
-from ..basic.util import spawnThread
+from ..basic.util import spawnThread, sockKeepalive
 from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
     ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter, \
     receving, sending
@@ -167,7 +167,7 @@ class PostListener(ModuleDaemon):
             (wSock, addr) = s.accept()
 
             wSock.settimeout(3)
-            wSock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sockKeepalive(wSock, 10, 3)
 
             self.__processor.req(wSock)
 

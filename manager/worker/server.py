@@ -2,6 +2,7 @@
 
 import socket
 import time
+import platform
 
 from ..basic.mmanager import Module
 
@@ -9,6 +10,7 @@ from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
     receving as letter_receving, sending as letter_sending
 from ..basic.info import Info
 from ..basic.type import *
+from ..basic.util import sockKeepalive
 
 from typing import Any, Union, Optional
 from threading import Lock
@@ -65,7 +67,7 @@ class Server(Module):
         port = self.__port
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sockKeepalive(self.sock, 10, 3)
 
         try:
             self.sock.connect((host, port))
