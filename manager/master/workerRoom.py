@@ -97,9 +97,8 @@ class WorkerRoom(ModuleDaemon):
 
     def sockSetup(self, sock:socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 8)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -134,6 +133,7 @@ class WorkerRoom(ModuleDaemon):
                 continue
 
             if self.isExists(ident):
+                workersocket.close()
                 Logger.putLog(logger, wrLog, "Worker " + ident + " is already exist in WorkerRoom")
                 continue
 
