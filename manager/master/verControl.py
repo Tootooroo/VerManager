@@ -4,15 +4,13 @@
 
 import django.db.utils
 import manager.master.components as Components
-
-
 from typing import *
 
 from manager.basic.type import State, Ok, Error
 from manager.basic.util import map_strict
 from manager.basic.mmanager import ModuleDaemon
 from threading import Thread
-from manager.models import Revisions
+from manager.models import Revisions, make_sure_mysql_usable
 from django.http import HttpRequest
 import re
 import queue
@@ -186,6 +184,8 @@ class RevSync(ModuleDaemon):
             author_ = last_commit['author']['name']
             comment_ = last_commit['message']
             date_time_ = last_commit['timestamp']
+
+            make_sure_mysql_usable()
 
             rev = Revisions(sn = sn_, author = author_, comment = comment_,
                             dateTime = date_time_)
