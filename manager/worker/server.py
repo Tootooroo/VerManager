@@ -212,6 +212,8 @@ class Server(Module):
                 return Server.SOCK_TIMEOUT
 
             except:
+                self.__status = Server.STATE_DISCONNECTED
+
                 if self.__reconnectWrapper(retry) == Server.SOCK_OK:
                     continue
                 return Server.SOCK_DISCONN
