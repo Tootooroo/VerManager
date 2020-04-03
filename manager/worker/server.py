@@ -69,12 +69,22 @@ class Server(Module):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockKeepalive(self.sock, 10, 3)
 
-        try:
-            self.sock.connect((host, port))
-        except ConnectionRefusedError:
-            while retry > 0:
-                time.sleep(1)
+        retry += 1
+
+        while retry > 0:
+            retry -= 1
+
+            try:
                 self.sock.connect((host, port))
+                break
+
+            except ConnectionRefusedError:
+                if retry > 0:
+                    continue
+                else:
+                    return Error
+            except:
+                raise Exception
 
         self.sock.settimeout(1)
 
