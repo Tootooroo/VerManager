@@ -1,7 +1,9 @@
 from typing import *
 
+from django.db import connections
 from django.db import models
 from django.utils import timezone
+from django.db import connection, connections
 
 # Create your models here.
 class Revisions(models.Model):
@@ -22,6 +24,9 @@ class Versions(models.Model):
         return self.vsn
 
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
+
+    make_sure_mysql_usable()
+
     begin = Revisions.objects.get(pk=rev1) # type: ignore
     end = Revisions.objects.get(pk=rev2) # type: ignore
 
@@ -38,3 +43,7 @@ def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
     comments = list(map(lambda ver: ver.comment, vers))
 
     return comments
+
+def make_sure_mysql_usable():
+    if connection.connection and not connection.is_usable():
+        del connections._connections.default
