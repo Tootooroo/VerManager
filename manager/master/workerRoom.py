@@ -99,6 +99,7 @@ class WorkerRoom(ModuleDaemon):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 8)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
