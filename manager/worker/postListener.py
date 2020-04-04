@@ -198,6 +198,7 @@ class PostProvider(Module):
         while retry > 0:
 
             try:
+                print("Try to connect to " + self.__address + ":" + str(self.__port))
                 sock.connect((self.__address, self.__port))
             except:
 
@@ -245,7 +246,6 @@ class PostProvider(Module):
                 self.__sock = None
 
                 while self.__sock is None:
-                    print("Provide_ste: try to reconnect")
                     self.reconnect()
 
                     if self.__sock is not None:
