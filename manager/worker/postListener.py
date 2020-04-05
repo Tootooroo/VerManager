@@ -199,6 +199,7 @@ class PostProvider(Module):
             retry -= 1
 
             try:
+                print("Try to connect to " + self.__address + ":" + str(self.__port))
                 sock.connect((self.__address, self.__port))
                 break
 
