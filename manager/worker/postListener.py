@@ -189,7 +189,7 @@ class PostProvider(Module):
             self.connectToListener()
 
     def connectToListener(self, retry:int = 0) -> State:
-        retyr += 1
+        retry += 1
 
         sock = self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -266,7 +266,7 @@ class Post:
     #    to do post-processing.
 
     def __init__(self, ident:str, version:str, cmds:List[str], output:str,
-                 menus:List['PostMenu'], frags:List[str]):
+                 menus:List['PostMenu'], frags:List[str]) -> None:
 
         self.__ident = ident
         self.__ver = version
