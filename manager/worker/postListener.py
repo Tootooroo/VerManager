@@ -188,36 +188,41 @@ class PostProvider(Module):
         if connect:
             self.connectToListener()
 
-    def connectToListener(self, retry:int = 1) -> State:
-
-        if not self.__sock is None:
-            return Error
+    def connectToListener(self, retry:int = 0) -> State:
+        retyr += 1
 
         sock = self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        while retry > 0:
+        while True:
+
+            # Update counter
+            retry -= 1
 
             try:
                 sock.connect((self.__address, self.__port))
+                break
+
             except:
-
-                self.__sock = None
-
-                time.sleep(1)
-                retry -= 1
+                if retry > 0:
+                    time.sleep(1)
+                    continue
+                else:
+                    self.__sock = None
+                    return Error
 
             break
 
         return Ok
 
-    def reconnect(self, retry:int = 1) -> State:
-        if self.__sock is None:
-            return Error
+    def reconnect(self, retry:int = 0) -> State:
+        if self.__sock is not None:
+            self.disconnect()
 
         return self.connectToListener(retry)
 
     def disconnect(self) -> None:
-        if not self.__sock is None:
+        if self.__sock is not None:
+            self.__sock.shutdown(socket.SHUT_RDWR)
             self.__sock.close()
             self.__sock = None
 
@@ -241,19 +246,11 @@ class PostProvider(Module):
             try:
                 sending(self.__sock, bin)
             except Exception:
-                # Interrupted, try to reconnect
-                self.__sock = None
-
-                while self.__sock is None:
-                    print("Provide_ste: try to reconnect")
-                    self.reconnect()
-
-                    if self.__sock is not None:
-                        break
-
-                    time.sleep(3)
-
-                continue
+                print("Provide_ste: try to reconnect")
+                if self.reconnect() == Error:
+                    self.__stuffQ.put(bin)
+                else:
+                    continue
 
             inProcessing = False
 
