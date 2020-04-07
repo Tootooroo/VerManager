@@ -10,7 +10,7 @@ import queue
 from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool, Manager
 from multiprocessing.pool import AsyncResult
-from threading import Event
+from threading import Event, Lock
 
 from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
@@ -73,6 +73,7 @@ class Processor(Module):
 
         # (tid, parent, result)
         self.__allTasks = [] # type: List[Tuple[str, str, AsyncResult]]
+        self.__result_lock = Lock()
 
         # Query purpose
         self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
@@ -80,6 +81,9 @@ class Processor(Module):
         self.__manager = Manager()
         # Collections of event used to stop building processing.
         self.__shell_events = {} # type: Dict[str, Event]
+
+        self._recyleInterrupt = False
+        self._recyleInProcessing = False
 
     def logging(self, msg:str) -> None:
         global LOG_ID
@@ -295,6 +299,14 @@ class Processor(Module):
 
         processor = cInst.getModule(M_NAME)
         processor.stop_all_tasks()
+        processor.drop_all_results()
+        processor.recyle_interrupt()
+
+        # Wait until recyle is stoped
+        while processor.isRecyleInProcessing():
+            time.sleep(0.01)
+
+        processor.recyle_stop_interrupte()
 
         # Cleanup PostListener
         pl = cInst.getModule(POST_LISTENER_M_NAME)
@@ -380,6 +392,16 @@ class Processor(Module):
         for taskId in self.__shell_events:
             self.__shell_events[taskId].set()
 
+    def drop_all_results(self) -> None:
+        with self.__result_lock:
+            self.__allTasks = []
+
+    def recyle_interrupt(self) -> None:
+        self._recyleInterrupt = True
+
+    def recyle_stop_interrupte(self) -> None:
+        self._recyleInterrupt = False
+
     def proc_newtask(self, reqLetter:NewLetter) -> State:
         if not self.isAbleToProc():
             return Error
@@ -414,10 +436,17 @@ class Processor(Module):
     # Remove tasks from processor and return
     # the number of request finished
     def recyle(self) -> int:
-        (readies, not_readies) = partition(self.__allTasks, lambda res: res[2].ready())
-        self.__allTasks = not_readies
+
+        self._recyleInProcessing = True
+
+        with self.__result_lock:
+            (readies, not_readies) = partition(self.__allTasks, lambda res: res[2].ready())
+            self.__allTasks = not_readies
 
         for (tid, version, res) in readies:
+
+            if self._recyleInterrupt:
+                break
 
             if tid in self.__shell_events:
                 del self.__shell_events [tid]
@@ -472,6 +501,8 @@ class Processor(Module):
             self.__numOfTasksInProc -= 1
             del self.__allTasks_dict [version+tid]
 
+        self._recyleInProcessing = False
+
         return len(readies)
 
     def __transBinaryTo(self, tid:str, path:str,
@@ -482,7 +513,12 @@ class Processor(Module):
 
         with open(path, "rb") as binFile:
             fileName = path.split(seperator)[-1]
+
             for line in binFile:
+
+                if self._recyleInterrupt:
+                    return None
+
                 binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
                                          fileName=fileName, parent=parent)
                 transferRtn(binLetter)
@@ -491,6 +527,9 @@ class Processor(Module):
         binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu = mid,
                                     fileName=fileName, parent = parent)
         transferRtn(binLetter_last)
+
+    def isRecyleInProcessing(self) -> bool:
+        return self._recyleInProcessing
 
     def isReqInProc(self, tid:str, parent:str = "") -> bool:
         return tid in self.__allTasks_dict
