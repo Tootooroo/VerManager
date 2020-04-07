@@ -13,6 +13,7 @@ class fromLetter_need_implemented(Exception):
 CMD_POST_TYPE = "post"
 CMD_ACCEPT = "accept"
 CMD_ACCEPT_RST = "accept_rst"
+CMD_LIS_ADDR_UPDATE = "lis_addr_update"
 
 class Command:
 
@@ -100,3 +101,29 @@ class AcceptRstCommand(Command):
             return None
 
         return AcceptRstCommand()
+
+class LisAddrUpdateCmd(Command):
+
+    def __init__(self, address:str, port:int) -> None:
+        content = {"address":address, "port":port}
+        Command.__init__(self, CMD_LIS_ADDR_UPDATE, content = content)
+
+        self._address = address
+        self._port = port
+
+    def address(self) -> str:
+        return self._address
+
+    def port(self) -> int:
+        return self._port
+
+    def toLetter(self) -> CommandLetter:
+        cmdLetter = CommandLetter(self.type, content = self.content)
+        return cmdLetter
+
+    @staticmethod
+    def fromLetter(l:CommandLetter) -> Optional['LisAddrUpdateCmd']:
+        if not isinstance(l, CommandLetter):
+            return None
+
+        return LisAddrUpdateCmd(l.getContent('address'), int(l.getContent('port')))

@@ -41,6 +41,7 @@ class Worker:
         self.inProcTask = TaskGroup()
         self.menus = [] # type: List[Tuple[str, str]]
         self.ident = ""
+        self.needUpdate = False
 
         self.sendLock = Lock()
 

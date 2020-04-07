@@ -19,7 +19,7 @@ from manager.basic.util import spawnThread, map_strict
 from manager.master.logger import Logger
 
 from manager.master.postElectProtos import RandomElectProtocol
-from manager.master.postElection import PostManager, PostElectProtocol, Role_Listener
+from manager.master.postElection import PostManager, PostElectProtocol, Role_Listener, Role_Provider
 
 from manager.basic.letter import CmdResponseLetter
 
@@ -28,7 +28,7 @@ from typing import *
 from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.master.logger import M_NAME as LOGGER_M_NAME
 
-from manager.basic.commands import AcceptCommand, AcceptRstCommand
+from manager.basic.commands import AcceptCommand, AcceptRstCommand, LisAddrUpdateCmd
 
 M_NAME = "WorkerRoom"
 
@@ -83,6 +83,8 @@ class WorkerRoom(ModuleDaemon):
 
         self.waitingStateHooks = [] # type: List[hookTuple]
         self.disconnStateHooks = [] # type: List[hookTuple]
+
+        self._lisAddr = ("", 0)
 
         self.__host = host
         self.__port = port
@@ -157,10 +159,22 @@ class WorkerRoom(ModuleDaemon):
                 if newAddr[0] != oldAddr[0]:
                     workerInWait.setAddress(newAddr)
 
-                    # Listener's address i changed need to re-elect
-                    # so provider able to know new address of listener.
+                    # Tell to every provider that the address
+                    # of listener is changed.
                     if workerInWait.role == Role_Listener:
-                        self.__pManager.setListener(None)
+                        self._lisAddr = newAddr
+
+                        cmd = LisAddrUpdateCmd(newAddr[0], newAddr[1])
+                        for worker in self.__workers.values():
+                            worker.control(cmd)
+
+                        for worker in self.__workers_waiting.values():
+                            worker.needUpdate = True
+
+                # Notify the last address of listener to provider.
+                if workerInWait.role == Role_Provider and workerInWait.needUpdate:
+                    cmd = LisAddrUpdateCmd(self._lisAddr[0], self._lisAddr[1])
+                    workerInWait.control(cmd)
 
                 workerInWait.setState(Worker.STATE_ONLINE)
                 self.addWorker(workerInWait)

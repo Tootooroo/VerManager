@@ -27,14 +27,15 @@ from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
 
-from ..basic.commands import Command, PostConfigCmd, CMD_POST_TYPE
+from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd
 
 from manager.worker.server import M_NAME as SERVER_M_NAME
 from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
 from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from manager.worker.sender import M_NAME as SENDER_M_NAME
 
-from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST
+from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
+    CMD_LIS_ADDR_UPDATE
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[[CommandLetter, Info, Any], State]
@@ -254,6 +255,20 @@ class Processor(Module):
             return Processor.__postProvider_config(address, port, info, cInst)
 
         return Error
+
+    @staticmethod
+    def lisAddrUpdate(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+        cmd = LisAddrUpdateCmd.fromLetter(cmdLetter)
+        if cmd is None:
+            return Error
+
+        address = cmd.address()
+        port    = cmd.port()
+
+        pr = cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
+        pr.setAddress(address, port)
+
+        return Ok
 
     @staticmethod
     def accepted_command(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
@@ -487,5 +502,6 @@ class Processor(Module):
 cmdHandlers = {
     CMD_POST_TYPE: Processor.post_config,
     CMD_ACCEPT: Processor.accepted_command,
-    CMD_ACCEPT_RST: Processor.accepted_reset_command
+    CMD_ACCEPT_RST: Processor.accepted_reset_command,
+    CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate
 } # type: Dict[str, CommandHandler]

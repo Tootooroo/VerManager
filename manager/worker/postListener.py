@@ -206,6 +206,10 @@ class PostProvider(Module):
         if connect:
             self.connectToListener()
 
+    def setAddress(self, address:str, port:int) -> None:
+        self.__address = address
+        self.__port = port
+
     def connectToListener(self, retry:int = 0) -> State:
         retry += 1
 
