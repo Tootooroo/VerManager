@@ -279,7 +279,8 @@ class PostProvider(Module):
                 except Exception:
                     print("Provide_ste: try to reconnect")
                     if self.reconnect() == Error:
-                        self.__stuffQ.put(bin)
+                        # Put into head of queue
+                        self.__stuffQ.queue.insert(0, bin)
                     else:
                         continue
 
