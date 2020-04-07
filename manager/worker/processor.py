@@ -34,7 +34,7 @@ from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
 from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from manager.worker.sender import M_NAME as SENDER_M_NAME
 
-from manager.basic.commands import CMD_POST_TYPE
+from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[[CommandLetter, Info, Any], State]
@@ -181,6 +181,8 @@ class Processor(Module):
             if not os.path.exists(projName):
                 commands = ["git clone -b master " + repo_url] + commands
 
+            commands = building_cmds
+
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
             # environment.
@@ -256,6 +258,50 @@ class Processor(Module):
         return Error
 
     @staticmethod
+    def accepted_command(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+        """
+        Worker has been accepted by master so worker is able to transfer messages
+        to master.
+        """
+        server = cInst.getModule(SERVER_M_NAME)
+        if server is None:
+            return Error
+
+        server.setStatus(Server.STATE_TRANSFER)
+        return Ok
+
+    @staticmethod
+    def accepted_reset_command(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+        """
+        Worker should be reset itself before it transfer any data to master.
+        """
+        # Reset worker's status
+        #
+        # First cancel all tasks in processing
+        global M_NAME
+
+        processor = cInst.getModule(M_NAME)
+        processor.stop_all_tasks()
+
+        # Cleanup PostListener
+        pl = cInst.getModule(POST_LISTENER_M_NAME)
+        if pl is not None:
+            pl.postRemoveAll()
+
+        # Cleanup PostProvider
+        pr = cInst.getModule(POST_PROVIDER_M_NAME)
+        if pr is not None:
+            pr.removeAllStuffs()
+
+        # Cleanup Server
+        server = cInst.getModule(SERVER_M_NAME)
+        server.drop_all_messages()
+
+        # Set to accept state
+        return Processor.accepted_command(cmdLetter, info, cInst)
+
+
+    @staticmethod
     def __postListener_config(address:str, port:int, info:Info, cInst:Any) -> State:
 
         if cInst.isModuleExists(POST_LISTENER_M_NAME):
@@ -315,6 +361,10 @@ class Processor(Module):
 
     def sotp_task(self, taskId:str) -> None:
         if taskId in self.__shell_events:
+            self.__shell_events[taskId].set()
+
+    def stop_all_tasks(self) -> None:
+        for taskId in self.__shell_events:
             self.__shell_events[taskId].set()
 
     def proc_newtask(self, reqLetter:NewLetter) -> State:
@@ -437,5 +487,7 @@ class Processor(Module):
 
 
 cmdHandlers = {
-    CMD_POST_TYPE: Processor.post_config
+    CMD_POST_TYPE: Processor.post_config,
+    CMD_ACCEPT: Processor.accepted_command,
+    CMD_ACCEPT_RST: Processor.accepted_reset_command
 } # type: Dict[str, CommandHandler]

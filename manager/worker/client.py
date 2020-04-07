@@ -103,11 +103,8 @@ class Client(Thread):
         else:
             workerName = self.__name
 
-        max = info.getConfig('MAX_TASK_CAN_PROC')
-        proc = info.getConfig('PROCESS_POOL_SIZE')
-
         s = Server(address, port, info, self)
-        s.connect(workerName, max, proc, retry=3)
+        s.setWorkerName(workerName)
         self.__manager.addModule(s)
 
         m1 = Receiver(s, info, self)
@@ -127,6 +124,7 @@ class Client(Thread):
         # is the only one non-daemon thread.
         self.__manager.join()
 
+        print("Stop")
         self.__isStop = True
 
 

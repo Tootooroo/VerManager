@@ -8,7 +8,7 @@ from ..basic.mmanager import Module
 
 from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
     receving as letter_receving, sending as letter_sending
-from ..basic.info import Info
+from ..basic.info import Info, M_NAME as INFO_M_NAME
 from ..basic.type import *
 from ..basic.util import sockKeepalive
 
@@ -26,6 +26,7 @@ class Server(Module):
     STATE_CONNECTED = 0
     STATE_CONNECTING = 1
     STATE_DISCONNECTED = 2
+    STATE_TRANSFER = 3
 
     SOCK_OK = 0
     SOCK_TIMEOUT = 1
@@ -34,6 +35,7 @@ class Server(Module):
 
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
         global M_NAME
+
         Module.__init__(self, M_NAME)
         self.info = info
 
@@ -52,9 +54,25 @@ class Server(Module):
         # should be closed and never rebuild in the future.
         self.__isStop = False
 
+        self.__cInst = cInst
+
+    def getStatus(self) -> int:
+        return self.__status
+
+    def setStatus(self, status:int) -> None:
+        self.__status = status
+
+    def setWorkerName(self, name:str) -> None:
+        self.__workerName = name
+
     def cleanup(self) -> None:
         self.__isStop = True
         self.disconnect()
+
+    def begin(self) -> None:
+        info = self.__cInst.getModule(INFO_M_NAME)
+        max = info.getConfig('MAX_TASK_CAN_PROC')
+        self.connect(self.__workerName, max, 0, retry = 3)
 
     def connect(self, workerName:str, max:int, proc:int, retry:int = 0) -> State:
 
@@ -66,8 +84,8 @@ class Server(Module):
         host = self.__address
         port = self.__port
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockKeepalive(self.sock, 10, 3)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockKeepalive(sock, 10, 3)
 
         retry += 1
 
@@ -75,7 +93,7 @@ class Server(Module):
             retry -= 1
 
             try:
-                self.sock.connect((host, port))
+                sock.connect((host, port))
                 break
 
             except ConnectionRefusedError:
@@ -86,21 +104,24 @@ class Server(Module):
             except:
                 raise Exception
 
-        self.sock.settimeout(1)
+        sock.settimeout(1)
 
         propLetter = PropLetter(ident = workerName, max = str(max), proc = str(proc))
-        if self.__send(propLetter) == Error:
+        if self.__sending(sock, propLetter) == Error:
             return Error
 
+        self.sock = sock
         self.__status = Server.STATE_CONNECTED
+
         return Ok
 
     def setSockTimeout(self, t:int) -> None:
         self.sock.settimeout(1)
 
     def disconnect(self) -> None:
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.sock.close()
+        if hasattr(self, 'sock'):
+            self.sock.shutdown(socket.SHUT_RDWR)
+            self.sock.close()
 
         self.__status = Server.STATE_DISCONNECTED
 
@@ -118,7 +139,7 @@ class Server(Module):
 
     def transfer_step(self, timeout:int = None) -> State:
 
-        if self.__isStop:
+        if self.__isStop or self.__status != Server.STATE_TRANSFER:
             return Error
 
         try:
@@ -130,6 +151,9 @@ class Server(Module):
             return Ok
 
         return Error
+
+    def drop_all_messages(self) -> None:
+        self.q.queue.clear()
 
     def responseRetrive(self) -> Optional[Letter]:
         try:
@@ -193,7 +217,7 @@ class Server(Module):
         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
             return Server.SOCK_PARSE_ERROR
         except:
-
+            self.__status = Server.STATE_DISCONNECTED
             if self.__reconnectWrapper(retry) == Server.SOCK_OK:
                 self.__send(l, retry)
                 return Server.SOCK_OK
@@ -227,7 +251,6 @@ class Server(Module):
 
             except:
                 self.__status = Server.STATE_DISCONNECTED
-
                 if self.__reconnectWrapper(retry) == Server.SOCK_OK:
                     continue
                 return Server.SOCK_DISCONN

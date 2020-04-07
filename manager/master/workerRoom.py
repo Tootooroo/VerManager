@@ -28,6 +28,8 @@ from typing import *
 from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.master.logger import M_NAME as LOGGER_M_NAME
 
+from manager.basic.commands import AcceptCommand, AcceptRstCommand
+
 M_NAME = "WorkerRoom"
 
 # Type alias
@@ -164,6 +166,10 @@ class WorkerRoom(ModuleDaemon):
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
 
+                # Send an accept command to the worker
+                # so it able to transfer message.
+                workerInWait.control(AcceptCommand())
+
                 map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
 
                 Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
@@ -173,6 +179,9 @@ class WorkerRoom(ModuleDaemon):
                 continue
 
             self.syncLock.release()
+
+            # Need to reset the accepted worker before it transfer any messages.
+            acceptedWorker.control(AcceptRstCommand())
 
             self.addWorker(acceptedWorker)
 

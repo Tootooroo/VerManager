@@ -157,6 +157,9 @@ class PostListener(ModuleDaemon):
     def postRemove(self, version:str) -> None:
         self.__processor.removePost(version)
 
+    def postRemoveAll(self) -> None:
+        self.__processor.removeAllPost()
+
     def run(self) -> None:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((self.__address, self.__port))
@@ -196,6 +199,7 @@ class PostProvider(Module):
         self.__port = port
         self.__sock = None # type: Optional[socket.socket]
         self.__stuffQ = Queue(1024)  # type: Queue[BinaryLetter]
+        self._Q_lock = Lock()
 
         self._isStop = False
 
@@ -256,27 +260,32 @@ class PostProvider(Module):
             if self.connectToListener() == Error:
                 return Error
 
-        try:
-            bin = self.__stuffQ.get_nowait()
-        except Q_Empty:
-            return Error
-
-        while inProcessing:
+        with self._Q_lock:
             try:
-                if self.__sock is None:
-                    raise Exception
+                bin = self.__stuffQ.get_nowait()
+            except Q_Empty:
+                return Error
 
-                sending(self.__sock, bin)
-            except Exception:
-                print("Provide_ste: try to reconnect")
-                if self.reconnect() == Error:
-                    self.__stuffQ.put(bin)
-                else:
-                    continue
+            while inProcessing:
+                try:
+                    if self.__sock is None:
+                        raise Exception
 
-            inProcessing = False
+                    sending(self.__sock, bin)
+                except Exception:
+                    print("Provide_ste: try to reconnect")
+                    if self.reconnect() == Error:
+                        self.__stuffQ.put(bin)
+                    else:
+                        continue
+
+                inProcessing = False
 
         return Ok
+
+    def removeAllStuffs(self) -> None:
+        with self._Q_lock:
+            self.__stuffQ.queue.clear()
 
     def cleanup(self) -> None:
         self.disconnect()
@@ -763,6 +772,10 @@ class PostProcessor(Thread):
             for post in self.__posts:
                 if post.getIdent() == version:
                     self.__posts.remove(post)
+
+    def removeAllPost(self) -> None:
+        with self.__post_lock:
+            self.__posts = []
 
     # Retrive information and binary file from workers and store into __pends
     def __post_collect_stuffs(self, args = None) -> None:

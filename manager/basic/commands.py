@@ -11,7 +11,8 @@ class fromLetter_need_implemented(Exception):
 
 # Command subType definitions
 CMD_POST_TYPE = "post"
-
+CMD_ACCEPT = "accept"
+CMD_ACCEPT_RST = "accept_rst"
 
 class Command:
 
@@ -65,3 +66,37 @@ class PostConfigCmd(Command):
 
 
         return PostConfigCmd(address, port, role)
+
+class AcceptCommand(Command):
+
+    def __init__(self) -> None:
+        Command.__init__(self, CMD_ACCEPT, content = {})
+
+    def toLetter(self) -> CommandLetter:
+        cmdLetter = CommandLetter(self.type, content = self.content)
+        return cmdLetter
+
+    @staticmethod
+    def fromLetter(l:CommandLetter) -> Optional['AcceptCommand']:
+
+        if not isinstance(l, CommandLetter):
+            return None
+
+        return AcceptCommand()
+
+class AcceptRstCommand(Command):
+
+    def __init__(self) -> None:
+        Command.__init__(self, CMD_ACCEPT_RST, content= {})
+
+    def toLetter(self) -> CommandLetter:
+        cmdLetter = CommandLetter(self.type, content = self.content)
+        return cmdLetter
+
+    @staticmethod
+    def fromLetter(l:CommandLetter) -> Optional['AcceptRstCommand']:
+
+        if not isinstance(l, CommandLetter):
+            return None
+
+        return AcceptRstCommand()

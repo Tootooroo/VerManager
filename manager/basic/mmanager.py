@@ -27,6 +27,9 @@ class Module:
     def getName(self) -> str:
         return self.__mName
 
+    def begin(self) -> None:
+        pass
+
     def cleanup(self) -> None:
         pass
 
@@ -107,6 +110,7 @@ class MManager:
         allMods = self.getAllModules()
 
         for mod in allMods:
+            mod.begin()
             if isinstance(mod, ModuleDaemon):
                 mod.start()
 
