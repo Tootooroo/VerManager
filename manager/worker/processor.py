@@ -259,7 +259,7 @@ class Processor(Module):
     def __postListener_config(address:str, port:int, info:Info, cInst:Any) -> State:
 
         if cInst.isModuleExists(POST_LISTENER_M_NAME):
-            cInst.removeModule(POST_LISTENER_M_NAME)
+            return Ok
 
         pl = PostListener(address, port, cInst)
         pl.start()
@@ -278,7 +278,11 @@ class Processor(Module):
     @staticmethod
     def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:
 
+        sender = cInst.getModule(SENDER_M_NAME)
+
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
+            provider = cInst.getModule(POST_PROVIDER_M_NAME)
+            sender.rtnUnRegister(provider.provide_step)
             cInst.removeModule(POST_PROVIDER_M_NAME)
 
         provider = PostProvider(address, port)
@@ -296,8 +300,7 @@ class Processor(Module):
                 break
             time.sleep(1)
 
-        sender = cInst.getModule(SENDER_M_NAME)
-        sender.rtnRegister(lambda : provider.provide_step())
+        sender.rtnRegister(provider.provide_step)
 
         cInst.addModule(provider)
 

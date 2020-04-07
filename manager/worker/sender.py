@@ -39,8 +39,9 @@ class Sender(ModuleDaemon):
         self.__send_rtns.append(rtn)
         return Ok
 
-    def rtnUnRegister(self) -> State:
-        pass
+    def rtnUnRegister(self, rtn:SendRtn_NoWait_NoExcep) -> State:
+        if rtn in self.__send_rtns:
+            self.__send_rtns.remove(rtn)
 
     def run(self) -> None:
         cond = self.cond

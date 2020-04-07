@@ -143,6 +143,7 @@ class PostListener(ModuleDaemon):
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
 
+        self._isStop = False
         self.__address = address
         self.__port = port
 
@@ -161,10 +162,21 @@ class PostListener(ModuleDaemon):
         s.bind((self.__address, self.__port))
         s.listen(10)
 
+        s.settimeout(5)
+
         self.__processor.start()
 
         while True:
-            (wSock, addr) = s.accept()
+
+            if self._isStop:
+                self.__processor.stop()
+                s.shutdown(socket.SHUT_RDWR)
+                s.close()
+
+            try:
+                (wSock, addr) = s.accept()
+            except socket.timeout:
+                continue
 
             wSock.settimeout(3)
             sockKeepalive(wSock, 10, 3)
@@ -172,7 +184,7 @@ class PostListener(ModuleDaemon):
             self.__processor.req(wSock)
 
     def stop(self) -> None:
-        pass
+        self._isStop = True
 
 class PostProvider(Module):
 
@@ -256,6 +268,10 @@ class PostProvider(Module):
             inProcessing = False
 
         return Ok
+
+    def cleanup(self) -> None:
+        self.disconnect()
+        self.__sock = None
 
 class Post:
 
@@ -574,6 +590,11 @@ class PostProcessor(Thread):
 
         self.__server = None # type: Optional[Server]
 
+        self._isStop = False
+
+    def stop(self) -> None:
+        self._isStop = True
+
     def logging(self, msg:str) -> None:
         global LOG_ID
 
@@ -657,7 +678,14 @@ class PostProcessor(Thread):
 
         while True:
 
-            post = statisfied_posts.get()
+            if self._isStop:
+                break
+
+            try:
+                post = statisfied_posts.get(timeout=5)
+            except Q_Empty:
+                continue
+
             self.logging("Post " + post.getVersion() + " is in processing")
 
             postId = post.getIdent()
@@ -729,6 +757,10 @@ class PostProcessor(Thread):
     def __post_collect_stuffs(self, args = None) -> None:
 
         while True:
+
+            if self._isStop:
+                break
+
             providers = self.__providers.wait(1)
 
             # Build stuffs from binary from providers
