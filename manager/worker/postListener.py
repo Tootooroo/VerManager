@@ -236,7 +236,7 @@ class PostProvider(Module):
         inProcessing = True
 
         if self.__sock is None:
-            return Error
+            self.connectToListener()
 
         try:
             bin = self.__stuffQ.get_nowait()

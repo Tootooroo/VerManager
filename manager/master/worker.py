@@ -117,6 +117,9 @@ class Worker:
     def getAddress(self) -> Tuple[str, int]:
         return self.address
 
+    def setAddress(self, address:Tuple[str, int]) -> None:
+        self.address = address
+
     def getIdent(self) -> str:
         return self.ident
 
