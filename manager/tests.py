@@ -470,6 +470,14 @@ class UnitTest(TestCase):
             c.start()
             c.join()
 
+        def clientInterrupt(name:str) -> None:
+            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
+                       name = name)
+            c.start()
+            time.sleep(15)
+            c.stop()
+            c.join()
+
         # Create a server
         sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
         sInst.start()
@@ -477,7 +485,8 @@ class UnitTest(TestCase):
         time.sleep(1)
 
         # Create workers
-        client1 = Process(target=clientStart, args = ("W1", ))
+        client1 = Process(target=clientInterrupt, args = ("W1", ))
+        time.sleep(2)
         client2 = Process(target=clientStart, args = ("W2", ))
         client3 = Process(target=clientStart, args = ("W3", ))
 
@@ -493,6 +502,8 @@ class UnitTest(TestCase):
         dispatcher = sInst.getModule("Dispatcher")
         if not isinstance(dispatcher, Dispatcher):
             self.assertTrue(False)
+
+        time.sleep(15)
 
         from manager.master.workerRoom import M_NAME as WR_M_NAME
         wr = sInst.getModule(WR_M_NAME)
@@ -526,7 +537,7 @@ class UnitTest(TestCase):
         task4 = Task("126", "123", "126")
         dispatcher.dispatch(task4)
 
-        time.sleep(10)
+        time.sleep(15)
 
         self.assertTrue(os.path.exists("./Storage/122/122total"))
         self.assertTrue(os.path.exists("./Storage/124/124total"))
@@ -650,7 +661,7 @@ class UnitTest(TestCase):
         bs = BuildSet(buildSet)
 
         # Create a taks object
-        t = SuperTask("VersionToto", "ABC", "VersionToto", bs)
+        t = SuperTask("VersionToto", "ABC", "VersionToto", bs, {})
 
         # Get a group which GL5610 reside in
         groupOfGL5610 = t.getGroupOf("GL5610")
