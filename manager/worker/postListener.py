@@ -170,8 +170,8 @@ class PostListener(ModuleDaemon):
 
             if self._isStop:
                 self.__processor.stop()
-                s.shutdown(socket.SHUT_RDWR)
                 s.close()
+                break
 
             try:
                 (wSock, addr) = s.accept()
@@ -196,6 +196,8 @@ class PostProvider(Module):
         self.__port = port
         self.__sock = None # type: Optional[socket.socket]
         self.__stuffQ = Queue(1024)  # type: Queue[BinaryLetter]
+
+        self._isStop = False
 
         if connect:
             self.connectToListener()
@@ -245,10 +247,14 @@ class PostProvider(Module):
 
     def provide_step(self) -> State:
 
+        if self._isStop:
+            return Error
+
         inProcessing = True
 
         if self.__sock is None:
-            self.connectToListener()
+            if self.connectToListener() == Error:
+                return Error
 
         try:
             bin = self.__stuffQ.get_nowait()
@@ -257,6 +263,9 @@ class PostProvider(Module):
 
         while inProcessing:
             try:
+                if self.__sock is None:
+                    raise Exception
+
                 sending(self.__sock, bin)
             except Exception:
                 print("Provide_ste: try to reconnect")
@@ -272,6 +281,8 @@ class PostProvider(Module):
     def cleanup(self) -> None:
         self.disconnect()
         self.__sock = None
+
+        self._isStop = True
 
 class Post:
 

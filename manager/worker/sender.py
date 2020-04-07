@@ -43,6 +43,8 @@ class Sender(ModuleDaemon):
         if rtn in self.__send_rtns:
             self.__send_rtns.remove(rtn)
 
+        return Ok
+
     def run(self) -> None:
         cond = self.cond
 

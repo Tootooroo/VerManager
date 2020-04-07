@@ -19,7 +19,7 @@ from manager.basic.util import spawnThread, map_strict
 from manager.master.logger import Logger
 
 from manager.master.postElectProtos import RandomElectProtocol
-from manager.master.postElection import PostManager, PostElectProtocol
+from manager.master.postElection import PostManager, PostElectProtocol, Role_Listener
 
 from manager.basic.letter import CmdResponseLetter
 
@@ -135,7 +135,8 @@ class WorkerRoom(ModuleDaemon):
 
             if self.isExists(ident):
                 workersocket.close()
-                Logger.putLog(logger, wrLog, "Worker " + ident + " is already exist in WorkerRoom")
+                Logger.putLog(logger, wrLog, "Worker " + ident +
+                              " is already exist in WorkerRoom")
                 continue
 
             self.syncLock.acquire()
@@ -146,14 +147,22 @@ class WorkerRoom(ModuleDaemon):
                 workerInWait = self.__workers_waiting[ident]
 
                 workerInWait.sockSet(acceptedWorker.sockGet())
-                workerInWait.setAddress(acceptedWorker.getAddress())
+
+                # Deal with address changed.
+                newAddr = acceptedWorker.getAddress()
+                oldAddr = workerInWait.getAddress()
+
+                if newAddr[0] != oldAddr[0]:
+                    workerInWait.setAddress(newAddr)
+
+                    # Listener's address i changed need to re-elect
+                    # so provider able to know new address of listener.
+                    if workerInWait.role == Role_Listener:
+                        self.__pManager.setListener(None)
 
                 workerInWait.setState(Worker.STATE_ONLINE)
                 self.addWorker(workerInWait)
                 del self.__workers_waiting [ident]
-
-                self.__pManager.addProvider(workerInWait)
-                self.__changePoint()
 
                 map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
 

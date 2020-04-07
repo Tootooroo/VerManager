@@ -93,6 +93,7 @@ class ElectGroup:
         if w in self.__candidate:
             return Error
 
+        w.role = None
         self.__candidate.append(w)
 
         return Ok

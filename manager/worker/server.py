@@ -117,6 +117,10 @@ class Server(Module):
         self.q.put(l)
 
     def transfer_step(self, timeout:int = None) -> State:
+
+        if self.__isStop:
+            return Error
+
         try:
             response = self.q.get_nowait()
         except Empty:
