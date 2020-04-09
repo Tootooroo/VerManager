@@ -143,66 +143,37 @@ class WorkerRoom(ModuleDaemon):
                               " is already exist in WorkerRoom")
                 continue
 
-            self.syncLock.acquire()
+            with self.syncLock:
+                if ident in self.__workers_waiting:
+                    # fixme: socket of workerInWait is broken need to
+                    # change to acceptedWorker
+                    workerInWait = self.__workers_waiting[ident]
 
-            if ident in self.__workers_waiting:
-                # fixme: socket of workerInWait is broken need to
-                # change to acceptedWorker
-                workerInWait = self.__workers_waiting[ident]
+                    # Update worker's status.
+                    workerInWait.sockSet(acceptedWorker.sockGet())
+                    workerInWait.setAddress(acceptedWorker.getAddress())
+                    workerInWait.setState(Worker.STATE_ONLINE)
 
-                workerInWait.sockSet(acceptedWorker.sockGet())
+                    self.addWorker(workerInWait)
+                    del self.__workers_waiting [ident]
+                    map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
 
-                # Deal with address changed.
-                newAddr = acceptedWorker.getAddress()
-                oldAddr = workerInWait.getAddress()
+                    # Send an accept command to the worker
+                    # so it able to transfer message.
+                    workerInWait.control(AcceptCommand())
 
-                if newAddr[0] != oldAddr[0]:
-                    workerInWait.setAddress(newAddr)
+                    self.__pManager.addCandidate(workerInWait)
 
-                    # Tell to every provider that the address
-                    # of listener is changed.
-                    if workerInWait.role == Role_Listener:
-                        self._lisAddr = newAddr
+                    Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
+                    continue
 
-                        cmd = LisAddrUpdateCmd(newAddr[0], newAddr[1])
-                        for worker in self.__workers.values():
-                            worker.control(cmd)
+                # Need to reset the accepted worker before it transfer any messages.
+                acceptedWorker.control(AcceptRstCommand())
 
-                        for worker in self.__workers_waiting.values():
-                            worker.needUpdate = True
+                self.addWorker(acceptedWorker)
+                self.__pManager.addCandidate(acceptedWorker)
 
-                # Notify the last address of listener to provider.
-                if workerInWait.role == Role_Provider and workerInWait.needUpdate:
-                    cmd = LisAddrUpdateCmd(self._lisAddr[0], self._lisAddr[1])
-                    workerInWait.control(cmd)
-
-                workerInWait.setState(Worker.STATE_ONLINE)
-                self.addWorker(workerInWait)
-                del self.__workers_waiting [ident]
-
-                # Send an accept command to the worker
-                # so it able to transfer message.
-                workerInWait.control(AcceptCommand())
-
-                map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
-
-                Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
-
-                self.syncLock.release()
-
-                continue
-
-            self.syncLock.release()
-
-            # Need to reset the accepted worker before it transfer any messages.
-            acceptedWorker.control(AcceptRstCommand())
-
-            self.addWorker(acceptedWorker)
-
-            self.__pManager.addCandidate(acceptedWorker)
-            self.__changePoint()
-
-            map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)
+                map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
@@ -245,14 +216,11 @@ class WorkerRoom(ModuleDaemon):
             return None
 
         # Init postManager
-        if self.getNumOfWorkers() > 0 and self.__isPManager_init == False:
+        if self.__isPManager_init == False:
             self.__pManager.proto_init()
             self.__isPManager_init = True
-
-            return None
-
-        # Stepping
-        if self.__isPManager_init:
+        else:
+            # Stepping
             self.__pManager.proto_step()
 
     def __waiting_worker_update(self) -> None:
@@ -284,6 +252,16 @@ class WorkerRoom(ModuleDaemon):
             self.removeWorker(ident)
             self.__changePoint()
 
+            if worker.role == None:
+                # Worker is a candidate
+                self.__pManager.removeCandidate(ident)
+            else:
+                # Remove this worker from PostManager
+                # if it's also a listener then set listener to None
+                self.__pManager.removeProvider(ident)
+                if self.__pManager.isListener(ident):
+                    self.__pManager.setListener(None)
+
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
 
@@ -304,13 +282,6 @@ class WorkerRoom(ModuleDaemon):
             Logger.putLog(logger, wrLog, "Worker " + ident +\
                            " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
-
-            # Remove this worker from PostManager
-            # if it's also a listener then set listener
-            # to None
-            self.__pManager.removeProvider(ident)
-            if self.__pManager.isListener(ident):
-                self.__pManager.setListener(None)
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
 

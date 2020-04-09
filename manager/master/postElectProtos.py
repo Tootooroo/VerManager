@@ -1,12 +1,12 @@
 # postElectProtos.py
 
 from functools import reduce
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-from queue import Queue
+from queue import Queue, Empty as queue_Empty
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import CmdResponseLetter
-from manager.basic.commands import PostConfigCmd
+from manager.basic.commands import Command, PostConfigCmd
 from manager.master.worker import Worker
 from manager.master.postElection import PostElectProtocol, ElectGroup, \
     Role_Listener, Role_Provider
@@ -32,14 +32,9 @@ class RandomElectProtocol(PostElectProtocol):
         ret = Error
 
         # Listener elect
-        while ret is Error:
-            (ret, ident) = self.__elect_listener()
-
-            if ret is Error:
-                self.__blackList.append(ident)
-
-                if len(self.__blackList) == self.group.numOfWorkers():
-                    return Error
+        (ret, ident) = self.__elect_listener()
+        if ret == Error:
+            return Error
 
         # Broadcast configuration to providers
         listener = self.group.getListener()
@@ -52,8 +47,11 @@ class RandomElectProtocol(PostElectProtocol):
         cmd_set_provider = PostConfigCmd(host, self.__proto_port,
                                          PostConfigCmd.ROLE_PROVIDER)
         for c in candidates:
-            c.control(cmd_set_provider)
-            l = self.waitMsg()
+            # fixme: May cause performance problem you can
+            #        send all command in onece. And wait a
+            #        constant time for all response.
+            l = self._send_command_and_wait(c, cmd_set_provider, timeout = 2)
+            if l is None: continue
 
             # fixme: Need to deal with failed of provider configure
             if l.getState() is CmdResponseLetter.STATE_SUCCESS:
@@ -64,11 +62,29 @@ class RandomElectProtocol(PostElectProtocol):
                 else:
                     self.group.addProvider(c)
 
-        self.group.removeAllCandidates()
+                self.group.removeCandidate_(c)
 
         self.isInit = True
 
         return Ok
+
+    def _send_command_and_wait(self, w:Worker, cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
+        try:
+            w.control(cmd)
+            response = self.waitMsg(timeout)
+
+            while response.getIdent() != w.getIdent():
+                response = self.waitMsg(timeout)
+
+        except (BrokenPipeError, queue_Empty):
+            return None
+        except:
+            import traceback
+            traceback.print_exc()
+
+            return None
+
+        return response
 
     def __elect_listener(self) -> Tuple[State, str]:
 
@@ -82,9 +98,6 @@ class RandomElectProtocol(PostElectProtocol):
 
         listener = reduce(self.__random_elect, candidates)
 
-        if listener in self.__blackList:
-            return (Error, "")
-
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
@@ -95,12 +108,12 @@ class RandomElectProtocol(PostElectProtocol):
         cmd_set_listener = PostConfigCmd(host, self.__proto_port,
                                          PostConfigCmd.ROLE_LISTENER)
 
-        listener.control(cmd_set_listener)
-        l = self.waitMsg()
+        # Clear messages trivial messages may remain in queue
+        # due to failed election before.
+        self.msgClear()
 
-        ident = l.getIdent()
-        if ident != listener.getIdent():
-            return (Error, listener.getIdent())
+        l = self._send_command_and_wait(listener, cmd_set_listener, timeout=2)
+        if l is None: return (Error, "")
 
         state = l.getState()
         if state == CmdResponseLetter.STATE_FAILED:
@@ -113,9 +126,6 @@ class RandomElectProtocol(PostElectProtocol):
 
     def step(self) -> State:
 
-        if self.isInit is False:
-            return Error
-
         assert(self.group is not None)
 
         listener = self.group.getListener()
@@ -127,21 +137,22 @@ class RandomElectProtocol(PostElectProtocol):
             if candidates == []:
                 return Ok
             else:
+                host, _ = listener.getAddress()
+                cmd_set_provider = PostConfigCmd(host, self.__proto_port,
+                                                    PostConfigCmd.ROLE_PROVIDER)
 
-                candidate_drags = self.group.candidateIter()
+                self.msgClear()
 
-                host, port = listener.getAddress()
-                for candidate in candidate_drags:
-                    self.group.addProvider(candidate)
-                    cmd_set_provider = PostConfigCmd(host, self.__proto_port,
-                                                     PostConfigCmd.ROLE_PROVIDER)
-                    candidate.control(cmd_set_provider)
-                    l = self.waitMsg()
+                candidates_iter = self.group.candidateIter()
+                for candidate in candidates_iter:
+                    l = self._send_command_and_wait(candidate, cmd_set_provider,
+                                                    timeout=2)
+                    if l is None: continue
 
-                    if l.getState() is CmdResponseLetter.STATE_FAILED:
-                        assert(False)
+                    if l.getState() is CmdResponseLetter.STATE_SUCCESS:
+                        self.group.addProvider(candidate)
+                        self.group.removeCandidate_(candidate)
 
-                self.group.removeAllCandidates()
 
                 return Ok
 

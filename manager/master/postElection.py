@@ -3,6 +3,7 @@
 from functools import reduce
 from queue import Queue
 
+from threading import Lock
 from manager.basic.util import partition
 from manager.basic.letter import CmdResponseLetter
 from manager.basic.commands import PostConfigCmd
@@ -32,6 +33,8 @@ class ElectGroup:
     def __init__(self, workers:List[Worker] = []) -> None:
         self.__listener = None  # type: Optional[Worker]
         self.__providers = {}  # type: Dict[str, Worker]
+
+        self.__lock_c = Lock()
         self.__candidate = []  # type: List[Worker]
 
         for w in workers:
@@ -90,44 +93,50 @@ class ElectGroup:
         return self.__providers[ident]
 
     def addCandidate(self, w:Worker) -> State:
-        if w in self.__candidate:
-            return Error
+        with self.__lock_c:
+            if w in self.__candidate:
+                return Error
 
-        w.role = None
-        self.__candidate.append(w)
+            w.role = None
+            self.__candidate.append(w)
 
         return Ok
 
     def removeCandidate(self, ident:str) -> Optional[Worker]:
-        beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent == ident)
+        with self.__lock_c:
+            beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent == ident)
 
-        if beRemoved == []:
-            return None
-        else:
-            assert(len(beRemoved) == 1)
+            if beRemoved == []:
+                return None
+            else:
+                assert(len(beRemoved) == 1)
 
-            self.__candidate = remain
-            return beRemoved[0]
+                self.__candidate = remain
+                return beRemoved[0]
 
     def removeCandidate_(self, w:Worker) -> State:
-
-        if w not in self.__candidate:
-            return Error
-        else:
-            self.__candidate.remove(w)
-            return Ok
+        with self.__lock_c:
+            if w not in self.__candidate:
+                return Error
+            else:
+                self.__candidate.remove(w)
+                return Ok
 
     def candidateIter(self) -> Generator:
         for candidate in self.__candidate:
             yield candidate
 
     def removeAllCandidates(self) -> None:
-        self.__candidate = []
+        with self.__lock_c:
+            for c in self.__candidate:
+                self.__candidate.remove(c)
 
     def getCandidate(self, ident:str) -> Optional[Worker]:
-        for candidate in self.__candidate:
-            if candidate.getIdent() == ident:
-                return candidate
+        with self.__lock_c:
+            for candidate in self.__candidate:
+                if candidate.getIdent() == ident:
+                    return candidate
+
         return None
 
     def candidates(self) -> List[Worker]:
@@ -158,8 +167,11 @@ class PostElectProtocol:
     def msgTransfer(self, l:CmdResponseLetter) -> None:
         self.msgQueue.put(l)
 
-    def waitMsg(self) -> CmdResponseLetter:
-        return self.msgQueue.get()
+    def waitMsg(self, timeout=None) -> CmdResponseLetter:
+        return self.msgQueue.get(timeout)
+
+    def msgClear(self) -> None:
+        self.msgQueue.queue.clear()
 
     def relations(self) -> Tuple[str, List[str]]:
 
