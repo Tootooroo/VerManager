@@ -104,7 +104,7 @@ class ElectGroup:
 
     def removeCandidate(self, ident:str) -> Optional[Worker]:
         with self.__lock_c:
-            beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent == ident)
+            beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent() == ident)
 
             if beRemoved == []:
                 return None
