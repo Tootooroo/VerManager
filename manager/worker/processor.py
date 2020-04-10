@@ -329,9 +329,7 @@ class Processor(Module):
     @staticmethod
     def __postListener_config(address:str, port:int, info:Info, cInst:Any) -> State:
 
-        if cInst.isModuleExists(POST_LISTENER_M_NAME):
-            return Ok
-        else:
+        if not cInst.isModuleExists(POST_LISTENER_M_NAME):
             pl = PostListener(address, port, cInst)
             pl.start()
 
