@@ -101,8 +101,8 @@ class WorkerRoom(ModuleDaemon):
 
     def sockSetup(self, sock:socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 8)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 3)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
 
     def run(self) -> None:

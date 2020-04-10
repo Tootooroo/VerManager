@@ -74,7 +74,7 @@ class RandomElectProtocol(PostElectProtocol):
             response = self.waitMsg(timeout)
 
             while response.getIdent() != w.getIdent():
-                response = self.waitMsg(timeout)
+                response = self.waitMsg(timeout=timeout)
 
         except (BrokenPipeError, queue_Empty):
             return None

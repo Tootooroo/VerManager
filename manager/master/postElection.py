@@ -168,7 +168,7 @@ class PostElectProtocol:
         self.msgQueue.put(l)
 
     def waitMsg(self, timeout=None) -> CmdResponseLetter:
-        return self.msgQueue.get(timeout)
+        return self.msgQueue.get(timeout=timeout)
 
     def msgClear(self) -> None:
         self.msgQueue.queue.clear()

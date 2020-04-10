@@ -331,11 +331,11 @@ class Processor(Module):
 
         if cInst.isModuleExists(POST_LISTENER_M_NAME):
             return Ok
+        else:
+            pl = PostListener(address, port, cInst)
+            pl.start()
 
-        pl = PostListener(address, port, cInst)
-        pl.start()
-
-        cInst.addModule(pl)
+            cInst.addModule(pl)
 
         # Resposne to configuration command
         server = cInst.getModule(SERVER_M_NAME)
@@ -350,7 +350,6 @@ class Processor(Module):
     def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:
 
         sender = cInst.getModule(SENDER_M_NAME)
-
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
             provider = cInst.getModule(POST_PROVIDER_M_NAME)
             sender.rtnUnRegister(provider.provide_step)
