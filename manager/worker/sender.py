@@ -62,8 +62,7 @@ class Sender(ModuleDaemon):
             now = datetime.utcnow()
 
             for rtn in self.__send_rtns:
-                if rtn() is Ok:
-                    last = now
+                if rtn() is Ok: last = now
 
             if isIdle(now, last):
                 time.sleep(1)

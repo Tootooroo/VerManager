@@ -15,7 +15,7 @@ class Post(Module):
         self.__server = Server(address, port, info, cInst)
 
     def connect(self, workerName:str) -> State:
-        return self.__server.connect(workerName, 0, 0)
+        return self.__server.connect()
 
     def disconnect(self) -> None:
         self.__server.disconnect()
@@ -33,4 +33,4 @@ class Post(Module):
         return self.__server.transfer_step(timeout)
 
     def reconnect(self, workerName:str, max:int, proc:int) -> State:
-        return self.__server.reconnect(workerName, max, proc)
+        return self.__server.reconnect()

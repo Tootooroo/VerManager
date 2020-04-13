@@ -486,7 +486,7 @@ class UnitTest(TestCase):
 
         # Create workers
         client1 = Process(target=clientInterrupt, args = ("W1", ))
-        time.sleep(2)
+        time.sleep(3)
         client2 = Process(target=clientStart, args = ("W2", ))
         client3 = Process(target=clientStart, args = ("W3", ))
 
@@ -516,7 +516,6 @@ class UnitTest(TestCase):
 
             # Wait at least WAITING_INTERVAL
             time.sleep(15)
-
 
         # Dispatch task
         task1 = Task("122", "123", "122")

@@ -48,6 +48,9 @@ class Server(Module):
         self.__address = address
         self.__port = port
 
+        self.__max = 0
+        self.__proc = 0
+
         self.__status = Server.STATE_DISCONNECTED
 
         # A flag to indicate this connection to master
@@ -70,16 +73,22 @@ class Server(Module):
         self.disconnect()
 
     def begin(self) -> None:
-        info = self.__cInst.getModule(INFO_M_NAME)
-        max = info.getConfig('MAX_TASK_CAN_PROC')
-        self.connect(self.__workerName, max, 0, retry = 3)
+        self.connect()
 
-    def connect(self, workerName:str, max:int, proc:int, retry:int = 0) -> State:
+    def connect(self) -> State:
+        info = self.__cInst.getModule(INFO_M_NAME)
+
+        self.__proc = self.__cInst.inProcTasks()
+        if self.__proc is None:
+            self.__proc = 0
+
+        self.__max = info.getConfig('MAX_TASK_CAN_PROC')
+
+        return self._connect(self.__max, self.__proc)
+
+    def _connect(self, max:int, proc:int, retry:int = 0) -> State:
 
         if self.__isStop: return Error
-
-        # Store workerName into instance for reconnect purpose
-        self.__workerName = workerName
 
         host = self.__address
         port = self.__port
@@ -102,11 +111,13 @@ class Server(Module):
                 else:
                     return Error
             except:
-                raise Exception
+                return Error
 
         sock.settimeout(1)
 
-        propLetter = PropLetter(ident = workerName, max = str(max), proc = str(proc))
+        propLetter = PropLetter(ident = self.__workerName,
+                                max = str(max),
+                                proc = str(proc))
         if self.__sending(sock, propLetter) == Error:
             return Error
 
@@ -139,16 +150,29 @@ class Server(Module):
 
     def transfer_step(self, timeout:int = None) -> State:
 
-        if self.__isStop or self.__status != Server.STATE_TRANSFER:
+        # Server module is in stop state.
+        if self.__isStop:
             return Error
+
+        # Not allow to transfer messages until authorized by master
+        if self.__status != Server.STATE_TRANSFER:
+            if self.__status == Server.STATE_DISCONNECTED:
+                # Try to connect to master so able to be authorized.
+                #self.begin()
+                pass
+            else:
+                return Error
 
         try:
             response = self.q.get_nowait()
         except Empty:
             return Error
 
-        if self.__send(response, retry = 3) == Server.SOCK_OK:
+        if self.__send(response, retry = 1) == Server.SOCK_OK:
             return Ok
+        else:
+            # Insert into head of the queue
+            self.q.queue.insert(0, response)
 
         return Error
 
@@ -161,21 +185,18 @@ class Server(Module):
         except:
             return None
 
-    def reconnectUntil(self, workerName:str, max:int, proc:int, timeout:int = None) -> State:
+    def reconnectUntil(self, interval:int = None) -> State:
         ret = Error
 
         while ret == Error:
-            ret = self.reconnect(workerName, max, proc)
-            time.sleep(timeout) # type: ignore
+            ret = self.reconnect()
+            time.sleep(interval) # type: ignore
 
         return ret
 
-    def reconnect(self, workerName:str, max:int, proc:int) -> State:
-        if workerName == "":
-            workerName = self.__workerName
-
+    def reconnect(self) -> State:
         try:
-            return self.connect(workerName, max, proc)
+            return self.connect()
         except:
             return Error
 
@@ -183,16 +204,13 @@ class Server(Module):
         return not self.q.empty()
 
     def __reconnectWrapper(self, retry:int = 0) -> int:
-        time.sleep(3)
-
         with self.__lock:
             if self.__status != Server.STATE_DISCONNECTED:
                 return Server.SOCK_OK
 
-
             if retry >= 0:
                 while retry > 0:
-                    ret = self.reconnect("", 0, 0)
+                    ret = self.reconnect()
                     if ret == Ok:
                         return Server.SOCK_OK
                     retry -= 1
@@ -202,7 +220,7 @@ class Server(Module):
 
                 return Server.SOCK_DISCONN
             else:
-                self.reconnectUntil("", 0, 0, timeout = 5)
+                self.reconnectUntil(interval = 1)
                 return Server.SOCK_OK
 
     def __send(self, l:Letter, retry:int = 0) -> int:
@@ -219,7 +237,7 @@ class Server(Module):
         except:
             self.__status = Server.STATE_DISCONNECTED
             if self.__reconnectWrapper(retry) == Server.SOCK_OK:
-                self.__send(l, retry)
+                self.__send(l, 1)
                 return Server.SOCK_OK
 
             return Server.SOCK_DISCONN

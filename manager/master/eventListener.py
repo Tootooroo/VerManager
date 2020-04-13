@@ -145,7 +145,6 @@ class EventListener(ModuleDaemon):
                 except:
                     traceback.print_exc()
                     self.workers.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED, fd)
-
                     self.entries.unregister(fd)
                     continue
 
