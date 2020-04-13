@@ -219,7 +219,8 @@ class WorkerRoom(ModuleDaemon):
 
         candidates = self.__pManager.candidates()
         if candidates != []:
-            self._WR_LOG(str([c.getIdent() for c in candidates]))
+            self._WR_LOG("Role:" + str(self.postRelations()))
+            self._WR_LOG("Candidates" + str([c.getIdent() for c in candidates]))
 
         if not self.isStable():
             return None
