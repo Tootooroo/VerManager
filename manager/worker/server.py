@@ -107,11 +107,10 @@ class Server(Module):
                 break
 
             except ConnectionRefusedError:
-                sock.close()
-
                 if retry > 0:
                     continue
                 else:
+                    sock.close()
                     return Error
             except:
                 sock.close()

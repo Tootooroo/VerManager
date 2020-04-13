@@ -230,6 +230,7 @@ class PostProvider(Module):
                     time.sleep(1)
                     continue
                 else:
+                    sock.close()
                     self.__sock = None
                     return Error
 
