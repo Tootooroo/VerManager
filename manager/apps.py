@@ -28,3 +28,5 @@ class ManagerConfig(AppConfig):
                                 info.getConfig("Port"),
                                 "./config.yaml")
         sInst.start()
+
+        S.ServerInstance = sInst
