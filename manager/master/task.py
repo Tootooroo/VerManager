@@ -215,9 +215,9 @@ class SuperTask(Task):
         return self.__buildSet is not None
 
     def toPreState(self) -> State:
-        isAbleTo = True
+        isAbleTo = False
         for c in self.__children:
-            isAbleTo = isAbleTo and c.isPrepare()
+            isAbleTo = isAbleTo or c.isPrepare()
         if isAbleTo:
             self.state = Task.STATE_PREPARE
             return Ok

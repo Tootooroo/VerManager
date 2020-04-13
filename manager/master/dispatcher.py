@@ -428,17 +428,25 @@ def workerLost_redispatch(w: Worker, args:Any) -> None:
         if w.role is Role_Listener and t.isAChild():
             parent = t.getParent()
             assert(parent is not None)
-            # Change state to failure must success
-            assert(parent.toState_force(Task.STATE_FAILURE) is Ok)
 
+            parent.toState_force(Task.STATE_FAILURE)
             continue
+
+        elif t.isAChild():
+            parent = t.getParent()
+            assert(parent is not None)
+
+            t.stateChange(Task.STATE_PREPARE)
+            if parent.taskState() == Task.STATE_IN_PROC:
+                parent.toPreState()
+                dispatcher.redispatch(parent)
         else:
             dispatcher.redispatch(t)
 
-    workers = workerRoom.getWorkerWithCond(lambda w_set: w_set)
 
     # Remove all tasks in failure state.
     if w.role is Role_Listener:
+        workers = workerRoom.getWorkerWithCond(lambda w_set: w_set)
         for w in workers:
             w.removeTaskWithCond(lambda t: t.isFailure())
 
