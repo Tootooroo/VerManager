@@ -76,8 +76,9 @@ class Receiver(ModuleDaemon):
                         continue
                     elif reqLetter == Server.SOCK_PARSE_ERROR:
                         continue
+
+                else:
+                    processor.proc(reqLetter)
+
             except:
                 traceback.print_exc()
-
-            if not isinstance(reqLetter, int):
-                processor.proc(reqLetter)

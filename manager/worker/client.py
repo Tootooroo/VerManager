@@ -67,8 +67,7 @@ class Client(Thread):
         if taskDealer is None or not isinstance(taskDealer, Receiver):
             return None
 
-        server.connect(self.__name, taskDealer.maxNumber(),
-                       taskDealer.numOfTasks())
+        server.connect()
 
     def disconnect(self) -> None:
         server = self.getModule(SERVER_M_NAME)

@@ -29,8 +29,6 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group.numOfCandidates() is 0:
             return Error
 
-        ret = Error
-
         # Listener elect
         (ret, ident) = self.__elect_listener()
         if ret == Error:

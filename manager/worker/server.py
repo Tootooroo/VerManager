@@ -95,7 +95,7 @@ class Server(Module):
         port = self.__port
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockKeepalive(sock, 5, 3)
+        sockKeepalive(sock, 10, 3)
 
         retry += 1
 
@@ -154,17 +154,9 @@ class Server(Module):
     def transfer_step(self, timeout:int = None) -> State:
 
         # Server module is in stop state.
-        if self.__isStop:
-            return Error
-
         # Not allow to transfer messages until authorized by master
-        if self.__status != Server.STATE_TRANSFER:
-            if self.__status == Server.STATE_DISCONNECTED:
-                # Try to connect to master so able to be authorized.
-                if self.reconnect() == Error:
-                    return Error
-            else:
-                return Error
+        if self.__isStop or self.__status != Server.STATE_TRANSFER:
+            return Error
 
         try:
             response = self.q.get_nowait()
@@ -230,23 +222,26 @@ class Server(Module):
                 return Server.SOCK_OK
 
     def __send(self, l:Letter, retry:int = 0) -> int:
-        try:
-            if isinstance(l, BinaryLetter):
-                Server.__sending_bytes(self.sock, l.binaryPack()) # type: ignore
-            else:
-                Server.__sending(self.sock, l)
-            return Server.SOCK_OK
-        except socket.timeout:
-            return Server.SOCK_TIMEOUT
-        except BinaryLetter.FIELD_LENGTH_EXCEPTION:
-            return Server.SOCK_PARSE_ERROR
-        except:
-            self.__status = Server.STATE_DISCONNECTED
-            if self.__reconnectWrapper(retry) == Server.SOCK_OK:
-                self.__send(l, 1)
-                return Server.SOCK_OK
 
-            return Server.SOCK_DISCONN
+        while True:
+            try:
+                if isinstance(l, BinaryLetter):
+                    Server.__sending_bytes(self.sock, l.binaryPack()) # type: ignore
+                else:
+                    Server.__sending(self.sock, l)
+                return Server.SOCK_OK
+            except socket.timeout:
+                return Server.SOCK_TIMEOUT
+            except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                return Server.SOCK_PARSE_ERROR
+            except:
+                self.__status = Server.STATE_DISCONNECTED
+                if self.__reconnectWrapper(retry) == Server.SOCK_OK:
+                    continue
+                else:
+                    return Server.SOCK_DISCONN
+
+            return Server.SOCK_OK
 
     def __send_bytes(self, b:bytes, retry:int = 0) -> int:
         try:

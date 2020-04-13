@@ -99,11 +99,21 @@ class WorkerRoom(ModuleDaemon):
         self.__lastChangedPoint = datetime.utcnow()
         self.__stableThres = WorkerRoom.STABLE_INTERVAL
 
+        self.logger = None # type: Optional[Logger]
+
     def sockSetup(self, sock:socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 3)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
+
+    def _WR_LOG(self, msg:str) -> None:
+        if self.logger is not None:
+            Logger.putLog(self.logger, wrLog, msg)
+        else:
+            self.logger = self.__serverInst.getModule(LOGGER_M_NAME)
+            if self.logger is not None:
+                self.logger.log_register(wrLog)
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -113,16 +123,12 @@ class WorkerRoom(ModuleDaemon):
         # Spawn a thread which respond to worker maintain
         maintainer = spawnThread(lambda wr: wr.maintain(), self)
 
-        global wrLog
-        logger = self.__serverInst.getModule(LOGGER_M_NAME)
-        logger.log_register(wrLog)
-
         while True:
             (workersocket, address) = self.sock.accept()
-            Logger.putLog(logger, wrLog, "A new connection(" + str(address) + ") has been accepted")
+            self._WR_LOG("A new connection(" + str(address) + ") has been accepted")
 
             self.sockSetup(workersocket)
-            Logger.putLog(logger, wrLog, "Socket options set up")
+            self._WR_LOG("Socket options set up")
 
             try:
                 acceptedWorker = Worker(workersocket, address)
@@ -130,17 +136,16 @@ class WorkerRoom(ModuleDaemon):
 
                 ident = acceptedWorker.getIdent()
 
-                Logger.putLog(logger, wrLog, "Worker " + ident + " initialized success")
+                self._WR_LOG("Worker " + ident + " initialized success")
 
             except WorkerInitFailed:
-                Logger.putLog(logger, wrLog, "Worker initialize faile and close the socket")
+                self._WR_LOG("Worker initialize faile and close the socket")
                 workersocket.shutdown(socket.SHUT_RDWR)
                 continue
 
             if self.isExists(ident):
                 workersocket.close()
-                Logger.putLog(logger, wrLog, "Worker " + ident +
-                              " is already exist in WorkerRoom")
+                self._WR_LOG("Worker " + ident + " is already exist in WorkerRoom")
                 continue
 
             with self.syncLock:
@@ -164,7 +169,7 @@ class WorkerRoom(ModuleDaemon):
 
                     self.__pManager.addCandidate(workerInWait)
 
-                    Logger.putLog(logger, wrLog, "Worker " + ident + " is reconnect")
+                    self._WR_LOG("Worker " + ident + " is reconnect")
                     continue
 
                 # Need to reset the accepted worker before it transfer any messages.
@@ -223,9 +228,11 @@ class WorkerRoom(ModuleDaemon):
             # Stepping
             self.__pManager.proto_step()
 
-    def __waiting_worker_update(self) -> None:
-        logger = self.__serverInst.getModule(LOGGER_M_NAME)
+        candidates = self.__pManager.candidates()
+        self._WR_LOG(str([c.getIdent() for c in candidates]))
 
+
+    def __waiting_worker_update(self) -> None:
         try:
             (eventType, index) = self.__eventQueue.get(timeout=1)
         except Empty:
@@ -244,8 +251,8 @@ class WorkerRoom(ModuleDaemon):
         ident = worker.getIdent()
 
         if eventType == WorkerRoom.EVENT_DISCONNECTED:
-            Logger.putLog(logger, wrLog, "Worker " + ident + \
-                            " is disconnected changed state into Waiting")
+            self._WR_LOG("Worker " + ident +
+                         " is disconnected changed state into Waiting")
 
             # Update worker's counter
             worker.setState(Worker.STATE_WAITING)
@@ -268,8 +275,6 @@ class WorkerRoom(ModuleDaemon):
             map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)
 
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
-        logger = self.__serverInst.getModule(LOGGER_M_NAME)
-
         workers_list = list(workers.values())
 
         if len(workers) == 0:
@@ -279,8 +284,8 @@ class WorkerRoom(ModuleDaemon):
 
         for worker in outOfTime:
             ident = worker.getIdent()
-            Logger.putLog(logger, wrLog, "Worker " + ident +\
-                           " is dissconnected for a long time will be removed")
+            self._WR_LOG("Worker " + ident +
+                         " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
