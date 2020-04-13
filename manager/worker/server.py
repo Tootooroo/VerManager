@@ -23,6 +23,7 @@ class DISCONN_EXCEPTION(Exception):
 
 class Server(Module):
 
+    STATE_SUSPEND = 4
     STATE_CONNECTED = 0
     STATE_CONNECTING = 1
     STATE_DISCONNECTED = 2
@@ -51,7 +52,7 @@ class Server(Module):
         self.__max = 0
         self.__proc = 0
 
-        self.__status = Server.STATE_DISCONNECTED
+        self.__status = Server.STATE_SUSPEND
 
         # A flag to indicate this connection to master
         # should be closed and never rebuild in the future.
@@ -94,7 +95,7 @@ class Server(Module):
         port = self.__port
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockKeepalive(sock, 10, 3)
+        sockKeepalive(sock, 5, 3)
 
         retry += 1
 
@@ -106,11 +107,14 @@ class Server(Module):
                 break
 
             except ConnectionRefusedError:
+                sock.close()
+
                 if retry > 0:
                     continue
                 else:
                     return Error
             except:
+                sock.close()
                 return Error
 
         sock.settimeout(1)
@@ -158,8 +162,8 @@ class Server(Module):
         if self.__status != Server.STATE_TRANSFER:
             if self.__status == Server.STATE_DISCONNECTED:
                 # Try to connect to master so able to be authorized.
-                #self.begin()
-                pass
+                if self.reconnect() == Error:
+                    return Error
             else:
                 return Error
 
@@ -195,6 +199,9 @@ class Server(Module):
         return ret
 
     def reconnect(self) -> State:
+        if self.__status != Server.STATE_DISCONNECTED:
+            return Error
+
         try:
             return self.connect()
         except:

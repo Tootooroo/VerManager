@@ -71,7 +71,7 @@ class RandomElectProtocol(PostElectProtocol):
     def _send_command_and_wait(self, w:Worker, cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
         try:
             w.control(cmd)
-            response = self.waitMsg(timeout)
+            response = self.waitMsg(timeout=timeout)
 
             while response.getIdent() != w.getIdent():
                 response = self.waitMsg(timeout=timeout)
