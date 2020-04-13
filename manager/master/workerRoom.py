@@ -168,7 +168,8 @@ class WorkerRoom(ModuleDaemon):
                     # so it able to transfer message.
                     workerInWait.control(AcceptCommand())
 
-                    self.__pManager.addCandidate(workerInWait)
+                    if not self.__pManager.isListener(ident):
+                        self.__pManager.addCandidate(workerInWait)
 
                     self._WR_LOG("Worker " + ident + " is reconnect")
                     continue
