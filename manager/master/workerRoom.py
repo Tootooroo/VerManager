@@ -99,6 +99,8 @@ class WorkerRoom(ModuleDaemon):
         self.__lastChangedPoint = datetime.utcnow()
         self.__stableThres = WorkerRoom.STABLE_INTERVAL
 
+        self._lastCandidates = [] # type: List[str]
+
         self.logger = None # type: Optional[Logger]
 
     def sockSetup(self, sock:socket.socket) -> None:
@@ -217,10 +219,11 @@ class WorkerRoom(ModuleDaemon):
 
     def __postProcessing(self) -> None:
 
-        candidates = self.__pManager.candidates()
-        if candidates != []:
+        candidates = [c.getIdent() for c in self.__pManager.candidates()]
+        if candidates != self._lastCandidates:
             self._WR_LOG("Role:" + str(self.postRelations()))
-            self._WR_LOG("Candidates" + str([c.getIdent() for c in candidates]))
+            self._WR_LOG("Candidates" + str(candidates))
+            self._lastCandidates = candidates
 
         if not self.isStable():
             return None
