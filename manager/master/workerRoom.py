@@ -42,8 +42,6 @@ wrLog = "wrLog"
 
 class WorkerRoom(ModuleDaemon):
 
-    STABLE_INTERVAL = 10
-
     WAITING_INTERVAL = 300
 
     EVENT_CONNECTED = 0
@@ -93,11 +91,12 @@ class WorkerRoom(ModuleDaemon):
         if self.__WAITING_INTERVAL == "":
             self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
+        self.__stableThres = self.__WAITING_INTERVAL + 3
+
         self.__isPManager_init = False
         self.__pManager = PostManager([], RandomElectProtocol())
 
         self.__lastChangedPoint = datetime.utcnow()
-        self.__stableThres = WorkerRoom.STABLE_INTERVAL
 
         self._lastCandidates = [] # type: List[str]
 
@@ -184,7 +183,7 @@ class WorkerRoom(ModuleDaemon):
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
-        return diff >= WorkerRoom.STABLE_INTERVAL
+        return diff >= self.__stableThres
 
     def setStableThres(self, thres:int) -> None:
         self.__stableThres = thres
@@ -261,17 +260,15 @@ class WorkerRoom(ModuleDaemon):
             # Update worker's counter
             worker.setState(Worker.STATE_WAITING)
             self.removeWorker(ident)
-            self.__changePoint()
 
             if worker.role == None:
                 # Worker is a candidate
                 self.__pManager.removeCandidate(ident)
             else:
                 # Remove this worker from PostManager
-                # if it's also a listener then set listener to None
-                self.__pManager.removeProvider(ident)
-                if self.__pManager.isListener(ident):
-                    self.__pManager.setListener(None)
+                # if it's a provider
+                if not self.__pManager.isListener(ident):
+                    self.__pManager.removeProvider(ident)
 
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
@@ -291,6 +288,16 @@ class WorkerRoom(ModuleDaemon):
             self._WR_LOG("Worker " + ident +
                          " is dissconnected for a long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
+
+            if worker.role == None:
+                # Worker is a candidate
+                self.__pManager.removeCandidate(ident)
+            else:
+                # Remove this worker from PostManager
+                # if it's also a listener then set listener to None
+                self.__pManager.removeProvider(ident)
+                if self.__pManager.isListener(ident):
+                    self.__pManager.setListener(None)
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
 
