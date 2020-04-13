@@ -265,11 +265,6 @@ class WorkerRoom(ModuleDaemon):
             if worker.role == None:
                 # Worker is a candidate
                 self.__pManager.removeCandidate(ident)
-            else:
-                # Remove this worker from PostManager
-                # if it's a provider
-                if not self.__pManager.isListener(ident):
-                    self.__pManager.removeProvider(ident)
 
             with self.syncLock:
                 self.__workers_waiting[ident] = worker
