@@ -217,6 +217,9 @@ class WorkerRoom(ModuleDaemon):
 
     def __postProcessing(self) -> None:
 
+        candidates = self.__pManager.candidates()
+        self._WR_LOG(str([c.getIdent() for c in candidates]))
+
         if not self.isStable():
             return None
 
@@ -227,10 +230,6 @@ class WorkerRoom(ModuleDaemon):
         else:
             # Stepping
             self.__pManager.proto_step()
-
-        candidates = self.__pManager.candidates()
-        self._WR_LOG(str([c.getIdent() for c in candidates]))
-
 
     def __waiting_worker_update(self) -> None:
         try:
