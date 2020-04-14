@@ -269,7 +269,9 @@ class Processor(Module):
         address = cmd.address()
         port    = cmd.port()
 
-        pr = cInst.getModule(POST_PROVIDER_M_NAME) # type: PostProvider
+        pr = cInst.getModule(POST_PROVIDER_M_NAME) # type: Optional[PostProvider]
+        if pr is None:
+            return Error
         pr.setAddress(address, port)
 
         return Ok
@@ -353,7 +355,7 @@ class Processor(Module):
             sender.rtnUnRegister(provider.provide_step)
             cInst.removeModule(POST_PROVIDER_M_NAME)
 
-        provider = PostProvider(address, port)
+        provider = PostProvider(address, port, cInst)
 
         # PostConfigCmd will send from master to the worker
         # which role is listener and workers

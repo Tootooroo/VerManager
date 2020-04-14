@@ -12,7 +12,7 @@ from manager.master.workerRoom import WorkerRoom
 from manager.master.dispatcher import Dispatcher, workerLost_redispatch
 from manager.master.eventListener import EventListener, workerRegister
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler, postHandler
+    logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.basic.storage import Storage
 from manager.master.exceptions import INVALID_CONFIGURATIONS
@@ -78,6 +78,7 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.CmdResponse, postHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
         eventListener.registerEvent(Letter.Log, logHandler)
+        eventListener.registerEvent(Letter.Req, lisAddrUpdateHandler)
         self.addModule(eventListener)
 
         logDir = info.getConfig('LogDir')

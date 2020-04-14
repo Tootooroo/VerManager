@@ -18,6 +18,10 @@ from queue import Queue, Empty
 from manager.basic.util import spawnThread, map_strict
 from manager.master.logger import Logger
 
+from manager.basic.letter import Letter
+from manager.basic.commands import Command, LisAddrUpdateCmd
+from manager.master.task import Task
+
 from manager.master.postElectProtos import RandomElectProtocol
 from manager.master.postElection import PostManager, PostElectProtocol, Role_Listener, Role_Provider
 
@@ -157,7 +161,22 @@ class WorkerRoom(ModuleDaemon):
 
                     # Update worker's status.
                     workerInWait.sockSet(acceptedWorker.sockGet())
-                    workerInWait.setAddress(acceptedWorker.getAddress())
+
+                    arrived_addr, arrived_port = acceptedWorker.getAddress()
+                    old_addr, old_port         = workerInWait.getAddress()
+
+                    if arrived_addr != old_addr:
+                        workerInWait.setAddress((arrived_addr, arrived_port))
+
+                        # Broadcast command to all workers that online.
+                        #
+                        # Note: This update command will only broadcast
+                        #       to workers that in online state. These
+                        #       worker that in waiting state can acquire
+                        #       new address via request.
+                        cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
+                        self.broadcast(cmd)
+
                     workerInWait.setState(Worker.STATE_ONLINE)
 
                     self.addWorker(workerInWait)
@@ -266,8 +285,7 @@ class WorkerRoom(ModuleDaemon):
                 # Worker is a candidate
                 self.__pManager.removeCandidate(ident)
 
-            with self.syncLock:
-                self.__workers_waiting[ident] = worker
+            self.__workers_waiting[ident] = worker
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)
 
@@ -291,15 +309,16 @@ class WorkerRoom(ModuleDaemon):
             else:
                 # Remove this worker from PostManager
                 # if it's also a listener then set listener to None
-                self.__pManager.removeProvider(ident)
                 if self.__pManager.isListener(ident):
-                    self.__pManager.removeCandidate(ident)
                     self.__pManager.setListener(None)
+                    self.__pManager.removeCandidate(ident)
+                self.__pManager.removeProvider(ident)
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
 
         for w in outOfTime:
-            del self.__workers_waiting [w.getIdent()]
+            with self.syncLock:
+                del self.__workers_waiting [w.getIdent()]
 
     def hookRegister(self, hook: hookTuple) -> None:
         self.hooks.append(hook)
@@ -363,6 +382,30 @@ class WorkerRoom(ModuleDaemon):
 
     def getNumOfWorkersInWait(self) -> int:
         return len(self.__workers_waiting)
+
+    def broadcast(self, command:Command) -> None:
+        for w in self.__workers.values():
+            w.control(command)
+
+    def control(self, ident:str, command:Command) -> State:
+        try:
+            self.__workers[ident].control(command)
+        except KeyError:
+            return Error
+        except BrokenPipeError:
+            return Error
+
+        return Ok
+
+    def do(self, ident:str, t:Task) -> State:
+        try:
+            self.__workers[ident].do(t)
+        except KeyError:
+            return Error
+        except BrokenPipeError:
+            return Error
+
+        return Ok
 
     def removeWorker(self, ident: str) -> State:
         with self.lock:

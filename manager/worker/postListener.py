@@ -19,6 +19,7 @@ from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
 from ..basic.type import *
+from ..basic.request import LastLisAddrRequire
 
 from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
@@ -191,7 +192,10 @@ class PostListener(ModuleDaemon):
 
 class PostProvider(Module):
 
-    def __init__(self, address:str, port:int, connect:bool = False) -> None:
+    UPPER_LIMIT_TO_REQUIRE_ADDR = 10
+    ADDR_REQUIRE_INTERVAL = 5
+
+    def __init__(self, address:str, port:int, cInst:Any, connect:bool = False) -> None:
         global M_NAME_Provider
 
         Module.__init__(self, M_NAME_Provider)
@@ -200,11 +204,19 @@ class PostProvider(Module):
         self.__sock = None # type: Optional[socket.socket]
         self.__stuffQ = Queue(1024)  # type: Queue[BinaryLetter]
         self._Q_lock = Lock()
+        self.__cInst = cInst
 
         self._isStop = False
 
-        if connect:
-            self.connectToListener()
+        # If _num_of_failed reach the limit worker should
+        # acquire last address of listener from master.
+        self._upper_limit = PostProvider.UPPER_LIMIT_TO_REQUIRE_ADDR
+        # Num of failed to reconnect to PostListener
+        self._num_of_failed = 0
+        # Clock to control address request rate
+        self._last_time_to_acquire_addr = datetime.utcnow()
+
+        if connect: self.connectToListener()
 
     def setAddress(self, address:str, port:int) -> None:
         self.__address = address
@@ -242,7 +254,32 @@ class PostProvider(Module):
         if self.__sock is not None:
             self.disconnect()
 
-        return self.connectToListener(retry)
+        ret = self.connectToListener(retry)
+        if ret == Error:
+            self._num_of_failed += 1
+
+            # In that case worker should acquire last address
+            # of PostListener from master.
+            if self._num_of_failed >= self._upper_limit:
+                # Allow only one request to address in a 5 seconds.
+                now = datetime.utcnow()
+                interval = (now - self._last_time_to_acquire_addr).seconds
+                if interval < PostProvider.ADDR_REQUIRE_INTERVAL:
+                    return Error
+                else:
+                    self._last_time_to_acquire_addr = now
+
+                server = self.__cInst.getModule(SERVER_M_NAME) # type: Optional[Server]
+                if server is None:
+                    return Error
+
+                workerName = self.__cInst.getIdent()
+                req = LastLisAddrRequire(workerName)
+                server.transfer(req.toLetter())
+
+                self._num_of_failed = 0
+
+        return Ok
 
     def disconnect(self) -> None:
         if self.__sock is not None:

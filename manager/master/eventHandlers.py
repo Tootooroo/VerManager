@@ -9,7 +9,7 @@ from manager.basic.type import Ok, Error, State
 from manager.basic.letter import *
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
 
-from manager.basic.commands import PostConfigCmd
+from manager.basic.commands import PostConfigCmd, LisAddrUpdateCmd
 from manager.basic.storage import Storage, StoChooser
 
 from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME, Dispatcher
@@ -214,5 +214,27 @@ def postHandler(eventListener:EventListener, letter: Letter) -> None:
     wr = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
     wr.msgToPostManager(letter)
 
-def lisAddrUpdate(eventListener:EventListener, letter:Letter) -> None:
-    pass
+def lisAddrUpdateHandler(eventListener:EventListener, letter:Letter) -> None:
+    """
+    This handler does not to ensure that that last address
+    is successfully sended to worker.
+
+    This Handler may return before send command due to:
+    (1) There is no listener may cause of the election is in processed.
+    (2) Requested worker is lost after it sended this request
+    """
+    if not isinstance(letter, ReqLetter):
+        return None
+
+    wr = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: Optional[WorkerRoom]
+    if wr is None: return None
+
+    # Get listener's address.
+    lis = wr.postListener()
+    if lis is None: return None
+
+    addr, port = lis.getAddress()
+    command = LisAddrUpdateCmd(addr, port)
+    request_from = letter.getIdent()
+
+    wr.control(request_from, command)

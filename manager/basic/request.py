@@ -29,7 +29,6 @@ class Request(ABC):
         """ Generate a request from a ReqLetter """
 
 
-
 class LastLisAddrRequire(Request):
     """ A request to request last addr of listener """
 
