@@ -293,6 +293,7 @@ class WorkerRoom(ModuleDaemon):
                 # if it's also a listener then set listener to None
                 self.__pManager.removeProvider(ident)
                 if self.__pManager.isListener(ident):
+                    self.__pManager.removeCandidate(ident)
                     self.__pManager.setListener(None)
 
             map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
