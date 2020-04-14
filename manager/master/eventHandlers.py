@@ -213,3 +213,6 @@ def postHandler(eventListener:EventListener, letter: Letter) -> None:
 
     wr = eventListener.getModule(WORKER_ROOM_MOD_NAME) # type: WorkerRoom
     wr.msgToPostManager(letter)
+
+def lisAddrUpdate(eventListener:EventListener, letter:Letter) -> None:
+    pass

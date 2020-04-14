@@ -127,6 +127,14 @@ class Letter:
     # content :  "{}"
     LogRegister = 'logRegister'
 
+    """
+    Format of ReqLetter
+    Type : 'Req'
+    Header : {"type":...}
+    Content : {"content":"..."}
+    """
+    Req = "Req"
+
     BINARY_HEADER_LEN = 196
     BINARY_MIN_HEADER_LEN = 6
     LETTER_TYPE_LEN = 2
@@ -753,6 +761,42 @@ class LogRegLetter(Letter):
     def getLogId(self) -> str:
         return self.getHeader('logId')
 
+class ReqLetter(Letter):
+    """
+    Letter that send from workers to master to
+    request something.
+    """
+
+    def __init__(self, ident:str, type:str, reqMsg:str):
+        Letter.__init__(self, Letter.Req,
+                        {"ident":ident, "type":type},
+                        {"reqMsg":reqMsg})
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def getType(self) -> str:
+        return self.getHeader('type')
+
+    def setType(self, type:str) -> None:
+        self.setHeader('type', type)
+
+    def getMsg(self) -> str:
+        return self.getContent('reqMsg')
+
+    def setMsg(self, msg:str) -> None:
+        self.setContent('reqMsg', msg)
+
+    @staticmethod
+    def parse(s:bytes) -> Optional['ReqLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.Req:
+            return None
+
+        return ReqLetter(header['ident'], header['type'], content['reqMsg'])
+
+
 validityMethods = {
     Letter.NewTask        : newTaskLetterValidity,
     Letter.Response       : responseLetterValidity,
@@ -764,7 +808,8 @@ validityMethods = {
     Letter.Command        : lambda letter:  True,
     Letter.CmdResponse    : lambda letter:  True,
     Letter.Post           : lambda letter:  True,
-    Letter.TaskCancel     : lambda letter:  True
+    Letter.TaskCancel     : lambda letter:  True,
+    Letter.Req            : lambda letter:  True
 } # type:  Dict[str, Callable]
 
 parseMethods = {
@@ -778,7 +823,8 @@ parseMethods = {
     Letter.Command        : CommandLetter,
     Letter.CmdResponse    : CmdResponseLetter,
     Letter.Post           : PostTaskLetter,
-    Letter.TaskCancel     : CancelLetter
+    Letter.TaskCancel     : CancelLetter,
+    Letter.Req            : ReqLetter
 } # type:  Any
 
 import socket
