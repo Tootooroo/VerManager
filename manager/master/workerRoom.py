@@ -165,17 +165,18 @@ class WorkerRoom(ModuleDaemon):
                     arrived_addr, arrived_port = acceptedWorker.getAddress()
                     old_addr, old_port         = workerInWait.getAddress()
 
-                    if arrived_addr != old_addr:
-                        workerInWait.setAddress((arrived_addr, arrived_port))
+                    if self.__pManager.isListener(workerInWait.getIdent()):
+                        if arrived_addr != old_addr:
+                            workerInWait.setAddress((arrived_addr, arrived_port))
 
-                        # Broadcast command to all workers that online.
-                        #
-                        # Note: This update command will only broadcast
-                        #       to workers that in online state. These
-                        #       worker that in waiting state can acquire
-                        #       new address via request.
-                        cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
-                        self.broadcast(cmd)
+                            # Broadcast command to all workers that online.
+                            #
+                            # Note: This update command will only broadcast
+                            #       to workers that in online state. These
+                            #       worker that in waiting state can acquire
+                            #       new address via request.
+                            cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
+                            self.broadcast(cmd)
 
                     workerInWait.setState(Worker.STATE_ONLINE)
 

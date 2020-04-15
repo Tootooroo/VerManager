@@ -109,8 +109,6 @@ class ElectGroup:
             if beRemoved == []:
                 return None
             else:
-                assert(len(beRemoved) == 1)
-
                 self.__candidate = remain
                 return beRemoved[0]
 
