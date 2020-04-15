@@ -215,20 +215,22 @@ class Dispatcher(ModuleDaemon):
     def run(self) -> None:
         counter = 0
 
+        last_aging = datetime.utcnow()
+        needAging = lambda now, last: (now - last).seconds > 1
 
         while True:
-            # Remove oudated tasks
-            self.__taskAging()
+
+            # Aging
+            now = datetime.utcnow()
+            if needAging(now, last_aging):
+                # Remove oudated tasks
+                self.__taskAging()
+
+                last_aging = now
 
             # Is there any task in taskWait queue
             # fixme: need to setup a timeout value
             isArrived = self.taskEvent.wait(2)
-            if not isArrived or counter % 5 == 0:
-                if counter > 10000:
-                    counter = 0
-
-                counter += 1
-                continue
 
             if len(self.taskWait) == 0:
                 self.__dispatch_logging("TaskWait Queue is empty.")
@@ -415,7 +417,6 @@ class Dispatcher(ModuleDaemon):
 
 
 # Hooks will be registered into WorkerRoom
-
 def workerLost_redispatch(w: Worker, args:Any) -> None:
     tasks = w.inProcTasks()
     dispatcher = args[0]
