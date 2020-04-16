@@ -8,9 +8,10 @@ from manager.basic.type import Ok, Error, State
 from manager.basic.mmanager import MManager, Module
 from manager.basic.info import Info
 from manager.basic.letter import Letter
-from manager.master.workerRoom import WorkerRoom
-from manager.master.dispatcher import Dispatcher, workerLost_redispatch
-from manager.master.eventListener import EventListener, workerRegister
+from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
+from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
+    workerLost_redispatch
+from manager.master.eventListener import EventListener, workerRegister, M_NAME as EVENT_M_NAME
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
@@ -72,7 +73,7 @@ class ServerInst(Thread):
         dispatcher = Dispatcher(workerRoom, self)
         self.addModule(dispatcher)
 
-        eventListener = EventListener(workerRoom, self)
+        eventListener = EventListener(self)
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
         eventListener.registerEvent(Letter.CmdResponse, postHandler)
@@ -91,9 +92,24 @@ class ServerInst(Thread):
         revSyncner = RevSync(self)
         self.addModule(revSyncner)
 
+        # Subscribe to subjects
+        eventListener.subscribe(workerRoom)
+        workerRoom.subscribe(eventListener)
+        workerRoom.subscribe(dispatcher)
+        dispatcher.subscribe(workerRoom)
 
-        workerRoom.hookRegister((workerRegister, [eventListener]))
-        workerRoom.disconnHookRegister((workerLost_redispatch, [dispatcher, workerRoom]))
+        # Install observer handlers to EventListener
+        eventListener.handler_install(WR_M_NAME, lambda data: workerRegister(eventListener, data))
+
+        # Install observer handlers to WorkerRoom
+        wr_handler_disconn = lambda data: workerRoom.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED,
+                                                              data)
+        workerRoom.handler_install(EVENT_M_NAME, wr_handler_disconn)
+        workerRoom.handler_install(DISPATCHER_M_NAME, lambda data: workerRoom.tasks_clear())
+
+        # Install observer handlers to Dispatcher
+        handler_dispatcher = lambda data: workerLost_redispatch(dispatcher, data)
+        dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
 
         self.__mmanager.startAll()
 

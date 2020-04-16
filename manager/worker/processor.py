@@ -16,6 +16,7 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
     CancelLetter
 
+from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
 from ..basic.util import partition, excepHandle, pathSeperator, execute_shell, \
@@ -38,7 +39,7 @@ from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
     CMD_LIS_ADDR_UPDATE
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
-CommandHandler = Callable[[CommandLetter, Info, Any], State]
+CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
 
 M_NAME = "Processor"
 LOG_ID = "Processor"
@@ -55,12 +56,13 @@ class Result:
         self.isSuccess = isSuccess
         self.menuId = mid
 
-
-class Processor(Module):
+class Processor(Module, Subject):
 
     def __init__(self, info:Info, cInst:Any) -> None:
         global M_NAME
+
         Module.__init__(self, M_NAME)
+        Subject.__init__(self, M_NAME)
 
         self.__max = int(info.getConfig('MAX_TASK_CAN_PROC'))
         self.__numOfTasksInProc = 0
@@ -132,7 +134,7 @@ class Processor(Module):
 
         if type == CancelLetter.TYPE_SINGLE:
             if ident in self.__shell_events:
-                self.sotp_task(ident)
+                self.stop_task(ident)
             else:
                 return Error
 
@@ -239,10 +241,10 @@ class Processor(Module):
 
         handler = cmdHandlers[type]
 
-        return handler(cmdLetter, self.__info, self.__cInst)
+        return handler(self, cmdLetter, self.__info, self.__cInst)
 
     @staticmethod
-    def post_config(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def post_config(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
 
         cmd = PostConfigCmd.fromLetter(cmdLetter)
 
@@ -254,30 +256,35 @@ class Processor(Module):
         role = cmd.role()
 
         if role is PostConfigCmd.ROLE_LISTENER:
-            return Processor.__postListener_config(address, port, info, cInst)
+            return Processor.__postListener_config(p, address, port, info, cInst)
         elif role is PostConfigCmd.ROLE_PROVIDER:
-            return Processor.__postProvider_config(address, port, info, cInst)
+            return Processor.__postProvider_config(p, address, port, info, cInst)
 
         return Error
 
     @staticmethod
-    def lisAddrUpdate(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def lisAddrUpdate(p: 'Processor', cmdLetter:CommandLetter,
+                      info:Info, cInst:Any) -> State:
+
         cmd = LisAddrUpdateCmd.fromLetter(cmdLetter)
         if cmd is None:
             return Error
 
         address = cmd.address()
-        port    = cmd.port()
 
-        pr = cInst.getModule(POST_PROVIDER_M_NAME) # type: Optional[PostProvider]
-        if pr is None:
-            return Error
-        pr.setAddress(address, port)
+        # PostListener update
+        if cInst.isModuleExists(POST_LISTENER_M_NAME):
+            p.notify((0, address))
+
+        # PostProvider update
+        if cInst.isModuleExists(POST_PROVIDER_M_NAME):
+            p.notify((1, address))
 
         return Ok
 
     @staticmethod
-    def accepted_command(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def accepted_command(p: 'Processor', cmdLetter:CommandLetter,
+                         info:Info, cInst:Any) -> State:
         """
         Worker has been accepted by master so worker is able to transfer messages
         to master.
@@ -290,7 +297,8 @@ class Processor(Module):
         return Ok
 
     @staticmethod
-    def accepted_reset_command(cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def accepted_reset_command(p:'Processor', cmdLetter:CommandLetter,
+                               info:Info, cInst:Any) -> State:
         """
         Worker should be reset itself before it transfer any data to master.
         """
@@ -325,17 +333,28 @@ class Processor(Module):
         server.drop_all_messages()
 
         # Set to accept state
-        return Processor.accepted_command(cmdLetter, info, cInst)
-
+        return Processor.accepted_command(p, cmdLetter, info, cInst)
 
     @staticmethod
-    def __postListener_config(address:str, port:int, info:Info, cInst:Any) -> State:
+    def __postListener_config(p:'Processor', address:str,
+                              port:int, info:Info, cInst:Any) -> State:
 
         if not cInst.isModuleExists(POST_LISTENER_M_NAME):
             pl = PostListener(address, port, cInst)
             pl.start()
 
+            p.subscribe(pl)
+            pl.handler_install(M_NAME, pl.address_update)
+
             cInst.addModule(pl)
+        else:
+            """
+            A PostListener is already exists on this worker
+            so need to create a new one. But the address
+            used by the listener may out of date. Need
+            to notify a new address to the PostListener.
+            """
+            p.notify((0, address))
 
         # Resposne to configuration command
         server = cInst.getModule(SERVER_M_NAME)
@@ -347,32 +366,33 @@ class Processor(Module):
         return Ok
 
     @staticmethod
-    def __postProvider_config(address:str, port:int, info:Info, cInst:Any) -> State:
+    def __postProvider_config(p:'Processor', address:str, port:int, info:Info, cInst:Any) -> State:
 
         sender = cInst.getModule(SENDER_M_NAME)
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
-            provider = cInst.getModule(POST_PROVIDER_M_NAME)
-            sender.rtnUnRegister(provider.provide_step)
-            cInst.removeModule(POST_PROVIDER_M_NAME)
+            p.notify((1, address))
+        else:
+            provider = PostProvider(address, port, cInst)
 
-        provider = PostProvider(address, port, cInst)
+            # PostConfigCmd will send from master to the worker
+            # which role is listener and workers
+            # that role is provider at the same
+            # time so command to provider may arrived before command
+            # to listener arrived. Give retry chance here to make sure
+            # provider is able to connect to listener.
+            retry = 3
 
-        # PostConfigCmd will send from master to the worker
-        # which role is listener and workers
-        # that role is provider at the same
-        # time so command to provider may arrived before command
-        # to listener arrived. Give retry chance here to make sure
-        # provider is able to connect to listener.
-        retry = 3
+            while retry > 0:
+                if provider.connectToListener() is Ok:
+                    break
+                time.sleep(1)
 
-        while retry > 0:
-            if provider.connectToListener() is Ok:
-                break
-            time.sleep(1)
+            sender.rtnRegister(provider.provide_step)
 
-        sender.rtnRegister(provider.provide_step)
+            p.subscribe(provider)
+            provider.handler_install(M_NAME, provider.address_update)
 
-        cInst.addModule(provider)
+            cInst.addModule(provider)
 
         # Response to configuraton command
         server = cInst.getModule(SERVER_M_NAME)
@@ -383,7 +403,7 @@ class Processor(Module):
 
         return Ok
 
-    def sotp_task(self, taskId:str) -> None:
+    def stop_task(self, taskId:str) -> None:
         if taskId in self.__shell_events:
             self.__shell_events[taskId].set()
 

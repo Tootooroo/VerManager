@@ -27,6 +27,7 @@ from queue import Queue, Empty as Q_Empty
 
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.worker.server import M_NAME as SERVER_M_NAME, Server
+from manager.basic.observer import Observer
 
 ReqIdent = Tuple[str, str]
 
@@ -138,15 +139,18 @@ class LinuxPorts(ProviderPorts):
         return fd in self.__socks
 
 
-class PostListener(ModuleDaemon):
+class PostListener(ModuleDaemon, Observer):
 
     def __init__(self, address:str, port:int, cInst:Any) -> None:
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
+        Observer.__init__(self)
 
+        self._sock = None # type: Optional[socket.socket]
         self._isStop = False
         self.__address = address
         self.__port = port
+        self._master_lock = Lock()
 
         self.__cInst = cInst
         self.__processor = PostProcessor(cInst)
@@ -161,25 +165,72 @@ class PostListener(ModuleDaemon):
     def postRemoveAll(self) -> None:
         self.__processor.removeAllPost()
 
+    def masterSock(self) -> State:
+        with self._master_lock:
+
+            if self._sock is not None:
+                return Ok
+
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.bind((self.__address, self.__port))
+                s.listen(10)
+                s.settimeout(5)
+
+                self._sock = s
+            except:
+                self._sock = None
+                return Error
+
+        return Ok
+
+
+    def address_update(self, data:Tuple[int, str]) -> None:
+        """
+        Handler to processing message from processor that about
+        the listener's address is changed.
+        """
+        role, address = data
+
+        # PostListener should not to concern
+        # such a message.
+        if role != 0:
+            return None
+
+        if self.__address != address:
+            self.__address = address
+
+            if self._sock is not None:
+                self._sock.shutdown(socket.SHUT_RDWR)
+                self._sock.close()
+
+            self._sock = None
+
     def run(self) -> None:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self.__address, self.__port))
-        s.listen(10)
 
-        s.settimeout(5)
-
+        self.masterSock()
         self.__processor.start()
 
         while True:
-
             if self._isStop:
                 self.__processor.stop()
-                s.close()
+                if self._sock is not None:
+                    self._sock.close()
+
                 break
 
+            if self._sock is None:
+                if self.masterSock() == Error:
+                    time.sleep(3)
+                    continue
+
             try:
-                (wSock, addr) = s.accept()
+                (wSock, addr) = self._sock.accept() # type: ignore
             except socket.timeout:
+                continue
+            except AttributeError:
+                # self._sock may be None during
+                # PostListener's addres updating
                 continue
 
             wSock.settimeout(3)
@@ -190,7 +241,7 @@ class PostListener(ModuleDaemon):
     def stop(self) -> None:
         self._isStop = True
 
-class PostProvider(Module):
+class PostProvider(Module, Observer):
 
     UPPER_LIMIT_TO_REQUIRE_ADDR = 10
     ADDR_REQUIRE_INTERVAL = 5
@@ -199,6 +250,8 @@ class PostProvider(Module):
         global M_NAME_Provider
 
         Module.__init__(self, M_NAME_Provider)
+        Observer.__init__(self)
+
         self.__address = address
         self.__port = port
         self.__sock = None # type: Optional[socket.socket]
@@ -221,6 +274,18 @@ class PostProvider(Module):
     def setAddress(self, address:str, port:int) -> None:
         self.__address = address
         self.__port = port
+
+    def address_update(self, data: Tuple[int, str]) -> None:
+
+        role, address = data
+
+        # PostProvider should not to concern such
+        # a message.
+        if role != 1:
+            return None
+
+        if self.__address != address:
+            self.setAddress(address, 8066)
 
     def connectToListener(self, retry:int = 0) -> State:
         retry += 1
@@ -299,7 +364,7 @@ class PostProvider(Module):
         inProcessing = True
 
         if self.__sock is None:
-            if self.connectToListener() == Error:
+            if self.reconnect() == Error:
                 return Error
 
         with self._Q_lock:

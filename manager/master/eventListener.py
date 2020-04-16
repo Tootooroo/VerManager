@@ -7,14 +7,13 @@ import select
 from typing import *
 
 from manager.master.exceptions import *
+from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker, Task
 from manager.basic.type import *
-from manager.master.workerRoom import WorkerRoom
 from manager.basic.letter import Letter, BinaryLetter
 
 from manager.master.logger import M_NAME as LOGGER_M_NAME
-from manager.master.workerRoom import M_NAME as WORKER_M_NAME
 
 import traceback
 
@@ -25,16 +24,23 @@ letterLog = "letterLog"
 
 Handler = Callable[['EventListener', Letter], None]
 
-class EventListener(ModuleDaemon):
+class EventListener(ModuleDaemon, Subject, Observer):
 
-    def __init__(self, workerRoom: WorkerRoom, inst:Any) -> None:
+    def __init__(self, inst:Any) -> None:
         global letterLog, M_NAME
 
         self.__sInst = inst
 
+        # Init as module
         ModuleDaemon.__init__(self, M_NAME)
+
+        # Init as Subject
+        Subject.__init__(self, M_NAME)
+
+        # Init as Observer
+        Observer.__init__(self)
+
         self.entries = select.poll()
-        self.workers = workerRoom
         self.numOfEntries = 0
 
         # Handler in handlers should be unique
@@ -65,40 +71,8 @@ class EventListener(ModuleDaemon):
         sock = worker.sock
         self.entries.register(sock.fileno(), select.POLLIN)
 
-    def fdUnregister(self, ident: str) -> None:
-        workers = self.getModule(WORKER_M_NAME)
-        worker = workers.getWorker()
-
-        if not worker is None:
-            sock = worker.sock
-
-        self.entries.unregister(sock.fileno())
-
-    def addWorker(self, worker: Worker) -> State:
-        ident = worker.getIdent()
-        isNotExists = not self.workers.isExists(ident)
-
-        if isNotExists:
-            self.workers.addWorker(worker)
-            # Register socket into entries
-            sock = worker.sock
-            self.entries.register(sock.fileno(), select.POLLIN)
-            self.entries.register(sock.fileno(), select.POLLERR)
-            return Ok
-
-        return Error
-
-    def removeWorker(self, ident) -> State:
-        worker = self.workers.getWorker(ident)
-
-        if not worker is None:
-            # Unregister the socket from poll object
-            self.entries.unregister(worker.sockGet())
-            # remove worker
-            self.workers.removeWorker(ident)
-            return Ok
-
-        return Error
+    def fdUnregister(self, fd) -> None:
+        self.entries.unregister(fd)
 
     def Acceptor(self, letter: Letter) -> None:
         # Check letter's type
@@ -144,7 +118,8 @@ class EventListener(ModuleDaemon):
                         continue
                 except:
                     traceback.print_exc()
-                    self.workers.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED, fd)
+                    # Notify observers that a connection is lost.
+                    self.notify(fd)
                     self.entries.unregister(fd)
                     continue
 
@@ -153,7 +128,12 @@ class EventListener(ModuleDaemon):
                         logger.log_put(letterLog, "Receive: " + letter.toString())
                     self.Acceptor(letter)
 
-# Hooks
-def workerRegister(worker:Worker, args:Any) -> None:
-    eventListener = args[0]
-    eventListener.fdRegister(worker)
+def workerRegister(eventListener: EventListener,
+                   data:Tuple[int, Worker]) -> None:
+    event, worker = data
+
+    if event == 0:
+        # A worker is Connected need to listene to it.
+        eventListener.fdRegister(worker)
+    else:
+        return None

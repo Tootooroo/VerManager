@@ -13,6 +13,7 @@ from functools import reduce
 from datetime import datetime
 
 from threading import Lock, Event
+from manager.basic.observer import Subject, Observer
 from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
@@ -21,15 +22,20 @@ from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
 from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask, TaskType
 from manager.basic.type import *
-from manager.master.workerRoom import WorkerRoom
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
+from manager.master.workerRoom import WorkerRoom
 
-class Dispatcher(ModuleDaemon):
+class Dispatcher(ModuleDaemon, Subject, Observer):
 
     def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
         global M_NAME
+
         ModuleDaemon.__init__(self, M_NAME)
+
+        Subject.__init__(self, M_NAME)
+
+        Observer.__init__(self)
 
         self.__sInst = inst
 
@@ -409,24 +415,23 @@ class Dispatcher(ModuleDaemon):
 
         task.lastUpdate()
 
-    def addWorkers(self, w: Worker) -> State:
-        return self.__workers.addWorker(w)
+def workerLost_redispatch(dispatcher: Dispatcher, data: Tuple[int, Worker]) -> None:
 
-    def removeWorkers(self, ident: str) -> State:
-        return self.__workers.removeWorker(ident)
+    event, worker = data
 
+    if event != 1:
+        return None
 
-# Hooks will be registered into WorkerRoom
-def workerLost_redispatch(w: Worker, args:Any) -> None:
-    tasks = w.inProcTasks()
-    dispatcher = args[0]
-    workerRoom = args[1]
+    if not isinstance(worker, Worker):
+        return None
+
+    tasks = worker.inProcTasks()
 
     for t in tasks:
         assert(isinstance(t, SingleTask) or isinstance(t, PostTask))
 
         # Not to redispatch tasks that need post-processing.
-        if w.role is Role_Listener and t.isAChild():
+        if worker.role is Role_Listener and t.isAChild():
             parent = t.getParent()
             assert(parent is not None)
 
@@ -446,10 +451,8 @@ def workerLost_redispatch(w: Worker, args:Any) -> None:
 
 
     # Remove all tasks in failure state.
-    if w.role is Role_Listener:
-        workers = workerRoom.getWorkerWithCond(lambda w_set: w_set)
-        for w in workers:
-            w.removeTaskWithCond(lambda t: t.isFailure())
+    if worker.role is Role_Listener:
+        dispatcher.notify(None)
 
 # Misc
 

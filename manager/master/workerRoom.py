@@ -8,6 +8,7 @@ from datetime import datetime
 
 from threading import Lock
 
+from manager.basic.observer import Subject, Observer
 from manager.basic.type import *
 from manager.master.worker import Worker, WorkerInitFailed
 
@@ -44,7 +45,7 @@ filterFunc = Callable[[List[Worker]], List[Worker]]
 # Constant
 wrLog = "wrLog"
 
-class WorkerRoom(ModuleDaemon):
+class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     WAITING_INTERVAL = 300
 
@@ -55,7 +56,14 @@ class WorkerRoom(ModuleDaemon):
     def __init__(self, host:str, port:int, sInst:Any) -> None:
         global M_NAME
 
+        # Module init
         ModuleDaemon.__init__(self, M_NAME)
+
+        # Subject init
+        Subject.__init__(self, M_NAME)
+
+        # Observer init
+        Observer.__init__(self)
 
         configs = sInst.getModule(INFO_M_NAME)
 
@@ -79,12 +87,6 @@ class WorkerRoom(ModuleDaemon):
         self.numOfWorkers = 0
 
         self.__eventQueue = Queue(256) # type: Queue
-
-        # Collection of methods to be run after a worker is accepted by WorkerRoom
-        self.hooks = [] # type: List[hookTuple]
-
-        self.waitingStateHooks = [] # type: List[hookTuple]
-        self.disconnStateHooks = [] # type: List[hookTuple]
 
         self._lisAddr = ("", 0)
 
@@ -165,6 +167,12 @@ class WorkerRoom(ModuleDaemon):
                     arrived_addr, arrived_port = acceptedWorker.getAddress()
                     old_addr, old_port         = workerInWait.getAddress()
 
+                    # Note: Need to setup worker's status before listener address update
+                    #       otherwise listener itself will unable to know address changed.
+                    workerInWait.setState(Worker.STATE_ONLINE)
+                    self.addWorker(workerInWait)
+                    del self.__workers_waiting [ident]
+
                     if self.__pManager.isListener(workerInWait.getIdent()):
                         if arrived_addr != old_addr:
                             workerInWait.setAddress((arrived_addr, arrived_port))
@@ -178,11 +186,7 @@ class WorkerRoom(ModuleDaemon):
                             cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
                             self.broadcast(cmd)
 
-                    workerInWait.setState(Worker.STATE_ONLINE)
-
-                    self.addWorker(workerInWait)
-                    del self.__workers_waiting [ident]
-                    map_strict(lambda hook: hook[0](workerInWait, hook[1]), self.hooks)
+                    self.notify((WorkerRoom.EVENT_CONNECTED, workerInWait))
 
                     # Send an accept command to the worker
                     # so it able to transfer message.
@@ -200,7 +204,7 @@ class WorkerRoom(ModuleDaemon):
                 self.addWorker(acceptedWorker)
                 self.__pManager.addCandidate(acceptedWorker)
 
-                map_strict(lambda hook: hook[0](acceptedWorker, hook[1]), self.hooks)
+                self.notify((WorkerRoom.EVENT_CONNECTED, acceptedWorker))
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
@@ -288,7 +292,7 @@ class WorkerRoom(ModuleDaemon):
 
             self.__workers_waiting[ident] = worker
 
-            map_strict(lambda hook: hook[0](worker, hook[1]), self.waitingStateHooks)
+            self.notify((WorkerRoom.EVENT_WAITING, worker))
 
     def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
@@ -315,20 +319,11 @@ class WorkerRoom(ModuleDaemon):
                     self.__pManager.removeCandidate(ident)
                 self.__pManager.removeProvider(ident)
 
-            map_strict(lambda hook: hook[0](worker, hook[1]), self.disconnStateHooks)
+            self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
 
         for w in outOfTime:
             with self.syncLock:
                 del self.__workers_waiting [w.getIdent()]
-
-    def hookRegister(self, hook: hookTuple) -> None:
-        self.hooks.append(hook)
-
-    def waitingHookRegister(self, hook: hookTuple) -> None:
-        self.waitingStateHooks.append(hook)
-
-    def disconnHookRegister(self, hook: hookTuple) -> None:
-        self.disconnStateHooks.append(hook)
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self.__eventQueue.put((eventType, ident))
@@ -418,6 +413,11 @@ class WorkerRoom(ModuleDaemon):
             self.__changePoint()
 
         return Ok
+
+    def tasks_clear(self) -> None:
+        """ Remove all failure tasks from all workers """
+        for w in self.__workers.values():
+            w.removeTaskWithCond(lambda t: t.isFailure())
 
     # Content of dictionary:
     # { PropertyName:PropertyValue }
