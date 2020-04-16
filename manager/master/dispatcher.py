@@ -28,7 +28,7 @@ from manager.master.workerRoom import WorkerRoom
 
 class Dispatcher(ModuleDaemon, Subject, Observer):
 
-    def _init_(self, workerRoom:WorkerRoom, inst:Any) -> None:
+    def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
