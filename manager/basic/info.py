@@ -17,11 +17,11 @@ class Info(Module):
 
         Module.__init__(self, M_NAME)
         with open(cfgPath, "r") as f:
-            self.__config = load(f, Loader=SafeLoader)
+            self._config = load(f, Loader=SafeLoader)
 
 
     def getConfig(self, *cfgKeys) -> typing.Any:
-        cfgValue = self.__config
+        cfgValue = self._config
 
         try:
             for i in cfgKeys:
@@ -33,8 +33,8 @@ class Info(Module):
 
     # Value of the dict may be a string may be a dict
     def getConfigs(self) -> typing.Dict[str, typing.Any]:
-        return self.__config
+        return self._config
 
     def validityChecking(self, predicates) -> bool:
-        results = list(map(lambda p: p(self.__config), predicates))
+        results = list(map(lambda p: p(self._config), predicates))
         return reduce(lambda acc, curr: acc and curr, results)

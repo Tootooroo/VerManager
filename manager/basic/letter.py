@@ -239,10 +239,10 @@ class Letter:
         if int.from_bytes(s[: 2], "big") == 1:
             return BinaryLetter.parse(s)
         else:
-            return Letter.__parse(s)
+            return Letter._parse(s)
 
     @staticmethod
-    def __parse(s:  bytes) -> Optional['Letter']:
+    def _parse(s:  bytes) -> Optional['Letter']:
         try:
             letter = s[2: ].decode()
         except:
@@ -767,7 +767,7 @@ class ReqLetter(Letter):
     request something.
     """
 
-    def __init__(self, ident:str, type:str, reqMsg:str):
+    def __init__(self, ident:str, type:str, reqMsg:str) -> None:
         Letter.__init__(self, Letter.Req,
                         {"ident":ident, "type":type},
                         {"reqMsg":reqMsg})

@@ -61,14 +61,14 @@ class Worker:
         # counters[STATE_WAITING] : wait_counter
         # counters[STATE_OFFLINE] : offline_counter
         self.counters = [0, 0, 0]
-        self.__clock = datetime.now()
+        self._clock = datetime.now()
 
     def active(self) -> None:
         # Prevent permanent blocking from waiting for PropertyNotify from worker
         self.sock.settimeout(10)
 
         try:
-            l = self.__recv()
+            l = self._recv()
 
             if l is None:
                 raise WorkerInitFailed()
@@ -82,7 +82,7 @@ class Worker:
             self.max = l.propNotify_MAX()
             self.ident = l.propNotify_IDENT()
             self.state = Worker.STATE_ONLINE
-            self.__clock = datetime.utcnow()
+            self._clock = datetime.utcnow()
         else:
             raise WorkerInitFailed()
 
@@ -93,19 +93,19 @@ class Worker:
         return self.sock
 
     def waitCounter(self) -> int:
-        self.__counterSync()
+        self._counterSync()
         return self.counters[Worker.STATE_WAITING]
 
     def offlineCounter(self) -> int:
-        self.__counterSync()
+        self._counterSync()
         return self.counters[Worker.STATE_OFFLINE]
 
     def onlineCounter(self) -> int:
-        self.__counterSync()
+        self._counterSync()
         return self.counters[Worker.STATE_ONLINE]
 
-    def __counterSync(self) -> None:
-        delta = datetime.utcnow() - self.__clock
+    def _counterSync(self) -> None:
+        delta = datetime.utcnow() - self._clock
         self.counters[self.state] = delta.seconds
 
     def setState(self, s: WorkerState) -> None:
@@ -113,7 +113,7 @@ class Worker:
             self.counters[self.state] = 0
 
         self.state = s
-        self.__clock = datetime.utcnow()
+        self._clock = datetime.utcnow()
 
     def getAddress(self) -> Tuple[str, int]:
         return self.address
@@ -159,7 +159,7 @@ class Worker:
 
     def control(self, cmd:Command) -> None:
         letter = cmd.toLetter()
-        self.__send(letter)
+        self._send(letter)
 
     def do(self, task: Task) -> None:
         letter = task.toLetter()
@@ -167,7 +167,7 @@ class Worker:
         if letter is None:
             raise Exception
 
-        self.__send(letter)
+        self._send(letter)
 
         # Register task into task group
         task.toProcState()
@@ -186,11 +186,11 @@ class Worker:
         letter = CancelLetter(id, CancelLetter.TYPE_SINGLE)
 
         if isinstance(task, SingleTask):
-            self.__send(letter)
+            self._send(letter)
 
         elif isinstance(task, PostTask):
             letter.setType(CancelLetter.TYPE_POST)
-            self.__send(letter)
+            self._send(letter)
 
         self.inProcTask.remove(id)
 
@@ -211,10 +211,10 @@ class Worker:
     def sending(sock: socket.socket, l: Letter) -> None:
         return letter_sending(sock, l)
 
-    def __recv(self) -> Optional[Letter]:
+    def _recv(self) -> Optional[Letter]:
         return Worker.receving(self.sock)
 
-    def __send(self, l: Letter) -> None:
+    def _send(self, l: Letter) -> None:
         try:
             with self.sendLock: Worker.sending(self.sock, l)
         except BrokenPipeError:

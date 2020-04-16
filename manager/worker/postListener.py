@@ -75,35 +75,35 @@ class ProviderPorts(abc.ABC):
 class WindowsPorts(ProviderPorts):
 
     def __init__(self) -> None:
-        self.__providers = [] # type: List[socket.socket]
+        self._providers = [] # type: List[socket.socket]
 
     def register(self, sock:socket.socket) -> None:
         if self.isExists(sock.fileno()):
             return None
 
-        self.__providers.append(sock)
+        self._providers.append(sock)
 
     def unregister(self, fd:int) -> None:
         if not self.isExists(fd):
             return None
 
-        self.__providers = [
+        self._providers = [
             provider
-            for provider in self.__providers
+            for provider in self._providers
             if provider.fileno() != fd
         ]
 
     def isExists(self, fd:int) -> bool:
-        return fd in [sock.fileno() for sock in self.__providers]
+        return fd in [sock.fileno() for sock in self._providers]
 
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
 
-        if self.__providers == []:
+        if self._providers == []:
             time.sleep(timeout)
             return []
 
         readies_r, readies_w, readies_x = \
-            select.select(self.__providers, [], [], timeout)
+            select.select(self._providers, [], [], timeout)
 
         return list(zip(readies_r, [0] * len(readies_r)))
 
@@ -111,32 +111,32 @@ class WindowsPorts(ProviderPorts):
 class LinuxPorts(ProviderPorts):
 
     def __init__(self) -> None:
-        self.__socks = {} # type: Dict[int, socket.socket]
-        self.__providers = select.poll()
+        self._socks = {} # type: Dict[int, socket.socket]
+        self._providers = select.poll()
 
     def register(self, sock:socket.socket) -> None:
         fd = sock.fileno()
 
-        if fd in self.__socks:
+        if fd in self._socks:
             return None
 
-        self.__socks[fd] = sock
-        self.__providers.register(fd, select.POLLIN)
+        self._socks[fd] = sock
+        self._providers.register(fd, select.POLLIN)
 
     def unregister(self, fd) -> None:
-        if fd in self.__socks:
-            del self.__socks [fd]
-            self.__providers.unregister(fd)
+        if fd in self._socks:
+            del self._socks [fd]
+            self._providers.unregister(fd)
         else:
             return None
 
     def wait(self, timeout:int) -> List[Tuple[socket.socket, int]]:
         timeout_seconds = timeout * 1000
-        readies = self.__providers.poll(timeout)
-        return [(self.__socks[fd], event) for (fd, event) in readies]
+        readies = self._providers.poll(timeout)
+        return [(self._socks[fd], event) for (fd, event) in readies]
 
     def isExists(self, fd:int) -> bool:
-        return fd in self.__socks
+        return fd in self._socks
 
 
 class PostListener(ModuleDaemon, Observer):
@@ -148,22 +148,22 @@ class PostListener(ModuleDaemon, Observer):
 
         self._sock = None # type: Optional[socket.socket]
         self._isStop = False
-        self.__address = address
-        self.__port = port
+        self._address = address
+        self._port = port
         self._master_lock = Lock()
 
-        self.__cInst = cInst
-        self.__processor = PostProcessor(cInst)
+        self._cInst = cInst
+        self._processor = PostProcessor(cInst)
 
     def postAppend(self, postLetter:'PostTaskLetter') -> None:
         post = Post.fromPostLetter(postLetter) # type: Post
-        self.__processor.appendPost(post)
+        self._processor.appendPost(post)
 
     def postRemove(self, version:str) -> None:
-        self.__processor.removePost(version)
+        self._processor.removePost(version)
 
     def postRemoveAll(self) -> None:
-        self.__processor.removeAllPost()
+        self._processor.removeAllPost()
 
     def masterSock(self) -> State:
         with self._master_lock:
@@ -173,7 +173,7 @@ class PostListener(ModuleDaemon, Observer):
 
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.bind((self.__address, self.__port))
+                s.bind((self._address, self._port))
                 s.listen(10)
                 s.settimeout(5)
 
@@ -197,8 +197,8 @@ class PostListener(ModuleDaemon, Observer):
         if role != 0:
             return None
 
-        if self.__address != address:
-            self.__address = address
+        if self._address != address:
+            self._address = address
 
             if self._sock is not None:
                 self._sock.shutdown(socket.SHUT_RDWR)
@@ -209,11 +209,11 @@ class PostListener(ModuleDaemon, Observer):
     def run(self) -> None:
 
         self.masterSock()
-        self.__processor.start()
+        self._processor.start()
 
         while True:
             if self._isStop:
-                self.__processor.stop()
+                self._processor.stop()
                 if self._sock is not None:
                     self._sock.close()
 
@@ -236,7 +236,7 @@ class PostListener(ModuleDaemon, Observer):
             wSock.settimeout(3)
             sockKeepalive(wSock, 10, 3)
 
-            self.__processor.req(wSock)
+            self._processor.req(wSock)
 
     def stop(self) -> None:
         self._isStop = True
@@ -252,12 +252,12 @@ class PostProvider(Module, Observer):
         Module.__init__(self, M_NAME_Provider)
         Observer.__init__(self)
 
-        self.__address = address
-        self.__port = port
-        self.__sock = None # type: Optional[socket.socket]
-        self.__stuffQ = Queue(1024)  # type: Queue[BinaryLetter]
+        self._address = address
+        self._port = port
+        self._sock = None # type: Optional[socket.socket]
+        self._stuffQ = Queue(1024)  # type: Queue[BinaryLetter]
         self._Q_lock = Lock()
-        self.__cInst = cInst
+        self._cInst = cInst
 
         self._isStop = False
 
@@ -272,8 +272,8 @@ class PostProvider(Module, Observer):
         if connect: self.connectToListener()
 
     def setAddress(self, address:str, port:int) -> None:
-        self.__address = address
-        self.__port = port
+        self._address = address
+        self._port = port
 
     def address_update(self, data: Tuple[int, str]) -> None:
 
@@ -284,13 +284,13 @@ class PostProvider(Module, Observer):
         if role != 1:
             return None
 
-        if self.__address != address:
+        if self._address != address:
             self.setAddress(address, 8066)
 
     def connectToListener(self, retry:int = 0) -> State:
         retry += 1
 
-        sock = self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         while True:
 
@@ -298,8 +298,8 @@ class PostProvider(Module, Observer):
             retry -= 1
 
             try:
-                print("Try to connect to " + self.__address + ":" + str(self.__port))
-                sock.connect((self.__address, self.__port))
+                print("Try to connect to " + self._address + ":" + str(self._port))
+                sock.connect((self._address, self._port))
                 break
 
             except:
@@ -308,7 +308,7 @@ class PostProvider(Module, Observer):
                     continue
                 else:
                     sock.close()
-                    self.__sock = None
+                    self._sock = None
                     return Error
 
             break
@@ -316,7 +316,7 @@ class PostProvider(Module, Observer):
         return Ok
 
     def reconnect(self, retry:int = 0) -> State:
-        if self.__sock is not None:
+        if self._sock is not None:
             self.disconnect()
 
         ret = self.connectToListener(retry)
@@ -334,11 +334,11 @@ class PostProvider(Module, Observer):
                 else:
                     self._last_time_to_acquire_addr = now
 
-                server = self.__cInst.getModule(SERVER_M_NAME) # type: Optional[Server]
+                server = self._cInst.getModule(SERVER_M_NAME) # type: Optional[Server]
                 if server is None:
                     return Error
 
-                workerName = self.__cInst.getIdent()
+                workerName = self._cInst.getIdent()
                 req = LastLisAddrRequire(workerName)
                 server.transfer(req.toLetter())
 
@@ -347,13 +347,13 @@ class PostProvider(Module, Observer):
         return Ok
 
     def disconnect(self) -> None:
-        if self.__sock is not None:
-            self.__sock.shutdown(socket.SHUT_RDWR)
-            self.__sock.close()
-            self.__sock = None
+        if self._sock is not None:
+            self._sock.shutdown(socket.SHUT_RDWR)
+            self._sock.close()
+            self._sock = None
 
     def provide(self, bin:BinaryLetter, timeout=None) -> State:
-        self.__stuffQ.put(bin, timeout)
+        self._stuffQ.put(bin, timeout)
         return Ok
 
     def provide_step(self) -> State:
@@ -363,27 +363,27 @@ class PostProvider(Module, Observer):
 
         inProcessing = True
 
-        if self.__sock is None:
+        if self._sock is None:
             if self.reconnect() == Error:
                 return Error
 
         with self._Q_lock:
             try:
-                bin = self.__stuffQ.get_nowait()
+                bin = self._stuffQ.get_nowait()
             except Q_Empty:
                 return Error
 
             while inProcessing:
                 try:
-                    if self.__sock is None:
+                    if self._sock is None:
                         raise Exception
 
-                    sending(self.__sock, bin)
+                    sending(self._sock, bin)
                 except Exception:
                     print("Provide_ste: try to reconnect")
                     if self.reconnect() == Error:
                         # Put into head of queue
-                        self.__stuffQ.queue.insert(0, bin)
+                        self._stuffQ.queue.insert(0, bin)
                     else:
                         continue
 
@@ -393,11 +393,11 @@ class PostProvider(Module, Observer):
 
     def removeAllStuffs(self) -> None:
         with self._Q_lock:
-            self.__stuffQ.queue.clear()
+            self._stuffQ.queue.clear()
 
     def cleanup(self) -> None:
         self.disconnect()
-        self.__sock = None
+        self._sock = None
 
         self._isStop = True
 
@@ -412,27 +412,27 @@ class Post:
     def __init__(self, ident:str, version:str, cmds:List[str], output:str,
                  menus:List['PostMenu'], frags:List[str]) -> None:
 
-        self.__ident = ident
-        self.__ver = version
-        self.__cmds = cmds
-        self.__output = output
-        self.__menus = menus
+        self._ident = ident
+        self._ver = version
+        self._cmds = cmds
+        self._output = output
+        self._menus = menus
 
-        self.__frags = {} # type: Dict[str, PostFrag]
+        self._frags = {} # type: Dict[str, PostFrag]
         for frag in frags:
-            self.__frags[frag] = PostFrag(frag)
+            self._frags[frag] = PostFrag(frag)
 
     def getIdent(self) -> str:
-        return self.__ident
+        return self._ident
 
     def getVersion(self) -> str:
-        return self.__ver
+        return self._ver
 
     def getMenus(self) -> List['PostMenu']:
-        return self.__menus
+        return self._menus
 
     def getMenu(self, ident:str) -> Optional['PostMenu']:
-        menus = list(filter(lambda menu: menu.getIdent(), self.__menus))
+        menus = list(filter(lambda menu: menu.getIdent(), self._menus))
 
         if len(menus) > 0:
             return menus[0]
@@ -440,24 +440,24 @@ class Post:
         return None
 
     def getCmds(self) -> List[str]:
-        return self.__cmds
+        return self._cmds
 
     def getOutput(self) -> str:
-        return self.__output
+        return self._output
 
     def getFrags(self) -> List[str]:
-        return list(self.__frags.keys())
+        return list(self._frags.keys())
 
-    def __menu_ids(self) -> List[str]:
-        return list(map(lambda m: m.getIdent(), self.__menus))
+    def _menu_ids(self) -> List[str]:
+        return list(map(lambda m: m.getIdent(), self._menus))
 
     def isSatisfied(self) -> bool:
 
-        for frag in self.__frags.values():
+        for frag in self._frags.values():
             if frag.stuff is None:
                 return False
 
-        for menu in self.__menus:
+        for menu in self._menus:
             if not menu.isSatisfied(): return False
 
         return True
@@ -465,11 +465,11 @@ class Post:
     def match(self, stuff:'Stuff') -> bool:
         stuffName = stuff.name()
 
-        if stuffName in self.__frags:
-            self.__frags[stuffName].stuff = stuff
+        if stuffName in self._frags:
+            self._frags[stuffName].stuff = stuff
             return True
 
-        for menu in self.__menus:
+        for menu in self._menus:
             isMatched = menu.stuffMatch(stuff)
             if isMatched:
                 return True
@@ -501,56 +501,56 @@ class PostMenu:
     def __init__(self, version:str, ident:str, depends:List[str],
                  cmd:List[str], output:str) -> None:
 
-        self.__version = version
-        self.__ident = ident
-        self.__cmd = cmd
-        self.__depends = {} # type: Dict[str, bool]
-        self.__output = output
+        self._version = version
+        self._ident = ident
+        self._cmd = cmd
+        self._depends = {} # type: Dict[str, bool]
+        self._output = output
 
         # Things that need by cmd
-        self.__stuffs = Stuffs() # type: Stuffs
-        self.__stuffs.setVersion(version)
+        self._stuffs = Stuffs() # type: Stuffs
+        self._stuffs.setVersion(version)
 
         for d in depends:
-            self.__depends[d] = False
+            self._depends[d] = False
 
     def getVersion(self) -> str:
-        return self.__version
+        return self._version
 
     def getIdent(self) -> str:
-        return self.__ident
+        return self._ident
 
     def stuffMatch(self, stuff:'Stuff') -> bool:
         stuffName = stuff.name()
 
-        if stuffName not in self.__depends:
+        if stuffName not in self._depends:
             return False
 
         version = stuff.version()
 
         # Version not paired
-        if self.__version != version:
+        if self._version != version:
             return False
 
         # This stuff must not exists in this menu
-        assert(not self.__stuffs.isExists(stuffName))
+        assert(not self._stuffs.isExists(stuffName))
 
-        self.__stuffs.addStuff(stuff)
-        self.__depends[stuffName] = True
+        self._stuffs.addStuff(stuff)
+        self._depends[stuffName] = True
 
         return True
 
     def getOutput(self) -> str:
-        return self.__output
+        return self._output
 
     def getStuffs(self) -> List['Stuff']:
-        return self.__stuffs.toList()
+        return self._stuffs.toList()
 
     def isSatisfied(self) -> bool:
-        return False not in list(self.__depends.values())
+        return False not in list(self._depends.values())
 
     def getCmd(self) -> List[str]:
-        return self.__cmd
+        return self._cmd
 
     @staticmethod
     def fromMenuLetter(letter:MenuLetter) -> 'PostMenu':
@@ -563,90 +563,90 @@ class PostMenu:
 class Stuffs:
 
     def __init__(self) -> None:
-        self.__version = None # type: Optional[str]
-        self.__stuffs = {} # type: Dict[str, Stuff]
+        self._version = None # type: Optional[str]
+        self._stuffs = {} # type: Dict[str, Stuff]
 
-        self.__lock = Lock()
+        self._lock = Lock()
 
-        self.__stuffs_list = [] # type: List[Stuff]
-        self.__index = 0
-        self.__len = 0
+        self._stuffs_list = [] # type: List[Stuff]
+        self._index = 0
+        self._len = 0
 
-    def __iter__(self) -> 'Stuffs':
+    def _iter_(self) -> 'Stuffs':
         return self
 
-    def __next__(self) -> 'Stuff':
+    def _next_(self) -> 'Stuff':
 
-        with self.__lock:
-            index = self.__index
-            self.__index += 1
+        with self._lock:
+            index = self._index
+            self._index += 1
 
-        return self.__stuffs_list[index]
+        return self._stuffs_list[index]
 
     def popHead(self) -> Optional['Stuff']:
 
-        self.__lock.acquire()
+        self._lock.acquire()
 
-        if self.__len > 0:
-            elem = self.__stuffs_list[0]
+        if self._len > 0:
+            elem = self._stuffs_list[0]
         else:
-            self.__lock.release()
+            self._lock.release()
             return None
 
-        self.__stuffs_list.remove(elem)
+        self._stuffs_list.remove(elem)
 
         ident = elem.name()
-        del self.__stuffs [ident]
+        del self._stuffs [ident]
 
-        self.__len -= 1
+        self._len -= 1
 
-        self.__lock.release()
+        self._lock.release()
 
         return elem
 
     def toList(self) -> List['Stuff']:
-        return list(self.__stuffs.values())
+        return list(self._stuffs.values())
 
     def setVersion(self, version:str) -> None:
-        self.__version = version
+        self._version = version
 
     def getVersion(self) -> Optional[str]:
-        return self.__version
+        return self._version
 
     def getStuff(self, stuffName:str) -> Optional['Stuff']:
-        with self.__lock:
-            if not stuffName in self.__stuffs:
+        with self._lock:
+            if not stuffName in self._stuffs:
                 return None
-            return self.__stuffs[stuffName]
+            return self._stuffs[stuffName]
 
     def isExists(self, stuffName:str) -> bool:
-        return stuffName in self.__stuffs
+        return stuffName in self._stuffs
 
     def addStuff(self, stuff:'Stuff') -> None:
         stuffName = stuff.name()
 
-        with self.__lock:
+        with self._lock:
             # if version has been set then only stuff which
-            # version is same with self.__version can be
+            # version is same with self._version can be
             # added
-            if not self.__version is None:
-                if stuff.version() != self.__version:
+            if not self._version is None:
+                if stuff.version() != self._version:
                     return None
 
-            if stuffName in self.__stuffs:
+            if stuffName in self._stuffs:
                 return None
 
-            self.__stuffs[stuffName] = stuff
-            self.__stuffs_list.append(stuff)
-            self.__len += 1
+            self._stuffs[stuffName] = stuff
+            self._stuffs_list.append(stuff)
+            self._len += 1
 
     def removeStuff(self, name:str) -> None:
-        with self.__lock:
-            if not name in self.__stuffs:
+        with self._lock:
+            if not name in self._stuffs:
                 return None
 
-            del self.__stuffs [name]
-            self.__len -= 1
+            del self._stuffs [name]
+            self._len -= 1
 
 class Stuff:
 
@@ -654,69 +654,69 @@ class Stuff:
                  # Where's structure: (BoxName, FileName)
                  where:Tuple[str, str]) -> None:
 
-        self.__version = version
-        self.__menu = menu
-        self.__stuffName = stuffName
-        self.__where = where
+        self._version = version
+        self._menu = menu
+        self._stuffName = stuffName
+        self._where = where
 
-        self.__last = datetime.utcnow()
+        self._last = datetime.utcnow()
 
     def elapsed(self) -> int:
-        return (datetime.utcnow() - self.__last).seconds
+        return (datetime.utcnow() - self._last).seconds
 
     def version(self) -> str:
-        return self.__version
+        return self._version
 
     def menu(self) -> str:
-        return self.__menu
+        return self._menu
 
     def name(self) -> str:
-        return self.__stuffName
+        return self._stuffName
 
     def where(self) -> Tuple[str, str]:
-        return self.__where
+        return self._where
 
     def setMenu(self, menu:str) -> None:
-        self.__menu = menu
+        self._menu = menu
 
     def setName(self, name:str) -> None:
-        self.__stuffname = name
+        self._stuffname = name
 
     def setWhere(self, where:Tuple[str, str]) -> None:
-        self.__where =  where
+        self._where =  where
 
 class PostProcessor(Thread):
 
     def __init__(self, cInst:Any) -> None:
         Thread.__init__(self)
 
-        self.__cInst = cInst
+        self._cInst = cInst
 
         # List of menu from server
         # after command of menu is
         # executed the menu will
         # be removed from this list
-        self.__posts = [] # type: List[Post]
-        self.__post_lock = Lock()
+        self._posts = [] # type: List[Post]
+        self._post_lock = Lock()
 
-        self.__stuffs = Stuffs() # type: Stuffs
+        self._stuffs = Stuffs() # type: Stuffs
 
-        self.__satisfiedPosts = Queue(10) # type: Queue[Post]
+        self._satisfiedPosts = Queue(10) # type: Queue[Post]
 
         system = platform.system()
         if system == 'Windows':
-            self.__providers = WindowsPorts() # type: ProviderPorts
+            self._providers = WindowsPorts() # type: ProviderPorts
         elif system == 'Linux':
-            self.__providers = LinuxPorts()
+            self._providers = LinuxPorts()
 
-        self.__inProcReq = [] # type: List[ReqIdent]
+        self._inProcReq = [] # type: List[ReqIdent]
 
         cfgs = cInst.getModule(INFO_M_NAME)
-        self.__storage = Storage(cfgs.getConfig('PostStorage'), None)
+        self._storage = Storage(cfgs.getConfig('PostStorage'), None)
 
-        self.__chooserSet = {} # type: Dict[str, StoChooser]
+        self._chooserSet = {} # type: Dict[str, StoChooser]
 
-        self.__server = None # type: Optional[Server]
+        self._server = None # type: Optional[Server]
 
         self._isStop = False
 
@@ -726,17 +726,17 @@ class PostProcessor(Thread):
     def logging(self, msg:str) -> None:
         global LOG_ID
 
-        if self.__server is None:
-            self.__server = self.__cInst.getModule(SERVER_M_NAME)
+        if self._server is None:
+            self._server = self._cInst.getModule(SERVER_M_NAME)
 
-            if self.__server is not None:
-                regLetter = LogRegLetter(self.__cInst.getIdent(), LOG_ID)
-                self.__server.transfer(regLetter)
+            if self._server is not None:
+                regLetter = LogRegLetter(self._cInst.getIdent(), LOG_ID)
+                self._server.transfer(regLetter)
             else:
                 return None
 
-        log_letter = LogLetter(self.__cInst.getIdent(), LOG_ID, msg)
-        self.__server.transfer(log_letter)
+        log_letter = LogLetter(self._cInst.getIdent(), LOG_ID, msg)
+        self._server.transfer(log_letter)
 
     def do_post_processing(self, post:Post) -> Optional[str]:
 
@@ -747,10 +747,10 @@ class PostProcessor(Thread):
 
         # Deal with menus
         menus = post.getMenus()
-        states = list(map(lambda menu: self.__do_menu(menu, buildDir), menus))
+        states = list(map(lambda menu: self._do_menu(menu, buildDir), menus))
 
         for menu in post.getMenus():
-            if self.__do_menu(menu, buildDir) is Ok:
+            if self._do_menu(menu, buildDir) is Ok:
                 self.logging("Menu " + menu.getIdent() + " is processed")
             else:
                 self.logging("Menu " + menu.getIdent() + " failed")
@@ -768,13 +768,13 @@ class PostProcessor(Thread):
 
         return buildDir
 
-    def __do_menu(self, menu:PostMenu, workDir:FilePath) -> State:
+    def _do_menu(self, menu:PostMenu, workDir:FilePath) -> State:
         command = menu.getCmd()
         stuffs = menu.getStuffs()
 
         for stuff in stuffs:
             (boxName, fileName) = stuff.where()
-            self.__storage.copyTo(boxName, fileName, workDir)
+            self._storage.copyTo(boxName, fileName, workDir)
 
         command.insert(0, "cd " + workDir)
         command_str = sep.join(command)
@@ -789,20 +789,20 @@ class PostProcessor(Thread):
         # Cleanup
         for stuff in stuffs:
             (boxName, fileName) = stuff.where()
-            self.__storage.delete(boxName, fileName)
+            self._storage.delete(boxName, fileName)
 
         return Ok
 
     def run(self) -> None:
 
-        spawnThread(self.__post_collect_stuffs)
+        spawnThread(self._post_collect_stuffs)
 
-        statisfied_posts = self.__satisfiedPosts
+        statisfied_posts = self._satisfiedPosts
 
-        configs = self.__cInst.getModule(INFO_M_NAME)
-        workerIdent = self.__cInst.getIdent()
+        configs = self._cInst.getModule(INFO_M_NAME)
+        workerIdent = self._cInst.getIdent()
 
-        server = self.__cInst.getModule(SERVER_M_NAME)
+        server = self._cInst.getModule(SERVER_M_NAME)
 
         while True:
 
@@ -871,43 +871,43 @@ class PostProcessor(Thread):
 
 
     def appendPost(self, post:Post) -> None:
-        with self.__post_lock:
-            self.__posts.append(post)
+        with self._post_lock:
+            self._posts.append(post)
 
     def removePost(self, version:str) -> None:
-        with self.__post_lock:
+        with self._post_lock:
 
-            for post in self.__posts:
+            for post in self._posts:
                 if post.getIdent() == version:
-                    self.__posts.remove(post)
+                    self._posts.remove(post)
 
     def removeAllPost(self) -> None:
-        with self.__post_lock:
-            self.__posts = []
+        with self._post_lock:
+            self._posts = []
 
-    # Retrive information and binary file from workers and store into __pends
-    def __post_collect_stuffs(self, args = None) -> None:
+    # Retrive information and binary file from workers and store into _pends
+    def _post_collect_stuffs(self, args = None) -> None:
 
         while True:
 
             if self._isStop:
                 break
 
-            providers = self.__providers.wait(1)
+            providers = self._providers.wait(1)
 
             # Build stuffs from binary from providers
             for sock, event in providers:
-                self.__build_stuff(sock)
+                self._build_stuff(sock)
 
             # Pair stuffs with menus
-            stuff = self.__stuffs.popHead()
+            stuff = self._stuffs.popHead()
 
             if stuff is None:
                 continue
 
             self.logging("Stuff arrived: " + stuff.name())
 
-            isPaired = self.__post_stuff_pair(stuff)
+            isPaired = self._post_stuff_pair(stuff)
 
             # fixme: add a counter to this stuff so we can remove
             #        a stuff if it's counter's value is bigger than
@@ -915,25 +915,25 @@ class PostProcessor(Thread):
             if isPaired is False:
                 # Only retry to pair stuff within last 5 seconds.
                 if stuff.elapsed() < 5:
-                    self.__stuffs.addStuff(stuff)
+                    self._stuffs.addStuff(stuff)
             else:
                 self.logging("Stuff " + stuff.name() + " paired")
 
             # After match we need to check is there a menu which
             # collect all stuffs of it need
 
-            with self.__post_lock:
-                for post in self.__posts:
+            with self._post_lock:
+                for post in self._posts:
                     if post.isSatisfied():
-                        self.__satisfiedPosts.put(post)
-                        self.__posts.remove(post)
+                        self._satisfiedPosts.put(post)
+                        self._posts.remove(post)
 
 
 
     # Return (tid, parent, stoId)
-    def __build_stuff(self, sock:socket.socket) -> None:
+    def _build_stuff(self, sock:socket.socket) -> None:
 
-        storage = self.__storage
+        storage = self._storage
         chooser = None # type: Optional[StoChooser]
 
         tid = ""
@@ -942,9 +942,9 @@ class PostProcessor(Thread):
 
         while True:
             try:
-                letter = self.__receving(sock)
+                letter = self._receving(sock)
             except DISCONN:
-                self.__rmSock(sock)
+                self._rmSock(sock)
                 break
             except socket.timeout:
                 break
@@ -958,26 +958,26 @@ class PostProcessor(Thread):
             content = letter.getContent('bytes')
             tid = letter.getTid()
             version = letter.getParent()
-            stoId = PostProcessor.__stoIdGen(tid, version)
+            stoId = PostProcessor._stoIdGen(tid, version)
             menu = letter.getMenu()
             fileName = letter.getFileName()
 
             # The last binary letter
             if content == b"":
-                if stoId not in self.__chooserSet:
+                if stoId not in self._chooserSet:
                     return None
 
-                self.__chooserSet[stoId].close()
-                del self.__chooserSet [stoId]
+                self._chooserSet[stoId].close()
+                del self._chooserSet [stoId]
 
 
                 stuff = Stuff(version, menu, tid, (version, fileName))
-                self.__stuffs.addStuff(stuff)
+                self._stuffs.addStuff(stuff)
 
                 return None
 
 
-            if stoId not in self.__chooserSet:
+            if stoId not in self._chooserSet:
 
                 # Create a file in storage
                 fileName = letter.getFileName()
@@ -986,18 +986,18 @@ class PostProcessor(Thread):
                 if chooser is None:
                     return None
 
-                self.__chooserSet[stoId] = chooser
+                self._chooserSet[stoId] = chooser
 
-            chooser = self.__chooserSet[stoId]
+            chooser = self._chooserSet[stoId]
 
             if isinstance(content, bytes) and chooser is not None:
                 chooser.store(content)
 
-    def __post_stuff_pair(self, stuff:Stuff) -> bool:
-        posts = self.__posts
+    def _post_stuff_pair(self, stuff:Stuff) -> bool:
+        posts = self._posts
 
 
-        with self.__post_lock:
+        with self._post_lock:
             for post in posts:
                 if post.match(stuff):
                     return True
@@ -1005,11 +1005,11 @@ class PostProcessor(Thread):
         return False
 
     @staticmethod
-    def __stoIdGen(tid:str, parent:str) -> str:
-        return parent+"__"+tid
+    def _stoIdGen(tid:str, parent:str) -> str:
+        return parent+"_"+tid
 
     @staticmethod
-    def __receving(sock: socket.socket) -> Optional[Letter]:
+    def _receving(sock: socket.socket) -> Optional[Letter]:
         try:
             return receving(sock)
         except BlockingIOError:
@@ -1019,18 +1019,18 @@ class PostProcessor(Thread):
         except Exception:
             raise DISCONN
 
-    def __addSock(self, sock:socket.socket) -> State:
+    def _addSock(self, sock:socket.socket) -> State:
 
         fd = sock.fileno()
 
-        if self.__providers.isExists(fd):
+        if self._providers.isExists(fd):
             return Error
 
-        self.__providers.register(sock)
+        self._providers.register(sock)
 
         return Ok
 
-    def __rmSock(self, descriptor:Union[socket.socket, int]) -> State:
+    def _rmSock(self, descriptor:Union[socket.socket, int]) -> State:
 
         fd = 0
 
@@ -1039,13 +1039,13 @@ class PostProcessor(Thread):
         else:
             fd = descriptor
 
-        if not self.__providers.isExists(fd):
+        if not self._providers.isExists(fd):
             return Error
 
-        self.__providers.unregister(fd)
+        self._providers.unregister(fd)
 
         return Ok
 
 
     def req(self, sock:socket.socket) -> None:
-        self.__addSock(sock)
+        self._addSock(sock)

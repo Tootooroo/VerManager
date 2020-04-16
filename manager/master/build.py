@@ -17,27 +17,27 @@ class Build:
         if not Build.isValid(build):
             raise BUILD_FORMAT_WRONG
 
-        self.__bId = bId
-        self.__cmds = build['cmd']
-        self.__output = build['output']
+        self._bId = bId
+        self._cmds = build['cmd']
+        self._output = build['output']
 
     def getIdent(self) -> str:
-        return self.__bId
+        return self._bId
 
     def getCmd(self) -> List[str]:
-        return self.__cmds
+        return self._cmds
 
     def setCmd(self, cmds:List[str]) -> None:
-        self.__cmds = cmds
+        self._cmds = cmds
 
     def getCmdStr(self) -> str:
-        return str(self.__cmds).replace("'", "\"")
+        return str(self._cmds).replace("'", "\"")
 
     def getOutput(self) ->  str:
-        return self.__output[0]
+        return self._output[0]
 
     def length(self) -> int:
-        return len(self.__cmds)
+        return len(self._cmds)
 
     @staticmethod
     def isValid(build:Dict) -> bool:
@@ -45,61 +45,61 @@ class Build:
 
     def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
         f = lambda cmd, var: cmd.replace(var[0], var[1])
-        self.__cmds = [reduce(f, varPairs, cmd) for cmd in self.__cmds]
-        self.__output = [reduce(f, varPairs, output) for output in self.__output]
+        self._cmds = [reduce(f, varPairs, cmd) for cmd in self._cmds]
+        self._output = [reduce(f, varPairs, output) for output in self._output]
 
 class Post:
 
     def __init__(self, ident:str, members:List[str], build:Build) -> None:
-        self.__ident = ident
-        self.__build = build
-        self.__members = members
+        self._ident = ident
+        self._build = build
+        self._members = members
 
     def getIdent(self) -> str:
-        return self.__ident
+        return self._ident
 
     def getMembers(self) -> List[str]:
-        return self.__members
+        return self._members
 
     def setMembers(self, members:List[str]) -> None:
-        self.__members = members
+        self._members = members
 
     def getBuild(self) -> Build:
-        return self.__build
+        return self._build
 
     def getCmds(self) -> List[str]:
-        return self.__build.getCmd()
+        return self._build.getCmd()
 
     def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
-        self.__build.varAssign(varPairs)
+        self._build.varAssign(varPairs)
 
     def setCmds(self, cmds:List[str]) -> None:
-        self.__build.setCmd(cmds)
+        self._build.setCmd(cmds)
 
     def toMenuLetter(self, version:str) -> MenuLetter:
-        cmds = self.__build.getCmd()
-        output = self.__build.getOutput()
-        mLetter = MenuLetter(version, self.__ident, cmds,
-                             self.__members, output)
+        cmds = self._build.getCmd()
+        output = self._build.getOutput()
+        mLetter = MenuLetter(version, self._ident, cmds,
+                             self._members, output)
 
         return mLetter
 
 class Merge:
 
     def __init__(self, build:Build) -> None:
-        self.__build = build
+        self._build = build
 
     def getCmds(self) -> List[str]:
-        return self.__build.getCmd()
+        return self._build.getCmd()
 
     def setCmds(self, cmds:List[str]) -> None:
-        self.__build.setCmd(cmds)
+        self._build.setCmd(cmds)
 
     def varAssign(self, varPairs:List[Tuple[str, str]]) -> None:
-        self.__build.varAssign(varPairs)
+        self._build.varAssign(varPairs)
 
     def getOutput(self) -> str:
-        return self.__build.getOutput()
+        return self._build.getOutput()
 
 
 class BuildSet:
@@ -108,37 +108,37 @@ class BuildSet:
         if not BuildSet.isValid(buildSet):
             raise BUILD_FORMAT_WRONG
 
-        self.__builds = BuildSet.__split(buildSet)
-        self.__postBelong = {} # type: Dict[str, Tuple[str, List[Build]]]
-        self.__posts = {} # type: Dict[str, Post]
+        self._builds = BuildSet._split(buildSet)
+        self._postBelong = {} # type: Dict[str, Tuple[str, List[Build]]]
+        self._posts = {} # type: Dict[str, Post]
 
         merge = buildSet['Merge']
         mergeBuild = Build("merge", {"cmd":merge['cmd'], "output":merge['output']})
-        self.__merge = Merge(mergeBuild)
+        self._merge = Merge(mergeBuild)
 
-        self.__buildPosts(buildSet)
+        self._buildPosts(buildSet)
 
     def belongTo(self, bId) -> Optional[Tuple[str, List[Build]]]:
-        if not bId in self.__postBelong:
+        if not bId in self._postBelong:
             return None
-        return self.__postBelong[bId]
+        return self._postBelong[bId]
 
     def getMerge(self) -> Merge:
-        return self.__merge
+        return self._merge
 
     def getPosts(self) -> List[Post]:
-        return list(self.__posts.values())
+        return list(self._posts.values())
 
     def getBuilds(self) -> List[Build]:
-        return list(self.__builds.values())
+        return list(self._builds.values())
 
     def getBuild(self, bId:str) -> Optional[Build]:
-        if not bId in self.__builds:
+        if not bId in self._builds:
             return None
-        return self.__builds[bId]
+        return self._builds[bId]
 
     def numOfBuilds(self) -> int:
-        return len(self.__builds)
+        return len(self._builds)
 
     # fixme: Should also to check relation of builds and posts
     @staticmethod
@@ -169,7 +169,7 @@ class BuildSet:
         return isPostsValid
 
     @staticmethod
-    def __split(buildSet:Dict) -> Dict[str, Build]:
+    def _split(buildSet:Dict) -> Dict[str, Build]:
         builds = {} # type: Dict[str, Build]
         builds_dict = buildSet['Builds']
 
@@ -178,7 +178,7 @@ class BuildSet:
 
         return builds
 
-    def __buildPosts(self, buildSet:Dict) -> None:
+    def _buildPosts(self, buildSet:Dict) -> None:
         postGroups = buildSet['Posts']
 
         # Build a dict to store post and their post build
@@ -186,12 +186,12 @@ class BuildSet:
             post = postGroups[pId]
 
             build = Build(pId, {"cmd":post['cmd'], "output":post['output']})
-            self.__posts[pId] = Post(pId, post['group'], build)
+            self._posts[pId] = Post(pId, post['group'], build)
 
         # Build a dict to store relation among builds.
         for pId in postGroups:
             group = postGroups[pId]['group']
 
             for bId in group:
-                buildsOfGroup = list(map(lambda bId: self.__builds[bId], group))
-                self.__postBelong[bId] = (pId, buildsOfGroup)
+                buildsOfGroup = list(map(lambda bId: self._builds[bId], group))
+                self._postBelong[bId] = (pId, buildsOfGroup)

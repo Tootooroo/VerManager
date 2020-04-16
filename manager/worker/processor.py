@@ -64,25 +64,25 @@ class Processor(Module, Subject):
         Module.__init__(self, M_NAME)
         Subject.__init__(self, M_NAME)
 
-        self.__max = int(info.getConfig('MAX_TASK_CAN_PROC'))
-        self.__numOfTasksInProc = 0
-        self.__cInst = cInst
-        self.__poolSize = int(info.getConfig('PROCESS_POOL_SIZE'))
-        self.__pool = Pool(self.__poolSize)
-        self.__info = info
+        self._max = int(info.getConfig('MAX_TASK_CAN_PROC'))
+        self._numOfTasksInProc = 0
+        self._cInst = cInst
+        self._poolSize = int(info.getConfig('PROCESS_POOL_SIZE'))
+        self._pool = Pool(self._poolSize)
+        self._info = info
 
-        self.__procedure = None # type: Optional[Callable]
+        self._procedure = None # type: Optional[Callable]
 
         # (tid, parent, result)
-        self.__allTasks = [] # type: List[Tuple[str, str, AsyncResult]]
-        self.__result_lock = Lock()
+        self._allTasks = [] # type: List[Tuple[str, str, AsyncResult]]
+        self._result_lock = Lock()
 
         # Query purpose
-        self.__allTasks_dict = {} # type: Dict[str, AsyncResult]
+        self._allTasks_dict = {} # type: Dict[str, AsyncResult]
 
-        self.__manager = Manager()
+        self._manager = Manager()
         # Collections of event used to stop building processing.
-        self.__shell_events = {} # type: Dict[str, Event]
+        self._shell_events = {} # type: Dict[str, Event]
 
         self._recyleInterrupt = False
         self._recyleInProcessing = False
@@ -91,29 +91,29 @@ class Processor(Module, Subject):
         global LOG_ID
 
         if not hasattr(self, 'server'):
-            self.server = self.__cInst.getModule(SERVER_M_NAME)
+            self.server = self._cInst.getModule(SERVER_M_NAME)
 
             if self.server is None:
                 return None
 
-            regLetter = LogRegLetter(self.__cInst.getIdent(), LOG_ID)
+            regLetter = LogRegLetter(self._cInst.getIdent(), LOG_ID)
             self.server.transfer(regLetter)
 
-        logLetter = LogLetter(self.__cInst.getIdent(), LOG_ID, msg)
+        logLetter = LogLetter(self._cInst.getIdent(), LOG_ID, msg)
         self.server.transfer(logLetter)
 
 
     def maxTasksAbleToProc(self) -> int:
-        return self.__max
+        return self._max
 
     def tasksInProc(self) -> int:
-        return self.__numOfTasksInProc
+        return self._numOfTasksInProc
 
     def poolSize(self) -> int:
-        return self.__poolSize
+        return self._poolSize
 
     def setProcedure(self, procedure:Callable[[Server, Letter, Info], None]) -> None:
-        self.__procedure = procedure
+        self._procedure = procedure
 
     def proc(self, reqLetter:Letter) -> None:
 
@@ -133,13 +133,13 @@ class Processor(Module, Subject):
         type = letter.getType()
 
         if type == CancelLetter.TYPE_SINGLE:
-            if ident in self.__shell_events:
+            if ident in self._shell_events:
                 self.stop_task(ident)
             else:
                 return Error
 
         elif type == CancelLetter.TYPE_POST:
-            post_listener = self.__cInst.getModule(POST_LISTENER_M_NAME) \
+            post_listener = self._cInst.getModule(POST_LISTENER_M_NAME) \
                 # type: Optional[PostListener]
 
             if post_listener is not None:
@@ -221,7 +221,7 @@ class Processor(Module, Subject):
         return result
 
     def proc_post(self, postTaskLetter:PostTaskLetter) -> State:
-        listener = self.__cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
+        listener = self._cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
 
         # This worker is not a listener
         if listener is None:
@@ -241,7 +241,7 @@ class Processor(Module, Subject):
 
         handler = cmdHandlers[type]
 
-        return handler(self, cmdLetter, self.__info, self.__cInst)
+        return handler(self, cmdLetter, self._info, self._cInst)
 
     @staticmethod
     def post_config(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
@@ -256,9 +256,9 @@ class Processor(Module, Subject):
         role = cmd.role()
 
         if role is PostConfigCmd.ROLE_LISTENER:
-            return Processor.__postListener_config(p, address, port, info, cInst)
+            return Processor._postListener_config(p, address, port, info, cInst)
         elif role is PostConfigCmd.ROLE_PROVIDER:
-            return Processor.__postProvider_config(p, address, port, info, cInst)
+            return Processor._postProvider_config(p, address, port, info, cInst)
 
         return Error
 
@@ -336,7 +336,7 @@ class Processor(Module, Subject):
         return Processor.accepted_command(p, cmdLetter, info, cInst)
 
     @staticmethod
-    def __postListener_config(p:'Processor', address:str,
+    def _postListener_config(p:'Processor', address:str,
                               port:int, info:Info, cInst:Any) -> State:
 
         if not cInst.isModuleExists(POST_LISTENER_M_NAME):
@@ -366,7 +366,7 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def __postProvider_config(p:'Processor', address:str, port:int, info:Info, cInst:Any) -> State:
+    def _postProvider_config(p:'Processor', address:str, port:int, info:Info, cInst:Any) -> State:
 
         sender = cInst.getModule(SENDER_M_NAME)
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
@@ -404,16 +404,16 @@ class Processor(Module, Subject):
         return Ok
 
     def stop_task(self, taskId:str) -> None:
-        if taskId in self.__shell_events:
-            self.__shell_events[taskId].set()
+        if taskId in self._shell_events:
+            self._shell_events[taskId].set()
 
     def stop_all_tasks(self) -> None:
-        for taskId in self.__shell_events:
-            self.__shell_events[taskId].set()
+        for taskId in self._shell_events:
+            self._shell_events[taskId].set()
 
     def drop_all_results(self) -> None:
-        with self.__result_lock:
-            self.__allTasks = []
+        with self._result_lock:
+            self._allTasks = []
 
     def recyle_interrupt(self) -> None:
         self._recyleInterrupt = True
@@ -426,7 +426,7 @@ class Processor(Module, Subject):
             return Error
 
         tid = reqLetter.getHeader('tid')
-        if tid in self.__shell_events:
+        if tid in self._shell_events:
             return Error
 
         version = reqLetter.getContent('vsn')
@@ -434,23 +434,23 @@ class Processor(Module, Subject):
         if self.isReqInProc(tid, version):
             return Error
 
-        s = self.__cInst.getModule(SERVER_M_NAME)
+        s = self._cInst.getModule(SERVER_M_NAME)
 
         # Notify master this task is change into in_processing state
-        response = ResponseLetter(ident=self.__cInst.getIdent(),
+        response = ResponseLetter(ident=self._cInst.getIdent(),
                                 tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
         s.transfer(response)
 
-        event = self.__manager.Event()
-        self.__shell_events[tid] = event
+        event = self._manager.Event()
+        self._shell_events[tid] = event
 
-        res = self.__pool.apply_async(Processor.do_proc,
-                                    (reqLetter, self.__info, event))
+        res = self._pool.apply_async(Processor.do_proc,
+                                    (reqLetter, self._info, event))
 
-        self.__allTasks.append((tid, version, res))
-        self.__allTasks_dict[version+tid] = res
+        self._allTasks.append((tid, version, res))
+        self._allTasks_dict[version+tid] = res
 
-        self.__numOfTasksInProc += 1
+        self._numOfTasksInProc += 1
 
         return Ok
 
@@ -460,17 +460,17 @@ class Processor(Module, Subject):
 
         self._recyleInProcessing = True
 
-        with self.__result_lock:
-            (readies, not_readies) = partition(self.__allTasks, lambda res: res[2].ready())
-            self.__allTasks = not_readies
+        with self._result_lock:
+            (readies, not_readies) = partition(self._allTasks, lambda res: res[2].ready())
+            self._allTasks = not_readies
 
         for (tid, version, res) in readies:
 
             if self._recyleInterrupt:
                 break
 
-            if tid in self.__shell_events:
-                del self.__shell_events [tid]
+            if tid in self._shell_events:
+                del self._shell_events [tid]
 
             result = res.get() # type: Result
 
@@ -479,15 +479,15 @@ class Processor(Module, Subject):
             needPost = result.needPost
 
             # Build path to result
-            projName = self.__info.getConfig("PROJECT_NAME")
+            projName = self._info.getConfig("PROJECT_NAME")
             path = projName + pathSeperator() + result.path
 
             menu = result.menuId
 
-            server = self.__cInst.getModule(SERVER_M_NAME)
-            provider = self.__cInst.getModule(POST_PROVIDER_M_NAME)
+            server = self._cInst.getModule(SERVER_M_NAME)
+            provider = self._cInst.getModule(POST_PROVIDER_M_NAME)
 
-            response = ResponseLetter(ident = self.__cInst.getIdent(), tid = tid,
+            response = ResponseLetter(ident = self._cInst.getIdent(), tid = tid,
                                       state = Letter.RESPONSE_STATE_FINISHED)
 
             if result.isSuccess is False:
@@ -498,14 +498,14 @@ class Processor(Module, Subject):
             else:
                 # Transfer Binary
                 if needPost == "false":
-                    self.__transBinaryTo(tid, path, lambda l: server.transfer(l))
+                    self._transBinaryTo(tid, path, lambda l: server.transfer(l))
                 else:
                     if provider is None:
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
                         server.transfer(response)
                     else:
                         try:
-                            self.__transBinaryTo(tid, path,
+                            self._transBinaryTo(tid, path,
                                             lambda l: provider.provide(l, 10),
                                             mid=menu,
                                             parent=version)
@@ -519,14 +519,14 @@ class Processor(Module, Subject):
                 # Notify to master
                 server.transfer(response)
 
-            self.__numOfTasksInProc -= 1
-            del self.__allTasks_dict [version+tid]
+            self._numOfTasksInProc -= 1
+            del self._allTasks_dict [version+tid]
 
         self._recyleInProcessing = False
 
         return len(readies)
 
-    def __transBinaryTo(self, tid:str, path:str,
+    def _transBinaryTo(self, tid:str, path:str,
                         transferRtn:Callable[[BinaryLetter], Any],
                         mid:str = "", parent:str = "") -> None:
 
@@ -553,7 +553,7 @@ class Processor(Module, Subject):
         return self._recyleInProcessing
 
     def isReqInProc(self, tid:str, parent:str = "") -> bool:
-        return tid in self.__allTasks_dict
+        return tid in self._allTasks_dict
 
     def isAbleToProc(self) -> bool:
         return self.tasksInProc() < self.maxTasksAbleToProc()

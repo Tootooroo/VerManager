@@ -25,23 +25,23 @@ class Sender(ModuleDaemon):
         self.cond = Condition()
         self.server = server
 
-        self.__status = 0
+        self._status = 0
 
-        self.__send_rtns = [] # type: List[SendRtn_NoWait_NoExcep]
+        self._send_rtns = [] # type: List[SendRtn_NoWait_NoExcep]
 
     def stop(self) -> None:
-        self.__status = 1
+        self._status = 1
 
     def rtnRegister(self, rtn:SendRtn_NoWait_NoExcep) -> State:
-        if rtn in self.__send_rtns:
+        if rtn in self._send_rtns:
             return Error
 
-        self.__send_rtns.append(rtn)
+        self._send_rtns.append(rtn)
         return Ok
 
     def rtnUnRegister(self, rtn:SendRtn_NoWait_NoExcep) -> State:
-        if rtn in self.__send_rtns:
-            self.__send_rtns.remove(rtn)
+        if rtn in self._send_rtns:
+            self._send_rtns.remove(rtn)
 
         return Ok
 
@@ -54,14 +54,14 @@ class Sender(ModuleDaemon):
         isIdle = lambda now,last: (now - last).seconds > 3
 
         while True:
-            if self.__status == 1:
-                self.__status = 2
+            if self._status == 1:
+                self._status = 2
                 cond.release()
                 return None
 
             now = datetime.utcnow()
 
-            for rtn in self.__send_rtns:
+            for rtn in self._send_rtns:
                 if rtn() is Ok: last = now
 
             if isIdle(now, last):

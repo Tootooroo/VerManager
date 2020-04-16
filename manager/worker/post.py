@@ -12,25 +12,25 @@ from .server import Server
 class Post(Module):
     def __init__(self, address:str, port:int, info:Info, cInst:Any) -> None:
         Module.__init__(self, "")
-        self.__server = Server(address, port, info, cInst)
+        self._server = Server(address, port, info, cInst)
 
     def connect(self, workerName:str) -> State:
-        return self.__server.connect()
+        return self._server.connect()
 
     def disconnect(self) -> None:
-        self.__server.disconnect()
+        self._server.disconnect()
 
     def setSockTimeout(self, t:int) -> None:
-        self.__server.setSockTimeout(t)
+        self._server.setSockTimeout(t)
 
     def waitLetter(self) -> Union[int, Letter]:
-        return self.__server.waitLetter()
+        return self._server.waitLetter()
 
     def transfer(self, letter:Letter) -> None:
-        self.__server.transfer(letter)
+        self._server.transfer(letter)
 
     def transfer_step(self, timeout:int = None) -> int:
-        return self.__server.transfer_step(timeout)
+        return self._server.transfer_step(timeout)
 
     def reconnect(self, workerName:str, max:int, proc:int) -> State:
-        return self.__server.reconnect()
+        return self._server.reconnect()

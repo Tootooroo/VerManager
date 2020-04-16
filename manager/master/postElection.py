@@ -21,127 +21,127 @@ Role_Provider = 1  # type: PostRole
 class ElectGroup_iter(Iterator):
 
     def __init__(self, iter:Iterator, dict:Dict) -> None:
-        self.__iter = iter
-        self.__dict = dict
+        self._iter = iter
+        self._dict = dict
 
     def __next__(self) -> Worker:
-        ident = self.__iter.__next__()
-        return self.__dict[ident]
+        ident = self._iter.__next__()
+        return self._dict[ident]
 
 class ElectGroup:
 
     def __init__(self, workers:List[Worker] = []) -> None:
-        self.__listener = None  # type: Optional[Worker]
-        self.__providers = {}  # type: Dict[str, Worker]
+        self._listener = None  # type: Optional[Worker]
+        self._providers = {}  # type: Dict[str, Worker]
 
-        self.__lock_c = Lock()
-        self.__candidate = []  # type: List[Worker]
+        self._lock_c = Lock()
+        self._candidate = []  # type: List[Worker]
 
         for w in workers:
             # At begining all workers is provider
-            self.__providers[w.getIdent()] = w
+            self._providers[w.getIdent()] = w
 
     def __iter__(self) -> ElectGroup_iter:
-        workers = self.__providers.copy()
+        workers = self._providers.copy()
 
         iter = workers.__iter__()
         return ElectGroup_iter(iter, workers)
 
     def numOfWorkers(self) -> int:
-        num_of_providers = len(self.__providers)
+        num_of_providers = len(self._providers)
         return num_of_providers
 
     def numOfCandidates(self) -> int:
-        return len(self.__candidate)
+        return len(self._candidate)
 
     def setListener(self, lis:Optional[Worker]) -> None:
         if lis is not None:
             lis.role = Role_Listener
-        self.__listener = lis
+        self._listener = lis
 
     def getListener(self) -> Optional[Worker]:
-        return self.__listener
+        return self._listener
 
     def isListener(self, ident) -> bool:
-        if self.__listener is None:
+        if self._listener is None:
             return False
-        return ident == self.__listener.getIdent()
+        return ident == self._listener.getIdent()
 
     def removeProvider(self, ident:str) -> State:
-        if ident not in self.__providers:
+        if ident not in self._providers:
             return Error
-        del self.__providers [ident]
+        del self._providers [ident]
         return Ok
 
     def addProvider(self, w:Worker) -> State:
         ident = w.getIdent()
 
-        if ident in self.__providers:
+        if ident in self._providers:
             return Error
 
         w.role = Role_Provider
-        self.__providers[ident] = w
+        self._providers[ident] = w
         return Ok
 
     def getProviders(self) -> List[Worker]:
-        return list(self.__providers.values())
+        return list(self._providers.values())
 
     def getProvider(self, ident:str) -> Optional[Worker]:
-        if ident not in self.__providers:
+        if ident not in self._providers:
             return None
 
-        return self.__providers[ident]
+        return self._providers[ident]
 
     def addCandidate(self, w:Worker) -> State:
-        with self.__lock_c:
-            if w in self.__candidate:
+        with self._lock_c:
+            if w in self._candidate:
                 return Error
 
             w.role = None
-            self.__candidate.append(w)
+            self._candidate.append(w)
 
         return Ok
 
     def removeCandidate(self, ident:str) -> Optional[Worker]:
-        with self.__lock_c:
-            beRemoved, remain = partition(self.__candidate, lambda c: c.getIdent() == ident)
+        with self._lock_c:
+            beRemoved, remain = partition(self._candidate, lambda c: c.getIdent() == ident)
 
             if beRemoved == []:
                 return None
             else:
-                self.__candidate = remain
+                self._candidate = remain
                 return beRemoved[0]
 
     def removeCandidate_(self, w:Worker) -> State:
-        with self.__lock_c:
-            if w not in self.__candidate:
+        with self._lock_c:
+            if w not in self._candidate:
                 return Error
             else:
-                self.__candidate.remove(w)
+                self._candidate.remove(w)
                 return Ok
 
     def candidateIter(self) -> Generator:
-        for candidate in self.__candidate:
+        for candidate in self._candidate:
             yield candidate
 
     def removeAllCandidates(self) -> None:
-        with self.__lock_c:
-            for c in self.__candidate:
-                self.__candidate.remove(c)
+        with self._lock_c:
+            for c in self._candidate:
+                self._candidate.remove(c)
 
     def getCandidate(self, ident:str) -> Optional[Worker]:
-        with self.__lock_c:
-            for candidate in self.__candidate:
+        with self._lock_c:
+            for candidate in self._candidate:
                 if candidate.getIdent() == ident:
                     return candidate
 
         return None
 
     def candidates(self) -> List[Worker]:
-        return self.__candidate
+        return self._candidate
 
     def isExists(self, ident:str) -> bool:
-        return ident in self.__providers
+        return ident in self._providers
 
 class PostElectProtocol:
 
@@ -191,49 +191,49 @@ class PostManager:
 
     def __init__(self, workers:List[Worker], proto:PostElectProtocol) -> None:
 
-        self.__eGroup = ElectGroup(workers)
-        self.__eProtocol = proto
+        self._eGroup = ElectGroup(workers)
+        self._eProtocol = proto
 
-        self.__eProtocol.group = self.__eGroup
+        self._eProtocol.group = self._eGroup
 
     def getListener(self) -> Optional[Worker]:
-        return self.__eGroup.getListener()
+        return self._eGroup.getListener()
 
     def setListener(self, lis:Optional[Worker]) -> None:
-        self.__eGroup.setListener(lis)
+        self._eGroup.setListener(lis)
 
     def isListener(self, ident:str) -> bool:
-        return self.__eGroup.isListener(ident)
+        return self._eGroup.isListener(ident)
 
     def removeProvider(self, ident:str) -> State:
-        return self.__eGroup.removeProvider(ident)
+        return self._eGroup.removeProvider(ident)
 
     def addProvider(self, w:Worker) -> State:
-        return self.__eGroup.addProvider(w)
+        return self._eGroup.addProvider(w)
 
     def addCandidate(self, w:Worker) -> State:
-        return self.__eGroup.addCandidate(w)
+        return self._eGroup.addCandidate(w)
 
     def removeCandidate(self, ident:str) -> Optional[Worker]:
-        return self.__eGroup.removeCandidate(ident)
+        return self._eGroup.removeCandidate(ident)
 
     def getCandidate(self, ident:str) -> Optional[Worker]:
-        return self.__eGroup.getCandidate(ident)
+        return self._eGroup.getCandidate(ident)
 
     def candidates(self) -> List[Worker]:
-        return self.__eGroup.candidates()
+        return self._eGroup.candidates()
 
     def proto_init(self) -> State:
-        return self.__eProtocol.init()
+        return self._eProtocol.init()
 
     def proto_step(self) -> State:
-        return self.__eProtocol.step()
+        return self._eProtocol.step()
 
     def proto_msg_transfer(self, l:CmdResponseLetter) -> None:
-        self.__eProtocol.msgTransfer(l)
+        self._eProtocol.msgTransfer(l)
 
     def proto_terminate(self) -> State:
-        return self.__eProtocol.terminate()
+        return self._eProtocol.terminate()
 
     def relations(self) -> Tuple[str, List[str]]:
-        return self.__eProtocol.relations()
+        return self._eProtocol.relations()

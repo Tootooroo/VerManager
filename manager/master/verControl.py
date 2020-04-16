@@ -41,19 +41,19 @@ class RevSync(ModuleDaemon):
 
         ModuleDaemon.__init__(self, M_NAME)
 
-        self.__stop = False
+        self._stop = False
 
-        self.__sInst = sInst
+        self._sInst = sInst
 
     def stop(self) -> None:
-        self.__stop = True
+        self._stop = True
 
     def connectToGitlab(self) -> State:
-        cfgs = self.__sInst.getModule(INFO_M_NAME)
+        cfgs = self._sInst.getModule(INFO_M_NAME)
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
 
-        self.__project_id = cfgs.getConfig("Project_ID")
+        self._project_id = cfgs.getConfig("Project_ID")
 
         if url == "" or token == "":
             return Error
@@ -97,7 +97,7 @@ class RevSync(ModuleDaemon):
         return formatDate + offset
 
     def revDBInit(self) -> bool:
-        pId = self.__project_id
+        pId = self._project_id
         revisions = self.gitlabRef.projects.get(pId).commits.list(all=True)
 
         # Remove old datas of revisions cause these data may out of date
@@ -108,7 +108,7 @@ class RevSync(ModuleDaemon):
             Revisions.objects.all().delete()  # type: ignore
 
             # Fill revisions just retrived into model
-            config = self.__sInst.getModule(INFO_M_NAME)
+            config = self._sInst.getModule(INFO_M_NAME)
             tz = config.getConfig('TimeZone')
 
             map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
@@ -159,12 +159,12 @@ class RevSync(ModuleDaemon):
         if self.revDBInit() == False:
             return None
 
-        config = self.__sInst.getModule(INFO_M_NAME)
+        config = self._sInst.getModule(INFO_M_NAME)
         tz = config.getConfig('TimeZone')
 
         while True:
 
-            if self.__stop is True:
+            if self._stop is True:
                 return None
 
             request = RevSync.revQueue.get(block=True, timeout=None)
