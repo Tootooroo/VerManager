@@ -283,17 +283,18 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             self._WR_LOG("Worker " + ident +
                          " is disconnected changed state into Waiting")
 
-            # Update worker's counter
-            worker.setState(Worker.STATE_WAITING)
-            self.removeWorker(ident)
+            with self.syncLock:
+                # Update worker's counter
+                worker.setState(Worker.STATE_WAITING)
+                self.removeWorker(ident)
 
-            if worker.role == None:
-                # Worker is a candidate
-                self._pManager.removeCandidate(ident)
+                if worker.role == None:
+                    # Worker is a candidate
+                    self._pManager.removeCandidate(ident)
 
-            self._workers_waiting[ident] = worker
+                self._workers_waiting[ident] = worker
 
-            self.notify((WorkerRoom.EVENT_WAITING, worker))
+                self.notify((WorkerRoom.EVENT_WAITING, worker))
 
     def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
