@@ -117,7 +117,7 @@ class Box:
     def _recover(self) -> State:
         files = os.listdir(self._path)
 
-        files = list(filter(lambda f: os.path.isfile(f), files))
+        files = list(filter(lambda f: os.path.isfile(self._path+seperator+f), files))
         if len(files) == 0:
             return Ok
 
@@ -227,14 +227,14 @@ class Storage(Module):
         global seperator
 
         boxes = os.listdir(self._path)
-        boxes = list(filter(lambda f: os.path.isdir(f), boxes))
+        boxes = list(filter(lambda f: os.path.isdir(self._path+seperator+f), boxes))
 
         for boxName in boxes:
             box = Box(boxName, self)
             self._boxes[boxName] = box
 
     def recover(self) -> None:
-        self._recover
+        self._recover()
 
     def create(self, boxName:str, fileName:str) -> Optional[StoChooser]:
         """
