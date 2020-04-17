@@ -201,7 +201,6 @@ class PostListener(ModuleDaemon, Observer):
             self.__address = address
 
             if self._sock is not None:
-                self._sock.shutdown(socket.SHUT_RDWR)
                 self._sock.close()
 
             self._sock = None
