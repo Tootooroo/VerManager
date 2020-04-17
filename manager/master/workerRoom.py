@@ -170,13 +170,14 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     # Note: Need to setup worker's status before listener address update
                     #       otherwise listener itself will unable to know address changed.
                     workerInWait.setState(Worker.STATE_ONLINE)
+                    workerInWait.setAddress((arrived_addr, arrived_port))
+
+                    # Move worker from waiting to online list.
                     self.addWorker(workerInWait)
                     del self._workers_waiting [ident]
 
                     if self._pManager.isListener(workerInWait.getIdent()):
                         if arrived_addr != old_addr:
-                            workerInWait.setAddress((arrived_addr, arrived_port))
-
                             # Broadcast command to all workers that online.
                             #
                             # Note: This update command will only broadcast
@@ -302,28 +303,26 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         outOfTime = list(filter(lambda w: w.waitCounter() > self._WAITING_INTERVAL, workers_list))
 
-        for worker in outOfTime:
-            ident = worker.getIdent()
-            self._WR_LOG("Worker " + ident +
-                         " is dissconnected for a long time will be removed")
-            worker.setState(Worker.STATE_OFFLINE)
+        with self.syncLock:
+            for worker in outOfTime:
+                ident = worker.getIdent()
+                self._WR_LOG("Worker " + ident +
+                            " is dissconnected for a long time will be removed")
+                worker.setState(Worker.STATE_OFFLINE)
 
-            if worker.role == None:
-                # Worker is a candidate
-                self._pManager.removeCandidate(ident)
-            else:
-                # Remove this worker from PostManager
-                # if it's also a listener then set listener to None
-                if self._pManager.isListener(ident):
-                    self._pManager.setListener(None)
+                if worker.role == None:
+                    # Worker is a candidate
                     self._pManager.removeCandidate(ident)
-                self._pManager.removeProvider(ident)
+                else:
+                    # Remove this worker from PostManager
+                    # if it's also a listener then set listener to None
+                    if self._pManager.isListener(ident):
+                        self._pManager.setListener(None)
+                        self._pManager.removeCandidate(ident)
+                    self._pManager.removeProvider(ident)
 
-            self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
-
-        for w in outOfTime:
-            with self.syncLock:
-                del self._workers_waiting [w.getIdent()]
+                    self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
+                    del self._workers_waiting [ident]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
