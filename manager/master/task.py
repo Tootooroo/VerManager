@@ -1,10 +1,10 @@
 # task.py
 
+from abc import ABC, abstractmethod
 from typing import *
 from functools import reduce
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, PostTaskLetter
-
 from manager.master.build import BuildSet
 
 from datetime import datetime
@@ -18,7 +18,26 @@ TaskType = int
 
 class TASK_TRANSFORM_ERROR(Exception): pass
 
-class Task:
+class TaskBase(ABC):
+
+    @abstractmethod
+    def id(self) -> str:
+        """ identity of task """
+
+    @abstractmethod
+    def dependence(self) -> List['TaskBase']:
+        """ Which task dependen to """
+
+    @abstractmethod
+    def taskState(self) -> TaskState:
+        """ State of Task """
+
+    @abstractmethod
+    def stateChange(self, state:TaskState) -> State:
+        """ Change task's state """
+
+
+class Task(TaskBase):
 
     Type = 0
 
@@ -139,6 +158,9 @@ class Task:
     def isFinished(self) -> bool:
         return self.state == Task.STATE_FINISHED
 
+    def dependence(self) -> List['TaskBase']:
+        return []
+
     # fixme: Python 3.5.3 raise an NameError exception:
     #        name 'BinaryIO' is not defined. Temporarily
     #        use Any to instead of BinaryIO
@@ -176,6 +198,9 @@ class SuperTask(Task):
         self._buildSet = buildSet
 
         self._split()
+
+    def dependence(self) -> List[TaskBase]:
+        return []
 
     def getChildren(self) -> List[Task]:
         return self._children
@@ -373,6 +398,9 @@ class SingleTask(Task):
     def isAChild(self) -> bool:
         return self._parent is not None
 
+    def denpendence(self) -> List['TaskBase']:
+        return []
+
     def toLetter(self) -> NewLetter:
 
         build = self._build
@@ -434,6 +462,13 @@ class PostTask(Task):
 
     def isAChild(self) -> bool:
         return self._parent is not None
+
+    def dependence(self) -> List[TaskBase]:
+        if self._parent is None:
+            return []
+
+        children = self._parent.getChildren()
+        return [child for child in children if child is not self]
 
     def toLetter(self) -> PostTaskLetter:
 

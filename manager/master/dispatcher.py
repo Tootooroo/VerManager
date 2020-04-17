@@ -20,11 +20,13 @@ from manager.master.worker import Worker
 from manager.master.postElection import Role_Listener, Role_Provider
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
-from manager.master.task import TaskState, Task, SuperTask, SingleTask, PostTask, TaskType
+from manager.master.task import TaskState, Task, SuperTask, SingleTask, \
+    PostTask, TaskType
 from manager.basic.type import *
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
 from manager.master.workerRoom import WorkerRoom
+from manager.basic.commands import ReWorkCommand
 
 class Dispatcher(ModuleDaemon, Subject, Observer):
 
@@ -75,16 +77,14 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     #
     # return True if task is assign successful otherwise return False
     def _dispatch(self, task: Task) -> bool:
+        ret = False
+
         if isinstance(task, SuperTask):
             self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
             return self._dispatchSuperTask(task)
 
         ret = self._do_dispatch(task)
-        if ret is True:
-            self._taskTracker.track(task)
-            return ret
-
-        return False
+        return ret
 
     def _do_dispatch(self, task: Task) -> bool:
 
@@ -107,9 +107,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         try:
             worker = workers[0]
-            self._taskTracker.onWorker(task.id(), worker)
-
             worker.do(task)
+            self._taskTracker.onWorker(task.id(), worker)
         except:
             self._dispatch_logging("Task " + task.id() +
                                     " dispatch failed: Worker is\
@@ -119,31 +118,19 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return True
 
     def _dispatchSuperTask(self, task: SuperTask) -> bool:
-        ret = True
         subTasks = task.getChildren()
 
         for sub in subTasks:
-            if not sub.isPrepare():
-                continue
-
             self._taskTracker.track(sub)
 
-            do_ret = self._do_dispatch(sub)
+            ret = self._do_dispatch(sub)
 
-            if do_ret is False:
-                ret = False
-            else:
-                sub.stateChange(Task.STATE_IN_PROC)
+            if ret is False:
+                self.taskWait.insert(0, task)
 
-        if ret is True:
-            self._dispatch_logging("SuperTask " + task.id() +
-                                    " is dispatched completly")
-            task.stateChange(Task.STATE_IN_PROC)
-        else:
-            self._dispatch_logging("SuperTask " + task.id() +
-                                    " is not dispatched completly")
+        sub.stateChange(Task.STATE_IN_PROC)
 
-        return ret
+        return True
 
     def dispatch(self, task: Task) -> bool:
         self._dispatch_logging("Dispatch task " + task.id())
@@ -174,17 +161,18 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         self._dispatch_logging("Redispatch task " + taskId)
 
-        if self._taskTracker.isInTrack(taskId):
-            ret = task.stateChange(Task.STATE_PREPARE)
-            if ret is Error:
-                return False
+        # Set task's state to prepare and remove worker
+        # deal with it before from record.
+        ret = task.stateChange(Task.STATE_PREPARE)
+        self._taskTracker.onWorker(task.id(), None)
 
-            self._taskTracker.untrack(taskId)
+        if ret is Error:
+            self._taskTracker.untrack(task.id())
+            return False
 
         with self.dispatchLock:
             if self._do_dispatch(task) is False:
                 self.taskWait.insert(0, task)
-                self._taskTracker.track(task)
                 self.taskEvent.set()
 
         return True
@@ -288,15 +276,29 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             t = self._taskTracker.getTask(ident)
             assert(t is not None)
 
-            # Task in proc or prepare status
-            # will not be aging even though
-            # their counter is out of date.
-            if t.isProc() or t.isPrepare():
+            if self._workers.getNumOfWorkers() != 0:
 
-                if self._workers.getNumOfWorkers() is not 0:
+                # Task in proc or prepare status
+                # will not be aging even though
+                # their counter is out of date.
+                if t.isProc() or t.isPrepare():
                     self._dispatch_logging(
-                        "Task " + ident + "is in processing/Prepare. Abort to remove")
+                        "Task " + ident + " is in processing/Prepare. Abort to remove")
                     continue
+                else:
+                    # Need to check that is this task dependen on another task
+                    deps = t.dependence()
+
+                    for dep in deps:
+
+                        isPrepare = dep.taskState() == Task.STATE_PREPARE
+                        isInProc  = dep.taskState == Task.STATE_IN_PROC
+
+                        if isPrepare or isInProc:
+                            self._dispatch_logging(
+                                "Task " + ident + " is remain cause it depend on another tasks"
+                            )
+                            continue
 
             self._dispatch_logging("Remove task " + ident)
             self._taskTracker.untrack(ident)
@@ -415,47 +417,57 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         task.lastUpdate()
 
-def workerLost_redispatch(dispatcher: Dispatcher, data: Tuple[int, Worker]) -> None:
+    def workerLost_redispatch(self, data: Tuple[int, Worker]) -> None:
 
-    event, worker = data
+        event, worker = data
 
-    if event != 1:
-        return None
+        # If event's value is 1 means the worker is lost.
+        if event != 1:
+            return None
 
-    if not isinstance(worker, Worker):
-        return None
+        tasks = worker.inProcTasks()
 
-    tasks = worker.inProcTasks()
+        for t in tasks:
+            # Clean record in TaskTracker
+            # so status of TaskTracker is up to date
+            # and will able to perform action depend on it.
+            self._taskTracker.onWorker(t.id(), None)
 
-    for t in tasks:
-        assert(isinstance(t, SingleTask) or isinstance(t, PostTask))
+        for t in tasks:
 
-        # Not to redispatch tasks that need post-processing.
-        if worker.role is Role_Listener and t.isAChild():
-            parent = t.getParent()
-            assert(parent is not None)
+            deps = t.dependence()
 
-            parent.toState_force(Task.STATE_FAILURE)
-            continue
+            if deps == []:
+                # This task is not depend on another task
+                # just redispatch this task again.
+                self.redispatch(t)
+            else:
+                # This task is depend on another tasks
+                # need to restart it by following steps:
 
-        elif t.isAChild():
-            parent = t.getParent()
-            assert(parent is not None)
+                # First: Redispatch task
+                self.redispatch(t)
 
-            t.stateChange(Task.STATE_PREPARE)
-            if parent.taskState() == Task.STATE_IN_PROC:
-                parent.toPreState()
-                dispatcher.redispatch(parent)
-        else:
-            dispatcher.redispatch(t)
+                # Second: Send RE_WORK command to workers that dealing
+                #         dependence of this task.
+                workers = [self._taskTracker.whichWorker(dep.id()) for dep in deps]
+                commands = [ReWorkCommand(dep.id()) for dep in deps]
+
+                for w, c in zip(workers, commands):
+                    # If w is None means the depended task
+                    # is waiting for dispatch.
+                    if w is None:
+                        continue
+
+                    w.control(c)
 
 
-    # Remove all tasks in failure state.
-    if worker.role is Role_Listener:
-        dispatcher.notify(None)
+
+
+
+
 
 # Misc
-
 # Method to get an online worker which
 # with lowest overhead of all online workerd
 def viaOverhead(workers: List[Worker]) -> List[Worker]:

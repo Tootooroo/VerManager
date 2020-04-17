@@ -108,7 +108,7 @@ class ServerInst(Thread):
         workerRoom.handler_install(DISPATCHER_M_NAME, lambda data: workerRoom.tasks_clear())
 
         # Install observer handlers to Dispatcher
-        handler_dispatcher = lambda data: workerLost_redispatch(dispatcher, data)
+        handler_dispatcher = lambda data: dispatcher.workerLost_redispatch(data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
 
         self._mmanager.startAll()

@@ -223,6 +223,12 @@ class Storage(Module):
         else:
             os.makedirs(path)
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def _recover(self) -> None:
         global seperator
 
@@ -349,3 +355,6 @@ class Storage(Module):
             return Error
 
         return theBox.copyTo(fileName, dest)
+
+    def destruct(self) -> None:
+        shutil.rmtree(self._path)

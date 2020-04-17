@@ -155,6 +155,9 @@ class PostListener(ModuleDaemon, Observer):
         self._cInst = cInst
         self._processor = PostProcessor(cInst)
 
+    def begin(self) -> None:
+        return None
+
     def postAppend(self, postLetter:'PostTaskLetter') -> None:
         post = Post.fromPostLetter(postLetter) # type: Post
         self._processor.appendPost(post)
@@ -237,6 +240,9 @@ class PostListener(ModuleDaemon, Observer):
             sockKeepalive(wSock, 10, 3)
 
             self._processor.req(wSock)
+
+    def cleanup(self) -> None:
+        return None
 
     def stop(self) -> None:
         self._isStop = True
@@ -399,6 +405,9 @@ class PostProvider(Module, Observer):
     def removeAllStuffs(self) -> None:
         with self._Q_lock:
             self._stuffQ.queue.clear()
+
+    def begin(self) -> None:
+        return None
 
     def cleanup(self) -> None:
         self.disconnect()

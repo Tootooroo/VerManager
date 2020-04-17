@@ -28,7 +28,7 @@ class TrackUnit:
     def taskStatus(self) -> TaskType:
         return self._task.taskState()
 
-    def setWorker(self, w:Worker) -> None:
+    def setWorker(self, w:Optional[Worker]) -> None:
         self._worker = w
 
     def getTask(self) -> Task:
@@ -69,7 +69,7 @@ class TaskTracker(Module):
             return None
         return self._tasks[t_name].getTask()
 
-    def onWorker(self, t_name:str, worker:Worker) -> None:
+    def onWorker(self, t_name:str, worker:Optional[Worker]) -> None:
         if t_name not in self._tasks:
             return None
 

@@ -1,5 +1,6 @@
 # commands.py
 
+from abc import ABC, abstractmethod
 from .letter import Letter, CommandLetter, Optional
 from typing import Dict, Tuple
 
@@ -22,12 +23,14 @@ class Command:
         self.content = content
         self.target = target
 
+    @abstractmethod
     def toLetter(self) -> Letter:
-        raise toLetter_need_implemented
+        """ Transfer Command to Letter """
 
+    @abstractmethod
     @staticmethod
     def fromLetter(l:CommandLetter) -> Optional['Command']:
-        raise fromLetter_need_implemented
+        """ Transfer from CommandLetter to Command """
 
 
 class PostConfigCmd(Command):
@@ -127,3 +130,19 @@ class LisAddrUpdateCmd(Command):
             return None
 
         return LisAddrUpdateCmd(l.getContent('address'), int(l.getContent('port')))
+
+class ReWorkCommand(Command):
+    """
+    Command to tell to worker that a task need to redo.
+    """
+
+    def __init__(self, tid:str) -> None:
+        content = {"tid":tid}
+        Command.__init__(self, CMD_LIS_ADDR_UPDATE, content = content)
+
+    def toLetter(self) -> CommandLetter:
+        return CommandLetter(self.type, content = self.content)
+
+    @staticmethod
+    def fromLetter(l:CommandLetter) -> Optional['ReWorkCommand']:
+        return None

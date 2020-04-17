@@ -23,41 +23,102 @@ import socket
 
 # Create your tests here.
 
-"""
 class FunctionalTest(TestCase):
-    def setUp(self):
-        self.browser = webdriver.Firefox()
 
-    def tearDown(self):
-        self.browser.quit()
+    def test_dispatcher(self):
 
-#    def test_title_check(self):
-#        self.browser.get('http://localhost:8000/manager')
-#        self.assertEqual('GPON Team Site', self.browser.title)
-#        self.fail('Test finish')
-"""
+        import os
+        from multiprocessing import Process
 
+        def clientStart(name:str) -> None:
+            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
+                       name = name)
+            c.start()
+            c.join()
 
-class HttpRequest_:
-    def __init__(self):
-        self.headers = {}
-        self.body = ""
+        def clientInterrupt(name:str) -> None:
+            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
+                       name = name)
+            c.start()
+            time.sleep(15)
+            c.stop()
+            c.join()
+
+        # Create a server
+        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
+        sInst.start()
+
+        time.sleep(1)
+
+        # Create workers
+        client1 = Process(target=clientInterrupt, args = ("W1", ))
+        time.sleep(3)
+        client2 = Process(target=clientStart, args = ("W2", ))
+        client3 = Process(target=clientStart, args = ("W3", ))
+
+        workers = [client1, client2, client3]
+
+        # Activate workers
+        list( map(lambda c: c.start(), workers) )
+
+        # Then wait a while so workers have enough time to connect to master
+        time.sleep(15)
+
+        # Get 'Dispatcher' Module on server so we can dispatch task to workers
+        dispatcher = sInst.getModule("Dispatcher")
+        if not isinstance(dispatcher, Dispatcher):
+            self.assertTrue(False)
+
+        time.sleep(15)
+
+        from manager.master.workerRoom import M_NAME as WR_M_NAME
+        wr = sInst.getModule(WR_M_NAME)
+
+        if wr.postListener() is not None:
+            client4 = Process(target=clientStart, args = ("W4", ))
+            client4.start()
+
+            workers.append(client4)
+
+            # Wait at least WAITING_INTERVAL
+            time.sleep(15)
+
+        # Dispatch task
+        task1 = Task("122", "123", "122")
+        dispatcher.dispatch(task1)
+
+        workerRoom = sInst.getModule("WorkerRoom")
+        self.assertTrue(isinstance(workerRoom, WorkerRoom))
+
+        # Now let us dispatch three more task to workers
+        # if nothing wrong each of these workers should
+        # in work.
+        task2 = Task("124", "123", "124")
+        dispatcher.dispatch(task2)
+
+        task3 = Task("125", "123", "125")
+        dispatcher.dispatch(task3)
+
+        task4 = Task("126", "123", "126")
+        dispatcher.dispatch(task4)
+
+        time.sleep(15)
+
+        self.assertTrue(os.path.exists("./Storage/122/122total"))
+        self.assertTrue(os.path.exists("./Storage/124/124total"))
+        self.assertTrue(os.path.exists("./Storage/125/125total"))
+        self.assertTrue(os.path.exists("./Storage/126/126total"))
+
+        for path in ["./Storage/" + sub for sub in ["122", "124", "125", "126"]]:
+            fileName = path.split("/")[-1] + "total"
+            os.remove(path+"/"+fileName)
+            os.rmdir(path)
+
+        time.sleep(10)
+
 
 
 class UnitTest(TestCase):
-
-    def tes_index_page(self):
-        response = self.client.get('/manager/')
-        self.assertTemplateUsed(response, 'index.html')
-
-    def tes_verRegister_page(self):
-        response = self.client.get('/manager/verManager')
-        self.assertTemplateUsed(response, 'verManager.html')
-
-    def tes_register_feature(self):
-        response = self.client.post('/manager/verRegister/register',
-                                    data = { 'Version' : 'V1', 'verChoice' : 'XXXX' })
-        self.assertTrue(response.status_code == 200)
 
     def tes_new_rev(self):
         import manager.master.components as Components
@@ -105,7 +166,7 @@ class UnitTest(TestCase):
         except Exception:
             self.assertTrue(False)
 
-    def tes_info(self):
+    def test_info(self):
         from manager.basic.info import Info
 
         cfgs = Info("./config.yaml")
@@ -321,59 +382,7 @@ class UnitTest(TestCase):
 
         time.sleep(3)
 
-    def tes_Connected(self):
-
-        sInst = ServerInst("127.0.0.1", 8012, "./config.yaml")
-        sInst.start()
-        time.sleep(1)
-
-        client1 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W1")
-        client1.start()
-
-        client2 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W2")
-        client2.start()
-
-        client3 = Client("127.0.0.1", 8012, "./manager/worker/config.yaml", name = "W3")
-        client3.start()
-
-        time.sleep(2)
-
-        wr = sInst.getModule('WorkerRoom')
-        self.assertEqual(3, wr.getNumOfWorkers())
-
-        time.sleep(15)
-
-        # Reconnect tests case
-        client1.disconnect()
-
-        # After client1 disconnect there should be one
-        # worker in wait queue
-        time.sleep(3)
-
-        self.assertEqual(1, wr.getNumOfWorkersInWait())
-
-        time.sleep(10)
-
-        # At this time worker should reconnect to master
-        self.assertEqual(0, wr.getNumOfWorkersInWait())
-        self.assertEqual(3, wr.getNumOfWorkers())
-
-        # Client Stop
-        client1.stop()
-        client2.stop()
-        client3.stop()
-
-        time.sleep(3)
-
-        self.assertTrue(client1.isStop())
-        self.assertTrue(client2.isStop())
-        self.assertTrue(client3.isStop())
-
-        time.sleep(10)
-
-        self.assertEqual(0, wr.getNumOfWorkersInWait())
-
-    def tes_logger(self):
+    def test_logger(self):
 
         from manager.master.logger import Logger
 
@@ -382,173 +391,6 @@ class UnitTest(TestCase):
 
         logger.log_register("Test")
         Logger.putLog(logger, "Test", "123")
-
-    def test_dispatcher_aging(self):
-        from manager.master.dispatcher import Dispatcher
-
-        def taskUpdate(d:Dispatcher):
-            i = 0
-            while i < 3:
-                d.taskLastUpdate("TaskEternel")
-                time.sleep(1)
-
-        s = ServerInst("127.0.0.1", 8099, "./config_test.yaml")
-        s.start()
-
-        time.sleep(1)
-
-        dispatcher = s.getModule("Dispatcher")
-        self.assertTrue(dispatcher is not None)
-
-        taskId = "TaskAging"
-        dispatcher.dispatch(Task(taskId, "Rev", "Ver"))
-
-        taskId_eternel = "TaskEternel"
-        dispatcher.dispatch(Task(taskId_eternel, "rev", "Ver"))
-
-        spawnThread(taskUpdate, dispatcher)
-
-        t_aging = dispatcher.getTask(taskId)
-        self.assertTrue(t_aging is not None)
-
-        t_eternel = dispatcher.getTask(taskId_eternel)
-        self.assertTrue(t_eternel is not None)
-
-        # Aging interval is 5 seconds
-        time.sleep(8)
-
-        t_aging = dispatcher.getTask(taskId)
-        self.assertTrue(t_aging is None)
-
-        t_eternel = dispatcher.getTask(taskId_eternel)
-        self.assertTrue(t_eternel is not None)
-
-
-    def tes_dispatcher_error(self):
-
-        from multiprocessing import Process
-
-        def clientStart(name:str) -> None:
-            c = Client("127.0.0.1", 8077, "./manager/worker/config.yaml",
-                        name = name)
-            c.start()
-            c.join()
-
-        # Create a server
-        sInst = ServerInst("127.0.0.1", 8077, "./config_cancel_test.yaml")
-        sInst.start()
-
-        time.sleep(1)
-
-        # Create workers
-        client1 = Process(target=clientStart, args = ("W1", ))
-        client2 = Process(target=clientStart, args = ("W2", ))
-        client3 = Process(target=clientStart, args = ("W3", ))
-        client4 = Process(target=clientStart, args = ("W4", ))
-
-        workers = [client1, client2, client3, client4]
-        for worker in workers: worker.start()
-
-        time.sleep(15)
-
-        dispatcher = sInst.getModule("Dispatcher") # type: Optional[Dispatcher]
-        self.assertTrue(dispatcher is not None)
-
-        task1 = Task("error_vsn", "rev", "error_vsn")
-        dispatcher.dispatch(task1)
-
-        time.sleep(30)
-
-    def test_dispatcher(self):
-
-        import os
-        from multiprocessing import Process
-
-        def clientStart(name:str) -> None:
-            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
-                       name = name)
-            c.start()
-            c.join()
-
-        def clientInterrupt(name:str) -> None:
-            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
-                       name = name)
-            c.start()
-            time.sleep(15)
-            c.stop()
-            c.join()
-
-        # Create a server
-        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
-        sInst.start()
-
-        time.sleep(1)
-
-        # Create workers
-        client1 = Process(target=clientInterrupt, args = ("W1", ))
-        time.sleep(3)
-        client2 = Process(target=clientStart, args = ("W2", ))
-        client3 = Process(target=clientStart, args = ("W3", ))
-
-        workers = [client1, client2, client3]
-
-        # Activate workers
-        list( map(lambda c: c.start(), workers) )
-
-        # Then wait a while so workers have enough time to connect to master
-        time.sleep(15)
-
-        # Get 'Dispatcher' Module on server so we can dispatch task to workers
-        dispatcher = sInst.getModule("Dispatcher")
-        if not isinstance(dispatcher, Dispatcher):
-            self.assertTrue(False)
-
-        time.sleep(15)
-
-        from manager.master.workerRoom import M_NAME as WR_M_NAME
-        wr = sInst.getModule(WR_M_NAME)
-
-        if wr.postListener() is not None:
-            client4 = Process(target=clientStart, args = ("W4", ))
-            client4.start()
-
-            workers.append(client4)
-
-            # Wait at least WAITING_INTERVAL
-            time.sleep(15)
-
-        # Dispatch task
-        task1 = Task("122", "123", "122")
-        dispatcher.dispatch(task1)
-
-        workerRoom = sInst.getModule("WorkerRoom")
-        self.assertTrue(isinstance(workerRoom, WorkerRoom))
-
-        # Now let us dispatch three more task to workers
-        # if nothing wrong each of these workers should
-        # in work.
-        task2 = Task("124", "123", "124")
-        dispatcher.dispatch(task2)
-
-        task3 = Task("125", "123", "125")
-        dispatcher.dispatch(task3)
-
-        task4 = Task("126", "123", "126")
-        dispatcher.dispatch(task4)
-
-        time.sleep(15)
-
-        self.assertTrue(os.path.exists("./Storage/122/122total"))
-        self.assertTrue(os.path.exists("./Storage/124/124total"))
-        self.assertTrue(os.path.exists("./Storage/125/125total"))
-        self.assertTrue(os.path.exists("./Storage/126/126total"))
-
-        for path in ["./Storage/" + sub for sub in ["122", "124", "125", "126"]]:
-            fileName = path.split("/")[-1] + "total"
-            os.remove(path+"/"+fileName)
-            os.rmdir(path)
-
-        time.sleep(10)
 
 
     def test_storage(self):
@@ -568,7 +410,6 @@ class UnitTest(TestCase):
         # Open
         chooser_open = storage.open(boxName, fileName)
         self.assertEqual(chooser_create.path(), chooser_open.path())
-
 
         self.assertEqual(1, storage.numOfFiles())
 
@@ -599,6 +440,9 @@ class UnitTest(TestCase):
         self.assertTrue(not os.path.exists("./Storage/box/file3"))
         self.assertTrue(not os.path.exists("./Storage/box/file4"))
         self.assertTrue(not os.path.exists("./Storage/box/file5"))
+
+        storage.destruct()
+        self.assertTrue(not os.path.exists("./Storage/"))
 
 
     def test_build(self):

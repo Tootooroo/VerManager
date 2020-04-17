@@ -1,5 +1,6 @@
 # mmanager.py
 
+from abc import ABC, abstractmethod
 from typing import Callable, Optional, List
 from threading import Thread, Event
 from .util import partition
@@ -19,7 +20,7 @@ class Daemon(Thread):
     def needStop(self) -> bool:
         raise Exception
 
-class Module:
+class Module(ABC):
 
     def __init__(self, mName:str) -> None:
         self._mName = mName
@@ -27,9 +28,11 @@ class Module:
     def getName(self) -> str:
         return self._mName
 
+    @abstractmethod
     def begin(self) -> None:
         pass
 
+    @abstractmethod
     def cleanup(self) -> None:
         pass
 
