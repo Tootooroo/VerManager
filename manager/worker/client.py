@@ -30,25 +30,25 @@ class Client(Thread):
 
         Thread.__init__(self)
 
-        self.__cfgPath = cfgPath
+        self._cfgPath = cfgPath
 
-        self.__name = name
+        self._name = name
 
-        self.__mAddress = mAddress
-        self.__mPort = mPort
+        self._mAddress = mAddress
+        self._mPort = mPort
 
-        self.__isStop = True
+        self._isStop = True
 
-        self.__manager = MManager()
+        self._manager = MManager()
 
     def getIdent(self) -> str:
-        return self.__name
+        return self._name
 
     def stop(self) -> None:
-        self.__manager.stopAll()
+        self._manager.stopAll()
 
     def inProcTasks(self) -> Optional[int]:
-        processor = self.__manager.getModule(PROCESSOR_M_NAME)
+        processor = self._manager.getModule(PROCESSOR_M_NAME)
 
         if isinstance(processor, Processor):
             return processor.tasksInProc()
@@ -56,7 +56,7 @@ class Client(Thread):
         return None
 
     def isStop(self) -> bool:
-        return self.__isStop
+        return self._isStop
 
     def connect(self) -> None:
         server = self.getModule(SERVER_M_NAME)
@@ -77,54 +77,54 @@ class Client(Thread):
         server.disconnect()
 
     def addModule(self, m: Module) -> None:
-        self.__manager.addModule(m)
+        self._manager.addModule(m)
 
     def getModule(self, ident: str) -> Optional[Module]:
-        return self.__manager.getModule(ident)
+        return self._manager.getModule(ident)
 
     def removeModule(self, ident) -> None:
-        self.__manager.removeModule(ident)
+        self._manager.removeModule(ident)
 
     def isModuleExists(self, ident: str) -> bool:
-        return self.__manager.isModuleExists(ident)
+        return self._manager.isModuleExists(ident)
 
     def run(self) -> None:
-        self.__isStop = False
+        self._isStop = False
 
-        info = Info(self.__cfgPath)
-        self.__manager.addModule(info)
+        info = Info(self._cfgPath)
+        self._manager.addModule(info)
 
-        address = self.__mAddress
-        port = self.__mPort
+        address = self._mAddress
+        port = self._mPort
 
-        if self.__name == "":
-            self.__name = workerName = info.getConfig('WORKER_NAME')
+        if self._name == "":
+            self._name = workerName = info.getConfig('WORKER_NAME')
         else:
-            workerName = self.__name
+            workerName = self._name
 
         s = Server(address, port, info, self)
         s.setWorkerName(workerName)
-        self.__manager.addModule(s)
+        self._manager.addModule(s)
 
         m1 = Receiver(s, info, self)
-        self.__manager.addModule(m1)
+        self._manager.addModule(m1)
 
         m2 = Sender(s, info, self)
         m2.rtnRegister(lambda : s.transfer_step(1))
-        self.__manager.addModule(m2)
+        self._manager.addModule(m2)
 
         m3 = Processor(info, self)
-        self.__manager.addModule(m3)
+        self._manager.addModule(m3)
 
-        self.__manager.startAll()
+        self._manager.startAll()
 
         # Block the initial thread cause the entire program
         # exists when only daemon-thread exists. initial thread
         # is the only one non-daemon thread.
-        self.__manager.join()
+        self._manager.join()
 
         print("Stop")
-        self.__isStop = True
+        self._isStop = True
 
 
 if __name__ == '__main__':

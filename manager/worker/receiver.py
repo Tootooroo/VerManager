@@ -28,8 +28,8 @@ class Receiver(ModuleDaemon):
         self.pool = Pool( int(info.getConfig('PROCESS_POOL_SIZE')) )
         self.info = info
         self.inProcTasks = {} # type: Dict[str, Any]
-        self.__status = 0
-        self.__cInst = cInst
+        self._status = 0
+        self._cInst = cInst
 
     def numOfTasks(self) -> int:
         return self.numOfTasksInProc
@@ -38,10 +38,10 @@ class Receiver(ModuleDaemon):
         return self.max
 
     def stop(self) -> None:
-        self.__status = 1
+        self._status = 1
 
     def status(self) -> int:
-        return self.__status
+        return self._status
 
     def listOfTasks(self) -> List[Any]:
         return list( self.inProcTasks.values())
@@ -52,7 +52,7 @@ class Receiver(ModuleDaemon):
     def run(self) -> None:
 
         server = self.server
-        processor = self.__cInst.getModule(PROCESSOR_M_NAME)
+        processor = self._cInst.getModule(PROCESSOR_M_NAME)
 
         # Not Processor module
         if not isinstance(processor, Processor):
@@ -60,7 +60,7 @@ class Receiver(ModuleDaemon):
 
         while True:
 
-            if self.__status == 1:
+            if self._status == 1:
                 return None
 
             try:

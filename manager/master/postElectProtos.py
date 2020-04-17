@@ -17,12 +17,12 @@ class RandomElectProtocol(PostElectProtocol):
 
     def __init__(self) -> None:
         PostElectProtocol.__init__(self)
-        self.__blackList = [] # type: List[str]
+        self._blackList = [] # type: List[str]
 
-        self.__proto_port = 8066
+        self._proto_port = 8066
 
     def init(self) -> State:
-        # __group maybe None because WorkerRoom is in instable status
+        # group maybe None because WorkerRoom is in instable status
         if self.group is None:
             return Error
 
@@ -30,7 +30,7 @@ class RandomElectProtocol(PostElectProtocol):
             return Error
 
         # Listener elect
-        (ret, ident) = self.__elect_listener()
+        (ret, ident) = self._elect_listener()
         if ret == Error:
             return Error
 
@@ -42,7 +42,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         candidates = self.group.candidateIter()
 
-        cmd_set_provider = PostConfigCmd(host, self.__proto_port,
+        cmd_set_provider = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_PROVIDER)
         for c in candidates:
             # fixme: May cause performance problem you can
@@ -84,7 +84,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return response
 
-    def __elect_listener(self) -> Tuple[State, str]:
+    def _elect_listener(self) -> Tuple[State, str]:
 
         if self.group is None:
             return (Ok, "")
@@ -94,7 +94,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         candidates = self.group.candidates()
 
-        listener = reduce(self.__random_elect, candidates)
+        listener = reduce(self._random_elect, candidates)
 
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
@@ -103,7 +103,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         (host, port) = listener.getAddress()
 
-        cmd_set_listener = PostConfigCmd(host, self.__proto_port,
+        cmd_set_listener = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_LISTENER)
 
         # Clear messages trivial messages may remain in queue
@@ -136,7 +136,7 @@ class RandomElectProtocol(PostElectProtocol):
                 return Ok
             else:
                 host, _ = listener.getAddress()
-                cmd_set_provider = PostConfigCmd(host, self.__proto_port,
+                cmd_set_provider = PostConfigCmd(host, self._proto_port,
                                                     PostConfigCmd.ROLE_PROVIDER)
 
                 self.msgClear()
@@ -155,7 +155,7 @@ class RandomElectProtocol(PostElectProtocol):
                 return Ok
 
         # Reinit
-        self.__isInit = False
+        self._isInit = False
 
         # Move all providers into candidates
         providers = self.group.getProviders()
@@ -171,5 +171,5 @@ class RandomElectProtocol(PostElectProtocol):
     def terminate(self) -> State:
         pass
 
-    def __random_elect(self, w1:Worker, w2:Worker) -> Worker:
+    def _random_elect(self, w1:Worker, w2:Worker) -> Worker:
         return w1

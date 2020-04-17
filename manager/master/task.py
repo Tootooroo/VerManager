@@ -53,7 +53,7 @@ class Task:
         self.extra = extra
 
         # Files that relate to this task
-        self.__files = None  # type: Optional[BinaryIO]
+        self._files = None  # type: Optional[BinaryIO]
 
         self.state = Task.STATE_PREPARE
 
@@ -143,7 +143,7 @@ class Task:
     #        name 'BinaryIO' is not defined. Temporarily
     #        use Any to instead of BinaryIO
     def file(self) -> Optional[Any]:
-        return self.__files
+        return self._files
 
     def toLetter(self) -> Letter:
         pass
@@ -172,17 +172,17 @@ class SuperTask(Task):
         Task.__init__(self, id, sn, revision, extra)
 
         self.type = SuperTask.Type
-        self.__children = [] # type: List['Task']
-        self.__buildSet = buildSet
+        self._children = [] # type: List['Task']
+        self._buildSet = buildSet
 
-        self.__split()
+        self._split()
 
     def getChildren(self) -> List[Task]:
-        return self.__children
+        return self._children
 
     def getChild(self, ident:str) -> Optional[Task]:
         maybe_the_child = list(filter(lambda w: w.id() == ident,
-                                      self.__children))
+                                      self._children))
 
         count = len(maybe_the_child)
         if count is 1:
@@ -193,7 +193,7 @@ class SuperTask(Task):
     def getGroupOf(self, tid:str) -> Optional[List[Task]]:
         group = []  # type: List[Task]
 
-        builds = self.__buildSet.belongTo(tid)
+        builds = self._buildSet.belongTo(tid)
         if builds is None:
             return None
 
@@ -212,11 +212,11 @@ class SuperTask(Task):
 
     # For SuperTask isBindWithBuild should always return True
     def isBindWithBuild(self) -> bool:
-        return self.__buildSet is not None
+        return self._buildSet is not None
 
     def toPreState(self) -> State:
         isAbleTo = False
-        for c in self.__children:
+        for c in self._children:
             isAbleTo = isAbleTo or c.isPrepare()
         if isAbleTo:
             self.state = Task.STATE_PREPARE
@@ -226,7 +226,7 @@ class SuperTask(Task):
 
     def toFinState(self) -> State:
         isAbleTo = True
-        for c in self.__children:
+        for c in self._children:
             isAbleTo = isAbleTo and c.isFinished()
         if isAbleTo:
             self.state = Task.STATE_FINISHED
@@ -235,7 +235,7 @@ class SuperTask(Task):
         return Error
 
     def toFailState(self) -> State:
-        failedChildren = list(filter(lambda child: child.isFailure(), self.__children))
+        failedChildren = list(filter(lambda child: child.isFailure(), self._children))
 
         if len(failedChildren) > 0:
             self.state = Task.STATE_FAILURE
@@ -246,7 +246,7 @@ class SuperTask(Task):
     def toState_force(self, state:TaskState) -> State:
         ret = True
 
-        for c in self.__children:
+        for c in self._children:
             c_ret = c.stateChange(state)
             if c_ret is Error:
                 ret = ret and False
@@ -260,10 +260,10 @@ class SuperTask(Task):
 
 
     def setBuildSet(self, buildSet:BuildSet) -> None:
-        self.__buildSet = buildSet
+        self._buildSet = buildSet
 
     def getPostTask(self) -> Optional['PostTask']:
-        for child in self.__children:
+        for child in self._children:
             if isinstance(child, PostTask):
                 return child
         return None
@@ -272,11 +272,11 @@ class SuperTask(Task):
     def isInPost(self, bId:str) -> bool:
         pass
 
-    def __split(self) -> None:
+    def _split(self) -> None:
         # Generate tasks from SuperTask
         # Version should attach to subtasks's tid
         # and Post group's member's id too.
-        builds = self.__buildSet.getBuilds()
+        builds = self._buildSet.getBuilds()
 
         children = [] # type: List[Task]
 
@@ -310,19 +310,19 @@ class SuperTask(Task):
 
             st.setParent(self)
 
-            group = self.__buildSet.belongTo(build.getIdent())
+            group = self._buildSet.belongTo(build.getIdent())
             if group is not None:
                 st.setGroup(group[0])
 
             children.append(st)
 
         # Build frags
-        allBuilds_ident = list(map(lambda b: b.getIdent(), self.__buildSet.getBuilds()))
-        predicate = lambda ident: self.__buildSet.belongTo(ident) is None
+        allBuilds_ident = list(map(lambda b: b.getIdent(), self._buildSet.getBuilds()))
+        predicate = lambda ident: self._buildSet.belongTo(ident) is None
         frags = [prefix(ident) for ident in allBuilds_ident if predicate(ident)]
 
         # Get posts from BuildSet and attach version to member's id.
-        posts = self.__buildSet.getPosts()
+        posts = self._buildSet.getPosts()
         for post in posts:
             if varPairs != []:
                 post.varAssign(varPairs)
@@ -332,7 +332,7 @@ class SuperTask(Task):
             members = list(map(lambda member: prefix(member), members))
             post.setMembers(members)
 
-        merge = self.__buildSet.getMerge()
+        merge = self._buildSet.getMerge()
         if varPairs != []:
             merge.varAssign(varPairs)
 
@@ -341,7 +341,7 @@ class SuperTask(Task):
 
         children.append(pt)
 
-        self.__children = children
+        self._children = children
 
 class SingleTask(Task):
 
@@ -354,42 +354,42 @@ class SingleTask(Task):
         Task.__init__(self, id, sn, revision, extra)
 
         self.type = SingleTask.Type
-        self.__build = build
-        self.__parent = None # type: Optional[SuperTask]
-        self.__postGroup = None # type: Optional[str]
+        self._build = build
+        self._parent = None # type: Optional[SuperTask]
+        self._postGroup = None # type: Optional[str]
 
     def setParent(self, parent:SuperTask) -> None:
-        self.__parent = parent
+        self._parent = parent
 
     def getParent(self) -> Optional[SuperTask]:
-        return self.__parent
+        return self._parent
 
     def setGroup(self, group:str) -> None:
-        self.__postGroup = group
+        self._postGroup = group
 
     def getGroup(self) -> Optional[str]:
-        return self.__postGroup
+        return self._postGroup
 
     def isAChild(self) -> bool:
-        return self.__parent is not None
+        return self._parent is not None
 
     def toLetter(self) -> NewLetter:
 
-        build = self.__build
+        build = self._build
         extra = {"resultPath":build.getOutput(), "cmds":build.getCmd()}
 
         if self.isAChild():
             parent_ident = self.getParent().id() # type: ignore
             needPost = "true"
-            group = self.__parent.getGroupOf(self.id()) # type: ignore
+            group = self._parent.getGroupOf(self.id()) # type: ignore
         else:
             parent_ident = ""
             needPost = "false"
 
         menu = ""
 
-        if self.__postGroup is not None:
-            menu = self.__postGroup
+        if self._postGroup is not None:
+            menu = self._postGroup
 
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
                          parent = parent_ident,
@@ -398,7 +398,7 @@ class SingleTask(Task):
                          needPost = needPost)
 
     def isBindWithBuild(self) -> bool:
-        return self.__build is not None
+        return self._build is not None
 
 
 class PostTask(Task):
@@ -411,41 +411,41 @@ class PostTask(Task):
         Task.__init__(self, ident, "", version)
 
         self.type = PostTask.Type
-        self.__postGroups = groups
-        self.__frags = frags
-        self.__merge = merge
-        self.__parent = None # type: Optional[SuperTask]
+        self._postGroups = groups
+        self._frags = frags
+        self._merge = merge
+        self._parent = None # type: Optional[SuperTask]
 
     @staticmethod
     def genIdent(ident:str) -> str:
         return ident+"__Post"
 
     def setParent(self, parent:SuperTask) -> None:
-        self.__parent = parent
+        self._parent = parent
 
     def getParent(self) -> Optional[SuperTask]:
-        return self.__parent
+        return self._parent
 
     def getGroups(self) -> List[Post]:
-        return self.__postGroups
+        return self._postGroups
 
     def setGroups(self, groups:List[Post]) -> None:
-        self.__postGroups = groups
+        self._postGroups = groups
 
     def isAChild(self) -> bool:
-        return self.__parent is not None
+        return self._parent is not None
 
     def toLetter(self) -> PostTaskLetter:
 
         version = self.vsn
-        posts = self.__postGroups
+        posts = self._postGroups
         menuLetters = list(map(lambda p: p.toMenuLetter(version), posts))
 
         postTaskLetter = PostTaskLetter(self.vsn+"__Post",
                                         self.vsn,
-                                        self.__merge.getCmds(),
-                                        self.__merge.getOutput(),
-                                        frags=self.__frags,
+                                        self._merge.getCmds(),
+                                        self._merge.getOutput(),
+                                        frags=self._frags,
                                         menus = {})
         for menuLetter in menuLetters:
             postTaskLetter.addMenu(menuLetter)
@@ -457,34 +457,34 @@ class PostTask(Task):
 class TaskGroup:
     def __init__(self) -> None:
         # {Type:Tasks}
-        self.__tasks = {} # type: Dict[TaskType, Dict[str, Task]]
-        self.__numOfTasks = 0
-        self.__lock = Lock()
+        self._tasks = {} # type: Dict[TaskType, Dict[str, Task]]
+        self._numOfTasks = 0
+        self._lock = Lock()
 
     def newTask(self, task: Task) -> None:
         type = task.getType()
         tid = task.id()
 
-        with self.__lock:
+        with self._lock:
 
             if self.__isExists(tid):
                 return None
 
-            if type not in self.__tasks:
-                self.__tasks[type] = {}
+            if type not in self._tasks:
+                self._tasks[type] = {}
 
-            tasks = self.__tasks[type]
+            tasks = self._tasks[type]
 
             tasks[task.id()] = task
 
             if not isinstance(task, PostTask):
-                self.__numOfTasks += 1
+                self._numOfTasks += 1
 
     def remove(self, id: str) -> State:
-        with self.__lock: return self.__remove(id)
+        with self._lock: return self.__remove(id)
 
     def __remove(self, id:str) -> State:
-        task_dicts = list(self.__tasks.values())
+        task_dicts = list(self._tasks.values())
 
         for tasks in task_dicts:
             if not id in tasks:
@@ -494,13 +494,13 @@ class TaskGroup:
             del tasks [id]
 
             if not isinstance(task, PostTask):
-                self.__numOfTasks -= 1
+                self._numOfTasks -= 1
 
             return Ok
 
         return Error
 
-    def __mark(self, id: str, st: TaskState) -> State:
+    def _mark(self, id: str, st: TaskState) -> State:
         task = self.search(id)
         if task is None:
             return Error
@@ -509,10 +509,10 @@ class TaskGroup:
         return Ok
 
     def toList(self) -> List[Task]:
-        with self.__lock: return self.__toList_non_lock()
+        with self._lock: return self._toList_non_lock()
 
-    def __toList_non_lock(self) -> List[Task]:
-        task_dicts = list(self.__tasks.values())
+    def _toList_non_lock(self) -> List[Task]:
+        task_dicts = list(self._tasks.values())
         task_lists = list(map(lambda d: list(d.values()), task_dicts))
 
         return reduce(lambda acc, cur: acc + cur, task_lists, [])
@@ -524,10 +524,10 @@ class TaskGroup:
         return list(l_id)
 
     def isExists(self, ident:str) -> bool:
-        with self.__lock: return self.__isExists(ident)
+        with self._lock: return self.__isExists(ident)
 
     def __isExists(self, ident:str) -> bool:
-        task_dicts = list(self.__tasks.values())
+        task_dicts = list(self._tasks.values())
 
         for tasks in task_dicts:
             if not id in tasks:
@@ -538,28 +538,28 @@ class TaskGroup:
         return False
 
     def removeTasks(self, predicate:Callable[[Task], bool]) -> None:
-        with self.__lock:
-            for t in self.__toList_non_lock():
+        with self._lock:
+            for t in self._toList_non_lock():
                 ret = predicate(t)
 
                 if ret is True:
                     self.__remove(t.id())
 
     def markPre(self, id: str) -> State:
-        return self.__mark(id, Task.STATE_PREPARE)
+        return self._mark(id, Task.STATE_PREPARE)
 
     def markInProc(self, id:str) -> State:
-        return self.__mark(id, Task.STATE_IN_PROC)
+        return self._mark(id, Task.STATE_IN_PROC)
 
     def markFin(self, id: str) -> State:
-        return self.__mark(id, Task.STATE_FINISHED)
+        return self._mark(id, Task.STATE_FINISHED)
 
     def markFail(self, id: str) -> State:
-        return self.__mark(id, Task.STATE_FAILURE)
+        return self._mark(id, Task.STATE_FAILURE)
 
     def search(self, id: str) -> Union[Task, None]:
-        with self.__lock:
-            tasks_dicts = list(self.__tasks.values())
+        with self._lock:
+            tasks_dicts = list(self._tasks.values())
 
             for tasks in tasks_dicts:
                 if id not in tasks:
@@ -570,4 +570,4 @@ class TaskGroup:
             return None
 
     def numOfTasks(self) -> int:
-        return self.__numOfTasks
+        return self._numOfTasks

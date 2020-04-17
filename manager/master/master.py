@@ -38,33 +38,33 @@ class ServerInst(Thread):
 
     def __init__(self, address:str, port:int, cfgPath:str) -> None:
         Thread.__init__(self)
-        self.__address = address
-        self.__port = port
+        self._address = address
+        self._port = port
 
-        self.__configPath = cfgPath
+        self._configPath = cfgPath
 
-        self.__mmanager = MManager()
+        self._mmanager = MManager()
 
     def getModule(self, m:str) -> Optional[Module]:
-        return self.__mmanager.getModule(m)
+        return self._mmanager.getModule(m)
 
     def addModule(self, mod:Module) -> State:
-        return self.__mmanager.addModule(mod)
+        return self._mmanager.addModule(mod)
 
     def modules(self) -> List[Module]:
-        return self.__mmanager.getAllModules()
+        return self._mmanager.getAllModules()
 
     def run(self) -> None:
         global predicates
 
-        info = Info(self.__configPath)
+        info = Info(self._configPath)
 
         #if not info.validityChecking(predicates):
         #    raise INVALID_CONFIGURATIONS
 
         self.addModule(info)
 
-        workerRoom = WorkerRoom(self.__address, self.__port, self)
+        workerRoom = WorkerRoom(self._address, self._port, self)
         self.addModule(workerRoom)
 
         tracker = TaskTracker()
@@ -111,9 +111,9 @@ class ServerInst(Thread):
         handler_dispatcher = lambda data: workerLost_redispatch(dispatcher, data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
 
-        self.__mmanager.startAll()
+        self._mmanager.startAll()
 
         # Block the initial thread cause the entire program
         # exists when only daemon-thread exists. initial thread
         # is the only one non-daemon thread.
-        self.__mmanager.join()
+        self._mmanager.join()

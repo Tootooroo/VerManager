@@ -44,55 +44,55 @@ class Server(Module):
         self.q = Queue(queueSize) # type: Queue[ResponseLetter]
 
         # Lock to protect socket while reconnecting
-        self.__lock = Lock()
+        self._lock = Lock()
 
-        self.__address = address
-        self.__port = port
+        self._address = address
+        self._port = port
 
-        self.__max = 0
-        self.__proc = 0
+        self._max = 0
+        self._proc = 0
 
-        self.__status = Server.STATE_SUSPEND
+        self._status = Server.STATE_SUSPEND
 
         # A flag to indicate this connection to master
         # should be closed and never rebuild in the future.
-        self.__isStop = False
+        self._isStop = False
 
-        self.__cInst = cInst
+        self._cInst = cInst
 
     def getStatus(self) -> int:
-        return self.__status
+        return self._status
 
     def setStatus(self, status:int) -> None:
-        self.__status = status
+        self._status = status
 
     def setWorkerName(self, name:str) -> None:
-        self.__workerName = name
+        self._workerName = name
 
     def cleanup(self) -> None:
-        self.__isStop = True
+        self._isStop = True
         self.disconnect()
 
     def begin(self) -> None:
         self.connect()
 
     def connect(self) -> State:
-        info = self.__cInst.getModule(INFO_M_NAME)
+        info = self._cInst.getModule(INFO_M_NAME)
 
-        self.__proc = self.__cInst.inProcTasks()
-        if self.__proc is None:
-            self.__proc = 0
+        self._proc = self._cInst.inProcTasks()
+        if self._proc is None:
+            self._proc = 0
 
-        self.__max = info.getConfig('MAX_TASK_CAN_PROC')
+        self._max = info.getConfig('MAX_TASK_CAN_PROC')
 
-        return self._connect(self.__max, self.__proc)
+        return self._connect(self._max, self._proc)
 
     def _connect(self, max:int, proc:int, retry:int = 0) -> State:
 
-        if self.__isStop: return Error
+        if self._isStop: return Error
 
-        host = self.__address
-        port = self.__port
+        host = self._address
+        port = self._port
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockKeepalive(sock, 10, 3)
@@ -118,14 +118,17 @@ class Server(Module):
 
         sock.settimeout(1)
 
-        propLetter = PropLetter(ident = self.__workerName,
+        propLetter = PropLetter(ident = self._workerName,
                                 max = str(max),
                                 proc = str(proc))
-        if self.__sending(sock, propLetter) == Error:
+
+        try:
+            self._sending(sock, propLetter)
+        except:
             return Error
 
         self.sock = sock
-        self.__status = Server.STATE_CONNECTED
+        self._status = Server.STATE_CONNECTED
 
         return Ok
 
@@ -137,10 +140,10 @@ class Server(Module):
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
 
-        self.__status = Server.STATE_DISCONNECTED
+        self._status = Server.STATE_DISCONNECTED
 
     def waitLetter(self) -> Union[int, Letter]:
-        return self.__recv(5)
+        return self._recv(5)
 
     # Transfer a letter to server
     # calling of this method will not transfer
@@ -155,7 +158,7 @@ class Server(Module):
 
         # Server module is in stop state.
         # Not allow to transfer messages until authorized by master
-        if self.__isStop or self.__status != Server.STATE_TRANSFER:
+        if self._isStop or self._status != Server.STATE_TRANSFER:
             return Error
 
         try:
@@ -163,7 +166,7 @@ class Server(Module):
         except Empty:
             return Error
 
-        if self.__send(response, retry = 1) == Server.SOCK_OK:
+        if self._send(response, retry = 1) == Server.SOCK_OK:
             return Ok
         else:
             # Insert into head of the queue
@@ -190,7 +193,7 @@ class Server(Module):
         return ret
 
     def reconnect(self) -> State:
-        if self.__status != Server.STATE_DISCONNECTED:
+        if self._status != Server.STATE_DISCONNECTED:
             return Error
 
         try:
@@ -201,9 +204,9 @@ class Server(Module):
     def isResponseInQ(self) -> bool:
         return not self.q.empty()
 
-    def __reconnectWrapper(self, retry:int = 0) -> int:
-        with self.__lock:
-            if self.__status != Server.STATE_DISCONNECTED:
+    def _reconnectWrapper(self, retry:int = 0) -> int:
+        with self._lock:
+            if self._status != Server.STATE_DISCONNECTED:
                 return Server.SOCK_OK
 
             if retry >= 0:
@@ -221,46 +224,46 @@ class Server(Module):
                 self.reconnectUntil(interval = 1)
                 return Server.SOCK_OK
 
-    def __send(self, l:Letter, retry:int = 0) -> int:
+    def _send(self, l:Letter, retry:int = 0) -> int:
 
         while True:
             try:
                 if isinstance(l, BinaryLetter):
-                    Server.__sending_bytes(self.sock, l.binaryPack()) # type: ignore
+                    Server._sending_bytes(self.sock, l.binaryPack()) # type: ignore
                 else:
-                    Server.__sending(self.sock, l)
+                    Server._sending(self.sock, l)
                 return Server.SOCK_OK
             except socket.timeout:
                 return Server.SOCK_TIMEOUT
             except BinaryLetter.FIELD_LENGTH_EXCEPTION:
                 return Server.SOCK_PARSE_ERROR
             except:
-                self.__status = Server.STATE_DISCONNECTED
-                if self.__reconnectWrapper(retry) == Server.SOCK_OK:
+                self._status = Server.STATE_DISCONNECTED
+                if self._reconnectWrapper(retry) == Server.SOCK_OK:
                     continue
                 else:
                     return Server.SOCK_DISCONN
 
             return Server.SOCK_OK
 
-    def __send_bytes(self, b:bytes, retry:int = 0) -> int:
+    def _send_bytes(self, b:bytes, retry:int = 0) -> int:
         try:
-            Server.__sending_bytes(self.sock, b)
+            Server._sending_bytes(self.sock, b)
             return Server.SOCK_OK
         except socket.timeout:
             return Server.SOCK_TIMEOUT
         except:
-            if self.__reconnectWrapper(retry) == Server.SOCK_OK:
-                self.__send_bytes(b, retry)
+            if self._reconnectWrapper(retry) == Server.SOCK_OK:
+                self._send_bytes(b, retry)
                 return Server.SOCK_OK
 
             return Server.SOCK_DISCONN
 
-    def __recv(self, retry:int = 0) -> Union[int, Letter]:
+    def _recv(self, retry:int = 0) -> Union[int, Letter]:
 
         while True:
             try:
-                letter = Server.__receving(self.sock)
+                letter = Server._receving(self.sock)
                 if letter is None:
                     return Server.SOCK_PARSE_ERROR
                 return letter
@@ -269,22 +272,22 @@ class Server(Module):
                 return Server.SOCK_TIMEOUT
 
             except:
-                self.__status = Server.STATE_DISCONNECTED
-                if self.__reconnectWrapper(retry) == Server.SOCK_OK:
+                self._status = Server.STATE_DISCONNECTED
+                if self._reconnectWrapper(retry) == Server.SOCK_OK:
                     continue
                 return Server.SOCK_DISCONN
 
     @staticmethod
-    def __receving(sock:socket.socket) -> Optional[Letter]:
+    def _receving(sock:socket.socket) -> Optional[Letter]:
         return letter_receving(sock)
 
     @staticmethod
-    def __sending(sock:socket.socket, l:Letter) -> None:
+    def _sending(sock:socket.socket, l:Letter) -> None:
         jBytes = l.toBytesWithLength()
-        return Server.__sending_bytes(sock, jBytes)
+        return Server._sending_bytes(sock, jBytes)
 
     @staticmethod
-    def __sending_bytes(sock:socket.socket, bytesBuffer:bytes) -> None:
+    def _sending_bytes(sock:socket.socket, bytesBuffer:bytes) -> None:
         totalSent = 0
         length = len(bytesBuffer)
 
@@ -293,5 +296,3 @@ class Server(Module):
             if sent == 0:
                 raise DISCONN_EXCEPTION
             totalSent += sent
-
-        return None

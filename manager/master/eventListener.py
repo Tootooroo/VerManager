@@ -29,7 +29,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
     def __init__(self, inst:Any) -> None:
         global letterLog, M_NAME
 
-        self.__sInst = inst
+        self._sInst = inst
 
         # Init as module
         ModuleDaemon.__init__(self, M_NAME)
@@ -50,7 +50,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
         self.taskResultFdSet = {} # type: Dict[str, BinaryIO]
 
     def getModule(self, m:str) -> Any:
-        return self.__sInst.getModule(m)
+        return self._sInst.getModule(m)
 
     def registerEvent(self, eventType: str, handler: Handler) -> None:
         if eventType in self.handlers:
@@ -86,7 +86,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
     def run(self) -> None:
         global letterLog
-        logger = self.__sInst.getModule(LOGGER_M_NAME)
+        logger = self._sInst.getModule(LOGGER_M_NAME)
 
         if logger is None:
             raise COMPONENTS_LOG_NOT_INIT

@@ -67,9 +67,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         configs = sInst.getModule(INFO_M_NAME)
 
-        self.__serverInst = sInst
+        self._serverInst = sInst
 
-        # This lock is use to protect __workers
+        # This lock is use to protect _workers
         # while add or remove workers from it
         # Note: This lock will not protect access to a worker object
         self.lock = Lock()
@@ -77,32 +77,32 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # Lock to prevent race between Waiting thread and maintain thread
         self.syncLock = Lock()
 
-        # __workers is a collection of workers in online state
-        self.__workers = {}  # type: Dict[str, Worker]
+        # _workers is a collection of workers in online state
+        self._workers = {}  # type: Dict[str, Worker]
 
-        # __workers_waiting is a collection of workers in waiting state
+        # _workers_waiting is a collection of workers in waiting state
         # if a worker which in this collection exceed WAIT limit it will
         # be removed
-        self.__workers_waiting = {}  # type: Dict[str, Worker]
+        self._workers_waiting = {}  # type: Dict[str, Worker]
         self.numOfWorkers = 0
 
-        self.__eventQueue = Queue(256) # type: Queue
+        self._eventQueue = Queue(256) # type: Queue
 
         self._lisAddr = ("", 0)
 
-        self.__host = host
-        self.__port = port
+        self._host = host
+        self._port = port
 
-        self.__WAITING_INTERVAL = configs.getConfig('WaitingInterval')
-        if self.__WAITING_INTERVAL == "":
-            self.__WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
+        self._WAITING_INTERVAL = configs.getConfig('WaitingInterval')
+        if self._WAITING_INTERVAL == "":
+            self._WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
-        self.__stableThres = self.__WAITING_INTERVAL + 3
+        self._stableThres = self._WAITING_INTERVAL + 3
 
-        self.__isPManager_init = False
-        self.__pManager = PostManager([], RandomElectProtocol())
+        self._isPManager_init = False
+        self._pManager = PostManager([], RandomElectProtocol())
 
-        self.__lastChangedPoint = datetime.utcnow()
+        self._lastChangedPoint = datetime.utcnow()
 
         self._lastCandidates = [] # type: List[str]
 
@@ -118,13 +118,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         if self.logger is not None:
             Logger.putLog(self.logger, wrLog, msg)
         else:
-            self.logger = self.__serverInst.getModule(LOGGER_M_NAME)
+            self.logger = self._serverInst.getModule(LOGGER_M_NAME)
             if self.logger is not None:
                 self.logger.log_register(wrLog)
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.bind((self.__host, self.__port))
+        self.sock.bind((self._host, self._port))
         self.sock.listen(5)
 
         # Spawn a thread which respond to worker maintain
@@ -156,10 +156,10 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 continue
 
             with self.syncLock:
-                if ident in self.__workers_waiting:
+                if ident in self._workers_waiting:
                     # fixme: socket of workerInWait is broken need to
                     # change to acceptedWorker
-                    workerInWait = self.__workers_waiting[ident]
+                    workerInWait = self._workers_waiting[ident]
 
                     # Update worker's status.
                     workerInWait.sockSet(acceptedWorker.sockGet())
@@ -171,9 +171,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     #       otherwise listener itself will unable to know address changed.
                     workerInWait.setState(Worker.STATE_ONLINE)
                     self.addWorker(workerInWait)
-                    del self.__workers_waiting [ident]
+                    del self._workers_waiting [ident]
 
-                    if self.__pManager.isListener(workerInWait.getIdent()):
+                    if self._pManager.isListener(workerInWait.getIdent()):
                         if arrived_addr != old_addr:
                             workerInWait.setAddress((arrived_addr, arrived_port))
 
@@ -193,7 +193,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     workerInWait.control(AcceptCommand())
 
                     if workerInWait.role == None:
-                        self.__pManager.addCandidate(workerInWait)
+                        self._pManager.addCandidate(workerInWait)
 
                     self._WR_LOG("Worker " + ident + " is reconnect")
                     continue
@@ -202,28 +202,28 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 acceptedWorker.control(AcceptRstCommand())
 
                 self.addWorker(acceptedWorker)
-                self.__pManager.addCandidate(acceptedWorker)
+                self._pManager.addCandidate(acceptedWorker)
 
                 self.notify((WorkerRoom.EVENT_CONNECTED, acceptedWorker))
 
     def isStable(self) -> bool:
-        diff = (datetime.utcnow() - self.__lastChangedPoint).seconds
-        return diff >= self.__stableThres
+        diff = (datetime.utcnow() - self._lastChangedPoint).seconds
+        return diff >= self._stableThres
 
     def setStableThres(self, thres:int) -> None:
-        self.__stableThres = thres
+        self._stableThres = thres
 
-    def __changePoint(self) -> None:
-        self.__lastChangedPoint = datetime.utcnow()
+    def _changePoint(self) -> None:
+        self._lastChangedPoint = datetime.utcnow()
 
     def msgToPostManager(self, l:CmdResponseLetter) -> None:
-        self.__pManager.proto_msg_transfer(l)
+        self._pManager.proto_msg_transfer(l)
 
     def postRelations(self) -> Tuple[str, List[str]]:
-        return self.__pManager.relations()
+        return self._pManager.relations()
 
     def postListener(self) -> Optional[Worker]:
-        return self.__pManager.getListener()
+        return self._pManager.getListener()
 
     # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
@@ -235,15 +235,15 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def maintain(self) -> None:
 
         while True:
-            self.__waiting_worker_update()
-            self.__waiting_worker_processing(self.__workers_waiting)
-            self.__postProcessing()
+            self._waiting_worker_update()
+            self._waiting_worker_processing(self._workers_waiting)
+            self._postProcessing()
 
             time.sleep(0.01)
 
-    def __postProcessing(self) -> None:
+    def _postProcessing(self) -> None:
 
-        candidates = [c.getIdent() for c in self.__pManager.candidates()]
+        candidates = [c.getIdent() for c in self._pManager.candidates()]
         if candidates != self._lastCandidates:
             self._WR_LOG("Role:" + str(self.postRelations()))
             self._WR_LOG("Candidates" + str(candidates))
@@ -253,16 +253,16 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             return None
 
         # Init postManager
-        if self.__isPManager_init == False:
-            self.__pManager.proto_init()
-            self.__isPManager_init = True
+        if self._isPManager_init == False:
+            self._pManager.proto_init()
+            self._isPManager_init = True
         else:
             # Stepping
-            self.__pManager.proto_step()
+            self._pManager.proto_step()
 
-    def __waiting_worker_update(self) -> None:
+    def _waiting_worker_update(self) -> None:
         try:
-            (eventType, index) = self.__eventQueue.get(timeout=1)
+            (eventType, index) = self._eventQueue.get(timeout=1)
         except Empty:
             return None
 
@@ -288,19 +288,19 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             if worker.role == None:
                 # Worker is a candidate
-                self.__pManager.removeCandidate(ident)
+                self._pManager.removeCandidate(ident)
 
-            self.__workers_waiting[ident] = worker
+            self._workers_waiting[ident] = worker
 
             self.notify((WorkerRoom.EVENT_WAITING, worker))
 
-    def __waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
+    def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
 
         if len(workers) == 0:
             return None
 
-        outOfTime = list(filter(lambda w: w.waitCounter() > self.__WAITING_INTERVAL, workers_list))
+        outOfTime = list(filter(lambda w: w.waitCounter() > self._WAITING_INTERVAL, workers_list))
 
         for worker in outOfTime:
             ident = worker.getIdent()
@@ -310,29 +310,29 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             if worker.role == None:
                 # Worker is a candidate
-                self.__pManager.removeCandidate(ident)
+                self._pManager.removeCandidate(ident)
             else:
                 # Remove this worker from PostManager
                 # if it's also a listener then set listener to None
-                if self.__pManager.isListener(ident):
-                    self.__pManager.setListener(None)
-                    self.__pManager.removeCandidate(ident)
-                self.__pManager.removeProvider(ident)
+                if self._pManager.isListener(ident):
+                    self._pManager.setListener(None)
+                    self._pManager.removeCandidate(ident)
+                self._pManager.removeProvider(ident)
 
             self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
 
         for w in outOfTime:
             with self.syncLock:
-                del self.__workers_waiting [w.getIdent()]
+                del self._workers_waiting [w.getIdent()]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
-        self.__eventQueue.put((eventType, ident))
+        self._eventQueue.put((eventType, ident))
 
     def notifyEventFd(self, eventType: EVENT_TYPE, fd: int) -> None:
-        self.__eventQueue.put((eventType, fd))
+        self._eventQueue.put((eventType, fd))
 
     def getWorkerViaFd(self, fd: int) -> Optional[Worker]:
-        workers = list(self.__workers.values())
+        workers = list(self._workers.values())
         theWorker = list(filter(lambda w: w.sock.fileno() == fd, workers))
 
         if len(theWorker) == 0:
@@ -342,33 +342,33 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def getWorker(self, ident: str) -> Optional[Worker]:
         with self.lock:
-            if not ident in self.__workers:
+            if not ident in self._workers:
                 return None
 
-            return self.__workers[ident]
+            return self._workers[ident]
 
     def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
         with self.lock:
-            workerList = list(self.__workers.values())
+            workerList = list(self._workers.values())
             return condRtn(workerList)
 
     def getWorkers(self) -> List[Worker]:
-        return list(self.__workers.values())
+        return list(self._workers.values())
 
     def addWorker(self, w: Worker) -> State:
         ident = w.getIdent()
         with self.lock:
-            if ident in self.__workers:
+            if ident in self._workers:
                 return Error
 
-            self.__workers[ident] = w
+            self._workers[ident] = w
             self.numOfWorkers += 1
-            self.__changePoint()
+            self._changePoint()
 
             return Ok
 
     def isExists(self, ident: str) -> bool:
-        if ident in self.__workers:
+        if ident in self._workers:
             return True
         else:
             return False
@@ -377,15 +377,15 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         return self.numOfWorkers
 
     def getNumOfWorkersInWait(self) -> int:
-        return len(self.__workers_waiting)
+        return len(self._workers_waiting)
 
     def broadcast(self, command:Command) -> None:
-        for w in self.__workers.values():
+        for w in self._workers.values():
             w.control(command)
 
     def control(self, ident:str, command:Command) -> State:
         try:
-            self.__workers[ident].control(command)
+            self._workers[ident].control(command)
         except KeyError:
             return Error
         except BrokenPipeError:
@@ -395,7 +395,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def do(self, ident:str, t:Task) -> State:
         try:
-            self.__workers[ident].do(t)
+            self._workers[ident].do(t)
         except KeyError:
             return Error
         except BrokenPipeError:
@@ -405,18 +405,18 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def removeWorker(self, ident: str) -> State:
         with self.lock:
-            if not ident in self.__workers:
+            if not ident in self._workers:
                 return Error
 
-            del self.__workers [ident]
+            del self._workers [ident]
             self.numOfWorkers -= 1
-            self.__changePoint()
+            self._changePoint()
 
         return Ok
 
     def tasks_clear(self) -> None:
         """ Remove all failure tasks from all workers """
-        for w in self.__workers.values():
+        for w in self._workers.values():
             w.removeTaskWithCond(lambda t: t.isFailure())
 
     # Content of dictionary:

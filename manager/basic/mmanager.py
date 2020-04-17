@@ -22,10 +22,10 @@ class Daemon(Thread):
 class Module:
 
     def __init__(self, mName:str) -> None:
-        self.__mName = mName
+        self._mName = mName
 
     def getName(self) -> str:
-        return self.__mName
+        return self._mName
 
     def begin(self) -> None:
         pass
@@ -44,30 +44,30 @@ ModuleName = str
 class MManager:
 
     def __init__(self):
-        self.__modules = {} # type: Dict[ModuleName, Module]
-        self.__num = 0
+        self._modules = {} # type: Dict[ModuleName, Module]
+        self._num = 0
 
     def isModuleExists(self, mName:ModuleName) -> bool:
-        return mName in self.__modules
+        return mName in self._modules
 
     def numOfModules(self):
-        return self.__num
+        return self._num
 
     def getModule(self, mName:ModuleName) -> Optional[Module]:
         if self.isModuleExists(mName):
-            return self.__modules[mName]
+            return self._modules[mName]
 
         return None
 
     def getAllModules(self) -> List[Module]:
-        return list(self.__modules.values())
+        return list(self._modules.values())
 
     def getAlives(self) -> List[Module]:
-        (alives, dies) = partition(self.__modules, lambda m: m.is_alive())
+        (alives, dies) = partition(self._modules, lambda m: m.is_alive())
         return alives
 
     def getDies(self) -> List[Module]:
-        (alives, dies) = partition(self.__modules, lambda m: m.is_alive())
+        (alives, dies) = partition(self._modules, lambda m: m.is_alive())
         return dies
 
     def addModule(self, m:Module) -> State:
@@ -76,21 +76,21 @@ class MManager:
         if self.isModuleExists(mName):
             return Error
 
-        self.__modules[mName] = m
-        self.__num += 1
+        self._modules[mName] = m
+        self._num += 1
 
         return Ok
 
     def removeModule(self, mName:ModuleName) -> Optional[Module]:
         if self.isModuleExists(mName):
-            m = self.__modules[mName]
+            m = self._modules[mName]
 
             m.cleanup()
             if isinstance(m, ModuleDaemon):
                 m.stop()
 
-            del self.__modules [mName]
-            self.__num -= 1
+            del self._modules [mName]
+            self._num -= 1
 
             return m
 
@@ -98,12 +98,12 @@ class MManager:
 
     def start(self, mName) -> None:
         if self.isModuleExists(mName):
-            m = self.__modules[mName]
+            m = self._modules[mName]
             m.start()
 
     def stop(self, mName) -> None:
         if self.isModuleExists(mName):
-            m = self.__modules[mName]
+            m = self._modules[mName]
             m.stop()
 
     def startAll(self) -> None:

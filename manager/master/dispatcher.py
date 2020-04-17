@@ -37,7 +37,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         Observer.__init__(self)
 
-        self.__sInst = inst
+        self._sInst = inst
 
         # A queue contain a collection of tasks
         self.taskWait = [] # type: List[Task]
@@ -51,57 +51,57 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         assert(taskTracker is not None)
         self._taskTracker = taskTracker
 
-        self.__workers = workerRoom
+        self._workers = workerRoom
 
-        # To protect __workers while add or remove
-        # worker is happen during search on __workers
-        self.__workerLock = Lock()
-        self.__numOfWorkers = 0
+        # To protect _workers while add or remove
+        # worker is happen during search on _workers
+        self._workerLock = Lock()
+        self._numOfWorkers = 0
 
-        self.__logger = None # type: Optional[Logger]
+        self._logger = None # type: Optional[Logger]
 
-    def __dispatch_logging(self, msg:str) -> None:
-        if self.__logger is None:
-            self.__logger = self.__sInst.getModule(LOGGER_M_NAME)
-            self.__logger.log_register("dispatcher")
+    def _dispatch_logging(self, msg:str) -> None:
+        if self._logger is None:
+            self._logger = self._sInst.getModule(LOGGER_M_NAME)
+            self._logger.log_register("dispatcher")
 
-            if self.__logger is None:
+            if self._logger is None:
                 return None
 
-        Logger.putLog(self.__logger, "dispatcher", msg)
+        Logger.putLog(self._logger, "dispatcher", msg)
 
     # Dispatch a task to a worker of
     # all by overhead of workers
     #
     # return True if task is assign successful otherwise return False
-    def __dispatch(self, task: Task) -> bool:
+    def _dispatch(self, task: Task) -> bool:
         if isinstance(task, SuperTask):
-            self.__dispatch_logging("Task " + task.id() + " is a SuperTask.")
-            return self.__dispatchSuperTask(task)
+            self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
+            return self._dispatchSuperTask(task)
 
-        ret = self.__do_dispatch(task)
+        ret = self._do_dispatch(task)
         if ret is True:
             self._taskTracker.track(task)
             return ret
 
         return False
 
-    def __do_dispatch(self, task: Task) -> bool:
+    def _do_dispatch(self, task: Task) -> bool:
 
         # First to find a acceptable worker
         # if found then assign task to the worker
-        # and __tasks otherwise append to taskWait
+        # and _tasks otherwise append to taskWait
         cond = viaOverhead
         workers = [] # type: List[Worker]
 
         if isinstance(task, PostTask):
             cond = theListener
 
-        workers = self.__workers.getWorkerWithCond(cond)
+        workers = self._workers.getWorkerWithCond(cond)
 
         # No workers satisfiy the condition.
         if workers == []:
-            self.__dispatch_logging("Task " + task.id() +
+            self._dispatch_logging("Task " + task.id() +
                                     " dispatch failed: No available worker")
             return False
 
@@ -111,14 +111,14 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             worker.do(task)
         except:
-            self.__dispatch_logging("Task " + task.id() +
+            self._dispatch_logging("Task " + task.id() +
                                     " dispatch failed: Worker is\
                                       unable to do the task.")
             return False
 
         return True
 
-    def __dispatchSuperTask(self, task: SuperTask) -> bool:
+    def _dispatchSuperTask(self, task: SuperTask) -> bool:
         ret = True
         subTasks = task.getChildren()
 
@@ -128,7 +128,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             self._taskTracker.track(sub)
 
-            do_ret = self.__do_dispatch(sub)
+            do_ret = self._do_dispatch(sub)
 
             if do_ret is False:
                 ret = False
@@ -136,17 +136,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 sub.stateChange(Task.STATE_IN_PROC)
 
         if ret is True:
-            self.__dispatch_logging("SuperTask " + task.id() +
+            self._dispatch_logging("SuperTask " + task.id() +
                                     " is dispatched completly")
             task.stateChange(Task.STATE_IN_PROC)
         else:
-            self.__dispatch_logging("SuperTask " + task.id() +
+            self._dispatch_logging("SuperTask " + task.id() +
                                     " is not dispatched completly")
 
         return ret
 
     def dispatch(self, task: Task) -> bool:
-        self.__dispatch_logging("Dispatch task " + task.id())
+        self._dispatch_logging("Dispatch task " + task.id())
 
         if self._taskTracker.isInTrack(task.id()):
             task_exists = self._taskTracker.getTask(task.id())
@@ -157,12 +157,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             return True
 
         # Bind task with a build or buildSet
-        task = self.__bind(task)
+        task = self._bind(task)
 
         self._taskTracker.track(task)
 
         with self.dispatchLock:
-            if self.__dispatch(task) == False:
+            if self._dispatch(task) == False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
                 self.taskEvent.set()
@@ -172,7 +172,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def redispatch(self, task: Task) -> bool:
         taskId = task.id()
 
-        self.__dispatch_logging("Redispatch task " + taskId)
+        self._dispatch_logging("Redispatch task " + taskId)
 
         if self._taskTracker.isInTrack(taskId):
             ret = task.stateChange(Task.STATE_PREPARE)
@@ -182,19 +182,19 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             self._taskTracker.untrack(taskId)
 
         with self.dispatchLock:
-            if self.__do_dispatch(task) is False:
+            if self._do_dispatch(task) is False:
                 self.taskWait.insert(0, task)
                 self._taskTracker.track(task)
                 self.taskEvent.set()
 
         return True
 
-    def __bind(self, task:Task) -> Task:
+    def _bind(self, task:Task) -> Task:
         if not task.isBindWithBuild():
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
             # bind one with it.
-            info = self.__sInst.getModule(INFO_M_NAME) # type: Info
+            info = self._sInst.getModule(INFO_M_NAME) # type: Info
             try:
                 build = Build(task.vsn ,info.getConfig("Build"))
                 if isinstance(build, Build):
@@ -230,7 +230,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             now = datetime.utcnow()
             if needAging(now, last_aging):
                 # Remove oudated tasks
-                self.__taskAging()
+                self._taskAging()
 
                 last_aging = now
 
@@ -239,37 +239,37 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             isArrived = self.taskEvent.wait(2)
 
             if len(self.taskWait) == 0:
-                self.__dispatch_logging("TaskWait Queue is empty.")
+                self._dispatch_logging("TaskWait Queue is empty.")
                 self.taskEvent.clear()
 
                 continue
 
             task = self.taskWait.pop()
-            self.__dispatch_logging("Task " + task.id() + " arrived")
+            self._dispatch_logging("Task " + task.id() + " arrived")
 
             if task.state == Task.STATE_FAILURE:
                 continue
 
             # Is there any workers acceptable
-            workers = self.__workers.getWorkerWithCond(acceptableWorkers)
+            workers = self._workers.getWorkerWithCond(acceptableWorkers)
 
             if workers == []:
-                self.__dispatch_logging("No acceptable worker")
+                self._dispatch_logging("No acceptable worker")
                 self.taskWait.append(task)
                 time.sleep(1)
             else:
                 # Task can be drop via setting its state to STATE_FAILURE
-                self.__dispatch_logging("Dispatch task: " + task.id())
+                self._dispatch_logging("Dispatch task: " + task.id())
 
-                if self.__dispatch(task) is False:
-                    self.__dispatch_logging("Dispatch task " + task.id() +
+                if self._dispatch(task) is False:
+                    self._dispatch_logging("Dispatch task " + task.id() +
                                             " failed. append to tail of queue")
                     self.taskWait.append(task)
 
                     time.sleep(1)
 
 
-    def __taskAging(self) -> None:
+    def _taskAging(self) -> None:
         tasks = self._taskTracker.tasks()
 
         current = datetime.utcnow()
@@ -279,7 +279,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         tasks_outdated = [t for t in tasks if t.refs == 0 or cond_is_timeout(t)]
 
         idents_outdated = [t.id() for t in tasks_outdated]
-        self.__dispatch_logging("Outdate tasks:" + str(idents_outdated))
+        self._dispatch_logging("Outdate tasks:" + str(idents_outdated))
 
         for ident in idents_outdated:
             if not self._taskTracker.isInTrack(ident):
@@ -293,12 +293,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # their counter is out of date.
             if t.isProc() or t.isPrepare():
 
-                if self.__workers.getNumOfWorkers() is not 0:
-                    self.__dispatch_logging(
+                if self._workers.getNumOfWorkers() is not 0:
+                    self._dispatch_logging(
                         "Task " + ident + "is in processing/Prepare. Abort to remove")
                     continue
 
-            self.__dispatch_logging("Remove task " + ident)
+            self._dispatch_logging("Remove task " + ident)
             self._taskTracker.untrack(ident)
 
     # Cancel a task
@@ -353,7 +353,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
     # Use to get result of task
     # after the call of this method task will be
-    # remove from __tasks
+    # remove from _tasks
     def retrive(self, taskId: str) -> Optional[str]:
         if not self._taskTracker.isInTrack(taskId):
             return None
@@ -383,7 +383,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def isTaskExists(self, taskId: str) -> bool:
         return self._taskTracker.isInTrack(taskId)
 
-    def __isTask(self, taskId: str, state: Callable) -> bool:
+    def _isTask(self, taskId: str, state: Callable) -> bool:
         if not self._taskTracker.isInTrack(taskId):
             return False
 
@@ -394,16 +394,16 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return state(task)
 
     def isTaskPrepare(self, taskId: str) -> bool:
-        return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_PREPARE)
+        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_PREPARE)
 
     def isTaskInProc(self, taskId: str) -> bool:
-        return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)
+        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)
 
     def isTaskFailure(self, taskId: str) -> bool:
-        return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FAILURE)
+        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_FAILURE)
 
     def isTaskFinished(self, taskId: str) -> bool:
-        return self.__isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
+        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
 
     def taskLastUpdate(self, taskId: str) -> None:
         if not self._taskTracker.isInTrack(taskId):
