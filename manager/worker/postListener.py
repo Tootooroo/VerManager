@@ -178,6 +178,7 @@ class PostListener(ModuleDaemon, Observer):
                 s.settimeout(5)
 
                 self._sock = s
+                print("PostListener listen at " + str((self._address, self._port)) )
             except:
                 self._sock = None
                 return Error
@@ -285,6 +286,11 @@ class PostProvider(Module, Observer):
 
         if self._address != address:
             self.setAddress(address, 8066)
+
+        self._sock = None
+        self.connectToListener(1)
+
+
 
     def connectToListener(self, retry:int = 0) -> State:
         retry += 1
