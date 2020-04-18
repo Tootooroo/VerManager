@@ -1,9 +1,15 @@
 # task.py
 
-from typing import Optional
+from typing import Optional, Any
 from multiprocessing.pool import AsyncResult
 
 class Task:
+
+    """
+    Task on client doesn not concern about what it to do
+    it just provide a place to query status of a task
+    that is processed on client.
+    """
 
     STATE_PENDING = 0
     STATE_PROC = 1
@@ -20,6 +26,12 @@ class Task:
 
         self._state = Task.STATE_PENDING
 
+    def tid(self) -> str:
+        return self._tid
+
+    def version(self) -> str:
+        return self._ver
+
     def isReady(self) -> bool:
         return self._asyncResult.ready()
 
@@ -34,3 +46,6 @@ class Task:
 
     def state(self) -> int:
         return self._state
+
+    def result(self) -> Any:
+        return self._asyncResult.get()

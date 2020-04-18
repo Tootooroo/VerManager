@@ -170,12 +170,12 @@ class Server(Module):
             return Ok
         else:
             # Insert into head of the queue
-            self.q.queue.insert(0, response)
+            self.q.queue.insert(0, response) # type: ignore
 
         return Error
 
     def drop_all_messages(self) -> None:
-        self.q.queue.clear()
+        self.q.queue.clear() # type: ignore
 
     def responseRetrive(self) -> Optional[Letter]:
         try:

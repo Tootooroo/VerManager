@@ -394,7 +394,7 @@ class PostProvider(Module, Observer):
                     print("Provide_ste: try to reconnect")
                     if self.reconnect() == Error:
                         # Put into head of queue
-                        self._stuffQ.queue.insert(0, bin)
+                        self._stuffQ.queue.insert(0, bin) # type: ignore
                     else:
                         continue
 
@@ -404,7 +404,7 @@ class PostProvider(Module, Observer):
 
     def removeAllStuffs(self) -> None:
         with self._Q_lock:
-            self._stuffQ.queue.clear()
+            self._stuffQ.queue.clear() # type: ignore
 
     def begin(self) -> None:
         return None

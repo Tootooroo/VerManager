@@ -15,6 +15,7 @@ CMD_POST_TYPE = "post"
 CMD_ACCEPT = "accept"
 CMD_ACCEPT_RST = "accept_rst"
 CMD_LIS_ADDR_UPDATE = "lis_addr_update"
+CMD_REWORK_TASK = "REWORK"
 
 class Command:
 
@@ -138,11 +139,24 @@ class ReWorkCommand(Command):
 
     def __init__(self, tid:str) -> None:
         content = {"tid":tid}
-        Command.__init__(self, CMD_LIS_ADDR_UPDATE, content = content)
+        Command.__init__(self, CMD_REWORK_TASK, content = content)
+
+        self._tid = tid
+
+    def tid(self) -> str:
+        return self._tid
 
     def toLetter(self) -> CommandLetter:
         return CommandLetter(self.type, content = self.content)
 
     @staticmethod
     def fromLetter(l:CommandLetter) -> Optional['ReWorkCommand']:
-        return None
+
+        if not isinstance(l, CommandLetter):
+            return None
+
+        tid = l.getContent('tid')
+        if tid == "":
+            return None
+
+        return ReWorkCommand(tid)

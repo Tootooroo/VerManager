@@ -24,11 +24,13 @@ from ..basic.util import partition, excepHandle, pathSeperator, execute_shell, \
 
 from ..basic.mmanager import Module
 
+from .processor_cmds import reworkCmd as cmds
+from .task import Task
 from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
 
-from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd
+from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
 
 from manager.worker.server import M_NAME as SERVER_M_NAME
 from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
@@ -36,7 +38,7 @@ from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from manager.worker.sender import M_NAME as SENDER_M_NAME
 
 from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
-    CMD_LIS_ADDR_UPDATE
+    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
@@ -74,11 +76,11 @@ class Processor(Module, Subject):
         self._procedure = None # type: Optional[Callable]
 
         # (tid, parent, result)
-        self._allTasks = [] # type: List[Tuple[str, str, AsyncResult]]
+        self._allTasks = [] # type: List[Task]
         self._result_lock = Lock()
 
         # Query purpose
-        self._allTasks_dict = {} # type: Dict[str, AsyncResult]
+        self._allTasks_dict = {} # type: Dict[str, Task]
 
         self._manager = Manager()
         # Collections of event used to stop building processing.
@@ -242,6 +244,15 @@ class Processor(Module, Subject):
         handler = cmdHandlers[type]
 
         return handler(self, cmdLetter, self._info, self._cInst)
+
+    @staticmethod
+    def command_rework(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+        command = ReWorkCommand.fromLetter(cmdLetter)
+
+        tid = command.tid()
+
+
+        return Ok
 
     @staticmethod
     def post_config(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
@@ -414,6 +425,7 @@ class Processor(Module, Subject):
     def drop_all_results(self) -> None:
         with self._result_lock:
             self._allTasks = []
+            self._allTasks_dict = {}
 
     def recyle_interrupt(self) -> None:
         self._recyleInterrupt = True
@@ -447,8 +459,9 @@ class Processor(Module, Subject):
         res = self._pool.apply_async(Processor.do_proc,
                                     (reqLetter, self._info, event))
 
-        self._allTasks.append((tid, version, res))
-        self._allTasks_dict[version+tid] = res
+        t = Task(tid, version, res)
+        self._allTasks.append(t)
+        self._allTasks_dict[tid] = t
 
         self._numOfTasksInProc += 1
 
@@ -461,10 +474,13 @@ class Processor(Module, Subject):
         self._recyleInProcessing = True
 
         with self._result_lock:
-            (readies, not_readies) = partition(self._allTasks, lambda res: res[2].ready())
+            (readies, not_readies) = partition(self._allTasks, lambda t: t.isReady())
             self._allTasks = not_readies
 
-        for (tid, version, res) in readies:
+        for t in readies:
+
+            tid = t.tid()
+            version = t.version()
 
             if self._recyleInterrupt:
                 break
@@ -472,7 +488,7 @@ class Processor(Module, Subject):
             if tid in self._shell_events:
                 del self._shell_events [tid]
 
-            result = res.get() # type: Result
+            result = t.result() # type: Result
 
             version = result.version
             tid = result.tid
@@ -520,7 +536,7 @@ class Processor(Module, Subject):
                 server.transfer(response)
 
             self._numOfTasksInProc -= 1
-            del self._allTasks_dict [version+tid]
+            del self._allTasks_dict [tid]
 
         self._recyleInProcessing = False
 
@@ -558,10 +574,17 @@ class Processor(Module, Subject):
     def isAbleToProc(self) -> bool:
         return self.tasksInProc() < self.maxTasksAbleToProc()
 
+    def getTask(self, tid) -> Optional[Task]:
+        if tid in self._allTasks_dict:
+            return self._allTasks_dict[tid]
+        return None
+
+
 
 cmdHandlers = {
-    CMD_POST_TYPE: Processor.post_config,
-    CMD_ACCEPT: Processor.accepted_command,
-    CMD_ACCEPT_RST: Processor.accepted_reset_command,
-    CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate
+    CMD_POST_TYPE:       Processor.post_config,
+    CMD_ACCEPT:          Processor.accepted_command,
+    CMD_ACCEPT_RST:      Processor.accepted_reset_command,
+    CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate,
+    CMD_REWORK_TASK:     Processor.command_rework
 } # type: Dict[str, CommandHandler]
