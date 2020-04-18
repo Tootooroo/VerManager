@@ -49,6 +49,12 @@ class EventListener(ModuleDaemon, Subject, Observer):
         # {tid:fd}
         self.taskResultFdSet = {} # type: Dict[str, BinaryIO]
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def getModule(self, m:str) -> Any:
         return self._sInst.getModule(m)
 

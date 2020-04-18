@@ -62,6 +62,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         self._logger = None # type: Optional[Logger]
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def _dispatch_logging(self, msg:str) -> None:
         if self._logger is None:
             self._logger = self._sInst.getModule(LOGGER_M_NAME)

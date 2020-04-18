@@ -108,6 +108,12 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self.logger = None # type: Optional[Logger]
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def sockSetup(self, sock:socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)

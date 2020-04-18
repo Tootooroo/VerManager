@@ -29,6 +29,12 @@ class Sender(ModuleDaemon):
 
         self._send_rtns = [] # type: List[SendRtn_NoWait_NoExcep]
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def stop(self) -> None:
         self._status = 1
 

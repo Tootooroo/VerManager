@@ -45,6 +45,12 @@ class RevSync(ModuleDaemon):
 
         self._sInst = sInst
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def stop(self) -> None:
         self._stop = True
 

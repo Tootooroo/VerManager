@@ -6,6 +6,7 @@ import traceback
 import platform
 import subprocess
 import queue
+import shutil
 
 from typing import Any, Optional, Callable, List, Tuple, Dict
 from multiprocessing import Pool, Manager
@@ -16,6 +17,7 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
     CancelLetter
 
+from ..basic.storage import M_NAME as STO_M_NAME, Storage, File
 from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
@@ -24,7 +26,6 @@ from ..basic.util import partition, excepHandle, pathSeperator, execute_shell, \
 
 from ..basic.mmanager import Module
 
-from .processor_cmds import reworkCmd as cmds
 from .task import Task
 from .post import Post
 from .server import Server
@@ -89,6 +90,12 @@ class Processor(Module, Subject):
         self._recyleInterrupt = False
         self._recyleInProcessing = False
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def logging(self, msg:str) -> None:
         global LOG_ID
 
@@ -150,7 +157,7 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def do_proc(reqLetter: NewLetter, info: Info, stop:Event) -> Result:
+    def do_proc(reqLetter: NewLetter, info: Info, stop:Event, path:str) -> Result:
         isSuccess = True
         try:
             workerName = info.getConfig('WORKER_NAME')
@@ -215,6 +222,9 @@ class Processor(Module, Subject):
                 else:
                     break
 
+            # Store generated file into Storage
+            shutil.copy(projName + pathSeperator() + result_path, path)
+
         except Exception:
             traceback.print_exc()
             return result
@@ -248,9 +258,51 @@ class Processor(Module, Subject):
     @staticmethod
     def command_rework(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
         command = ReWorkCommand.fromLetter(cmdLetter)
+        if command is None: return Error
 
         tid = command.tid()
+        t = p.getTask(tid)
 
+        # This task doesn't exists
+        # which means the task is failure so
+        # the task is removed.
+        if t is None:
+            return Error
+
+        if t.state() >= Task.STATE_TRANSFER:
+
+            result = t.result()
+            if result.isSuccess is False:
+                return Ok
+
+            storage = cInst.getModule(STO_M_NAME) # type: Optional[Storage]
+            assert(storage is not None)
+
+            version = t.version()
+            fileName = t.path.split(pathSeperator())[-1]
+            file = storage.getFile(version, t.path)
+
+            # file must not None cause the task's state
+            # is at least is transfer
+            assert(file is not None)
+
+            if t.state() == Task.STATE_TRANSFER:
+                # Interrupt the in transfered task
+                p.recyle_interrupt()
+
+                # Wait task exit
+                while p.isRecyleInProcessing(): time.sleep(0.01)
+
+                # clean provider
+                pr = cInst.getModule(POST_PROVIDER_M_NAME)
+                if pr is None:
+                    return Error
+                else:
+                    pr.removeAllStuffs()
+
+                # Set task's state to In-Proc so it will be
+                # dealt by Recyle()
+                t.toProcState()
 
         return Ok
 
@@ -318,16 +370,15 @@ class Processor(Module, Subject):
         # First cancel all tasks in processing
         global M_NAME
 
-        processor = cInst.getModule(M_NAME)
-        processor.stop_all_tasks()
-        processor.drop_all_results()
-        processor.recyle_interrupt()
+        p.stop_all_tasks()
+        p.drop_all_results()
+        p.recyle_interrupt()
 
         # Wait until recyle is stoped
-        while processor.isRecyleInProcessing():
+        while p.isRecyleInProcessing():
             time.sleep(0.01)
 
-        processor.recyle_stop_interrupte()
+        p.recyle_stop_interrupte()
 
         # Cleanup PostListener
         pl = cInst.getModule(POST_LISTENER_M_NAME)
@@ -427,6 +478,12 @@ class Processor(Module, Subject):
             self._allTasks = []
             self._allTasks_dict = {}
 
+    def recyle_lock(self) -> None:
+        self._result_lock.acquire()
+
+    def recyle_unlock(self) -> None:
+        self._result_lock.release()
+
     def recyle_interrupt(self) -> None:
         self._recyleInterrupt = True
 
@@ -456,14 +513,24 @@ class Processor(Module, Subject):
         event = self._manager.Event()
         self._shell_events[tid] = event
 
+        # Create a file in storage this file will be
+        # overwrite by generated file if task successed.
+        storage = self._cInst.getModule(STO_M_NAME)
+        assert(storage is not None)
+
+        resultPath = reqLetter.getExtra()['resultPath']
+        fileName = resultPath.split(pathSeperator())[-1]
+        sto = storage.create(version, fileName)
+
         res = self._pool.apply_async(Processor.do_proc,
-                                    (reqLetter, self._info, event))
+                                    (reqLetter, self._info, event, sto._path))
 
-        t = Task(tid, version, res)
-        self._allTasks.append(t)
-        self._allTasks_dict[tid] = t
+        filePath = reqLetter.getExtra()['resultPath']
+        t = Task(tid, version, res, filePath)
 
-        self._numOfTasksInProc += 1
+        t.toProcState()
+
+        self.addTask(t)
 
         return Ok
 
@@ -473,9 +540,11 @@ class Processor(Module, Subject):
 
         self._recyleInProcessing = True
 
+        filter_f = lambda t: t.isReady() and (t.state() == Task.STATE_PROC or
+                                       t.state() == Task.STATE_TRANSFER)
+
         with self._result_lock:
-            (readies, not_readies) = partition(self._allTasks, lambda t: t.isReady())
-            self._allTasks = not_readies
+            (readies, not_readies) = partition(self._allTasks, filter_f)
 
         for t in readies:
 
@@ -484,6 +553,8 @@ class Processor(Module, Subject):
 
             if self._recyleInterrupt:
                 break
+
+            t.toTransferState()
 
             if tid in self._shell_events:
                 del self._shell_events [tid]
@@ -506,25 +577,52 @@ class Processor(Module, Subject):
             response = ResponseLetter(ident = self._cInst.getIdent(), tid = tid,
                                       state = Letter.RESPONSE_STATE_FINISHED)
 
+            # Task is failure clean the task
             if result.isSuccess is False:
                 # Tell to master this task is failed.
                 response.setState(Letter.RESPONSE_STATE_FAILURE)
                 server.transfer(response)
+                t.toDoneState()
+
+                # Delete file correspond to this task
+                storage = self._cInst.getModule(STO_M_NAME)
+                assert(storage is not None)
+                storage.delete(version, path.split(pathSeperator())[-1])
+
+                # Remove the task from Processor
+                self.removeTask(t.tid())
 
             else:
                 # Transfer Binary
                 if needPost == "false":
-                    self._transBinaryTo(tid, path, lambda l: server.transfer(l))
+                    # Tasks that no post can not be interrupted.
+                    if self._transBinaryTo(tid, path, lambda l: server.transfer(l), interruptable = False) == 0:
+                        server.transfer(response)
+                        t.toDoneState()
+                    else:
+                        break
+
                 else:
                     if provider is None:
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
                         server.transfer(response)
                     else:
                         try:
-                            self._transBinaryTo(tid, path,
-                                            lambda l: provider.provide(l, 10),
-                                            mid=menu,
-                                            parent=version)
+                            # Transfer generated file to PostListener or master
+                            ret = self._transBinaryTo(tid, path,
+                                                      lambda l: provider.provide(l, 10),
+                                                      mid=menu,
+                                                      parent=version)
+
+                            # Transfer done
+                            if ret == 0:
+                                # Notify to master
+                                server.transfer(response)
+                                t.toDoneState()
+                            else:
+                                # Transfer is interrupted
+                                break
+
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                         except FileNotFoundError:
@@ -532,19 +630,16 @@ class Processor(Module, Subject):
                         except queue.Full:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
 
-                # Notify to master
-                server.transfer(response)
-
-            self._numOfTasksInProc -= 1
-            del self._allTasks_dict [tid]
-
         self._recyleInProcessing = False
 
         return len(readies)
 
+    # 0: Normal
+    # 1: Be interrupted
     def _transBinaryTo(self, tid:str, path:str,
-                        transferRtn:Callable[[BinaryLetter], Any],
-                        mid:str = "", parent:str = "") -> None:
+                       transferRtn:Callable[[BinaryLetter], Any],
+                       mid:str = "", parent:str = "",
+                       interruptable:bool = True) -> int:
 
         seperator = pathSeperator()
 
@@ -553,8 +648,8 @@ class Processor(Module, Subject):
 
             for line in binFile:
 
-                if self._recyleInterrupt:
-                    return None
+                if self._recyleInterrupt and interruptable:
+                    return 1
 
                 binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
                                          fileName=fileName, parent=parent)
@@ -564,6 +659,8 @@ class Processor(Module, Subject):
         binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu = mid,
                                     fileName=fileName, parent = parent)
         transferRtn(binLetter_last)
+
+        return 0
 
     def isRecyleInProcessing(self) -> bool:
         return self._recyleInProcessing
@@ -578,6 +675,27 @@ class Processor(Module, Subject):
         if tid in self._allTasks_dict:
             return self._allTasks_dict[tid]
         return None
+
+    def addTask(self, t:Task) -> None:
+        tid = t.tid()
+
+        if tid in self._allTasks_dict:
+            return None
+
+        self._allTasks_dict[tid] = t
+        self._allTasks.append(t)
+
+        self._numOfTasksInProc += 1
+
+    def removeTask(self, tid:str) -> None:
+
+        if tid not in self._allTasks_dict:
+            return None
+
+        del self._allTasks_dict [tid]
+        self._allTasks = [t for t in self._allTasks if t.tid() != tid]
+
+        self._numOfTasksInProc -= 1
 
 
 

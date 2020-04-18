@@ -29,6 +29,12 @@ class Logger(ModuleDaemon):
         if not os.path.exists(path):
             os.mkdir(path)
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def run(self) -> None:
         while True:
             msgUnit = self.logQueue.get() # type: Tuple[LOG_ID, LOG_MSG]

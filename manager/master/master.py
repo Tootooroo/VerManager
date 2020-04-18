@@ -9,8 +9,7 @@ from manager.basic.mmanager import MManager, Module
 from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
-from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
-    workerLost_redispatch
+from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME
 from manager.master.eventListener import EventListener, workerRegister, M_NAME as EVENT_M_NAME
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler

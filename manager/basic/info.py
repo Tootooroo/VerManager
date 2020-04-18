@@ -19,6 +19,12 @@ class Info(Module):
         with open(cfgPath, "r") as f:
             self._config = load(f, Loader=SafeLoader)
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
 
     def getConfig(self, *cfgKeys) -> typing.Any:
         cfgValue = self._config

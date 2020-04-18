@@ -31,6 +31,12 @@ class Receiver(ModuleDaemon):
         self._status = 0
         self._cInst = cInst
 
+    def begin(self) -> None:
+        return None
+
+    def cleanup(self) -> None:
+        return None
+
     def numOfTasks(self) -> int:
         return self.numOfTasksInProc
 

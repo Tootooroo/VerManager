@@ -28,7 +28,6 @@ class Command:
     def toLetter(self) -> Letter:
         """ Transfer Command to Letter """
 
-    @abstractmethod
     @staticmethod
     def fromLetter(l:CommandLetter) -> Optional['Command']:
         """ Transfer from CommandLetter to Command """

@@ -11,6 +11,7 @@ from typing import Union, List, Optional
 from ..basic.letter import Letter, ResponseLetter, BinaryLetter
 from ..basic.info import Info
 from ..basic.mmanager import MManager, Module
+from ..basic.storage import Storage
 
 from .processor import Processor
 from .sender import Sender
@@ -115,6 +116,9 @@ class Client(Thread):
 
         m3 = Processor(info, self)
         self._manager.addModule(m3)
+
+        m4 = Storage("DoneStorage", None)
+        self._manager.addModule(m4)
 
         self._manager.startAll()
 
