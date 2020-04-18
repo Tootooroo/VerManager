@@ -465,7 +465,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     if w is None:
                         continue
 
-                    w.control(c)
+                    try:
+                        w.control(c)
+                    except BrokenPipeError:
+                        continue
 
 
 

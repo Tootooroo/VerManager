@@ -39,7 +39,7 @@ from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from manager.worker.sender import M_NAME as SENDER_M_NAME
 
 from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
-    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK
+    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
@@ -256,6 +256,10 @@ class Processor(Module, Subject):
         return handler(self, cmdLetter, self._info, self._cInst)
 
     @staticmethod
+    def command_clean(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+        pass
+
+    @staticmethod
     def command_rework(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
         command = ReWorkCommand.fromLetter(cmdLetter)
         if command is None: return Error
@@ -274,17 +278,6 @@ class Processor(Module, Subject):
             result = t.result()
             if result.isSuccess is False:
                 return Ok
-
-            storage = cInst.getModule(STO_M_NAME) # type: Optional[Storage]
-            assert(storage is not None)
-
-            version = t.version()
-            fileName = t.path.split(pathSeperator())[-1]
-            file = storage.getFile(version, t.path)
-
-            # file must not None cause the task's state
-            # is at least is transfer
-            assert(file is not None)
 
             if t.state() == Task.STATE_TRANSFER:
                 # Interrupt the in transfered task
@@ -462,7 +455,6 @@ class Processor(Module, Subject):
                                    CmdResponseLetter.STATE_SUCCESS,
                                    extra={"isListener":"false"})
         server.transfer(letter)
-
         return Ok
 
     def stop_task(self, taskId:str) -> None:
@@ -522,12 +514,15 @@ class Processor(Module, Subject):
         fileName = resultPath.split(pathSeperator())[-1]
         sto = storage.create(version, fileName)
 
-        res = self._pool.apply_async(Processor.do_proc,
-                                    (reqLetter, self._info, event, sto._path))
+        res = self._pool.apply_async(
+            Processor.do_proc, (reqLetter, self._info, event, sto._path)
+        )
 
         filePath = reqLetter.getExtra()['resultPath']
         t = Task(tid, version, res, filePath)
 
+        # Changed task's state to Proc so it can be dealt by
+        # recyle() onece it's ready.
         t.toProcState()
 
         self.addTask(t)
@@ -548,26 +543,36 @@ class Processor(Module, Subject):
 
         for t in readies:
 
-            tid = t.tid()
-            version = t.version()
-
             if self._recyleInterrupt:
                 break
 
             t.toTransferState()
 
+            tid = t.tid()
+            version = t.version()
+
             if tid in self._shell_events:
                 del self._shell_events [tid]
 
             result = t.result() # type: Result
-
             version = result.version
             tid = result.tid
             needPost = result.needPost
 
             # Build path to result
-            projName = self._info.getConfig("PROJECT_NAME")
-            path = projName + pathSeperator() + result.path
+            fileName = result.path.split(pathSeperator())[-1]
+
+            storage = self._cInst.getModule(STO_M_NAME)
+            assert(storage is not None)
+
+            file = storage.getFile(version, fileName)
+
+            # Task is already be cleaned.
+            if file is None:
+                self.removeTask(tid)
+                continue
+
+            path = file.path()
 
             menu = result.menuId
 
@@ -596,7 +601,7 @@ class Processor(Module, Subject):
                 # Transfer Binary
                 if needPost == "false":
                     # Tasks that no post can not be interrupted.
-                    if self._transBinaryTo(tid, path, lambda l: server.transfer(l), interruptable = False) == 0:
+                    if self._transBinaryTo(tid, path, lambda l: server.transfer(l)) == 0:
                         server.transfer(response)
                         t.toDoneState()
                     else:
@@ -638,8 +643,7 @@ class Processor(Module, Subject):
     # 1: Be interrupted
     def _transBinaryTo(self, tid:str, path:str,
                        transferRtn:Callable[[BinaryLetter], Any],
-                       mid:str = "", parent:str = "",
-                       interruptable:bool = True) -> int:
+                       mid:str = "", parent:str = "") -> int:
 
         seperator = pathSeperator()
 
@@ -648,7 +652,7 @@ class Processor(Module, Subject):
 
             for line in binFile:
 
-                if self._recyleInterrupt and interruptable:
+                if self._recyleInterrupt:
                     return 1
 
                 binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
@@ -704,5 +708,6 @@ cmdHandlers = {
     CMD_ACCEPT:          Processor.accepted_command,
     CMD_ACCEPT_RST:      Processor.accepted_reset_command,
     CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate,
-    CMD_REWORK_TASK:     Processor.command_rework
+    CMD_REWORK_TASK:     Processor.command_rework,
+    CMD_CLEAN:           Processor.command_clean
 } # type: Dict[str, CommandHandler]
