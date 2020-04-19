@@ -403,12 +403,10 @@ class Processor(Module, Subject):
 
             cInst.addModule(pl)
         else:
-            """
-            A PostListener is already exists on this worker
-            so need to create a new one. But the address
-            used by the listener may out of date. Need
-            to notify a new address to the PostListener.
-            """
+            # A PostListener is already exists on this worker
+            # so need to create a new one. But the address
+            # used by the listener may out of date. Need
+            # to notify a new address to the PostListener.
             p.notify((0, address))
 
         # Resposne to configuration command
