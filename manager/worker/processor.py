@@ -17,12 +17,9 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
     CancelLetter
 
-from ..basic.storage import M_NAME as STO_M_NAME, Storage, File
 from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
-from ..basic.util import partition, excepHandle, pathSeperator, execute_shell, \
-    packShellCommands
 
 from ..basic.mmanager import Module
 
@@ -33,12 +30,12 @@ from .postListener import PostListener, PostProvider
 
 from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
 
-from manager.worker.server import M_NAME as SERVER_M_NAME
-from manager.worker.postListener import M_NAME as POST_LISTENER_M_NAME
-from manager.worker.postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
-from manager.worker.sender import M_NAME as SENDER_M_NAME
+from .server import M_NAME as SERVER_M_NAME
+from .postListener import M_NAME as POST_LISTENER_M_NAME
+from .postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
+from .sender import M_NAME as SENDER_M_NAME
 
-from manager.basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
+from ..basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
     CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
