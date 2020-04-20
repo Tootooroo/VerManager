@@ -87,6 +87,7 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
                 super.toFinState()
 
+            print("Remove Task: " + taskId)
             worker.removeTask(taskId)
 
             # Close chooser

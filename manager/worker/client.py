@@ -117,7 +117,7 @@ class Client(Thread):
         m3 = Processor(info, self)
         self._manager.addModule(m3)
 
-        m4 = Storage("DoneStorage", None)
+        m4 = Storage(info.getConfig('STORAGE'), None)
         self._manager.addModule(m4)
 
         self._manager.startAll()

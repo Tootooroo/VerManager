@@ -183,6 +183,7 @@ class PostListener(ModuleDaemon, Observer):
                 self._sock = s
                 print("PostListener listen at " + str((self._address, self._port)) )
             except:
+                import traceback; traceback.print_exc()
                 self._sock = None
                 return Error
 

@@ -132,9 +132,13 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             ret = self._do_dispatch(sub)
 
             if ret is False:
-                self.taskWait.insert(0, task)
+                self.taskWait.insert(0, sub)
+                self.taskEvent.set()
 
-        sub.stateChange(Task.STATE_IN_PROC)
+            else:
+                sub.toProcState()
+
+        task.stateChange(Task.STATE_IN_PROC)
 
         return True
 
@@ -223,6 +227,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # Aging
             now = datetime.utcnow()
             if needAging(now, last_aging):
+                print("Aging")
                 # Remove oudated tasks
                 self._taskAging()
 
@@ -232,6 +237,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # fixme: need to setup a timeout value
             isArrived = self.taskEvent.wait(2)
 
+            self._dispatch_logging("InQueue:" + str([t.id() for t in self.taskWait]))
+
             if len(self.taskWait) == 0:
                 self._dispatch_logging("TaskWait Queue is empty.")
                 self.taskEvent.clear()
@@ -239,6 +246,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 continue
 
             task = self.taskWait.pop()
+
+            if not self._taskTracker.isInTrack(task.id()):
+                self._dispatch_logging("Task " + task.id() + " is out of date")
+                continue
+
             self._dispatch_logging("Task " + task.id() + " arrived")
 
             if task.state == Task.STATE_FAILURE:
@@ -249,25 +261,26 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             if workers == []:
                 self._dispatch_logging("No acceptable worker")
-                self.taskWait.append(task)
+                self.taskWait.insert(0, task)
                 time.sleep(1)
             else:
                 # Task can be drop via setting its state to STATE_FAILURE
                 self._dispatch_logging("Dispatch task: " + task.id())
 
-                if self._dispatch(task) is False:
-                    self._dispatch_logging("Dispatch task " + task.id() +
-                                            " failed. append to tail of queue")
-                    self.taskWait.append(task)
+                with self.dispatchLock:
+                    if self._dispatch(task) is False:
+                        self._dispatch_logging("Dispatch task " + task.id() +
+                                                " failed. append to tail of queue")
+                        self.taskWait.append(task)
 
-                    time.sleep(1)
+                        time.sleep(1)
 
 
     def _taskAging(self) -> None:
         tasks = self._taskTracker.tasks()
 
         current = datetime.utcnow()
-        cond_is_timeout = lambda t: (current - t.last()).seconds > 5
+        cond_is_timeout = lambda t: (current - t.last()).seconds > 10
 
         # For a task that refs reduce to 0 do aging instance otherwise wait 1 min
         tasks_outdated = [t for t in tasks if t.refs == 0 or cond_is_timeout(t)]
@@ -423,6 +436,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         task.lastUpdate()
 
+        if isinstance(task, SuperTask):
+            children = task.getChildren()
+
+            for child in children:
+                child.lastUpdate()
+
     def workerLost_redispatch(self, data: Tuple[int, Worker]) -> None:
 
         event, worker = data
@@ -466,6 +485,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                         continue
 
                     try:
+                        print("To " + w.getIdent())
                         w.control(c)
                     except BrokenPipeError:
                         continue

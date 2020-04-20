@@ -519,9 +519,8 @@ class TaskGroup:
         with self._lock: return self.__remove(id)
 
     def __remove(self, id:str) -> State:
-        task_dicts = list(self._tasks.values())
+        for tasks in self._tasks.values():
 
-        for tasks in task_dicts:
             if not id in tasks:
                 continue
 

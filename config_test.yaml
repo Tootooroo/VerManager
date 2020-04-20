@@ -19,24 +19,28 @@ BuildSet:
   Builds:
     GL5610:
         cmd:
+        - sleep 10
         - echo ll <version> <datetime> > ll
         output:
         - ./ll
 
     GL5610-v2:
         cmd:
+        - sleep 10
         - echo ll2 <version> <datetime> > ll2
         output:
         - ./ll2
 
     GL5610-v3:
         cmd:
+        - sleep 10
         - echo ll3 <version> <datetime> > ll3
         output:
         - ./ll3
 
     GL8900:
         cmd:
+        - sleep 10
         - echo ll4 <version> <datetime> > ll4
         output:
         - ./ll4

@@ -197,6 +197,8 @@ class Processor(Module, Subject):
             if not os.path.exists(projName):
                 commands = ["git clone -b master " + repo_url] + commands
 
+            commands = building_cmds
+
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
             # environment.
@@ -493,6 +495,13 @@ class Processor(Module, Subject):
         version = reqLetter.getContent('vsn')
 
         if self.isReqInProc(tid, version):
+            t = self.getTask(tid)
+            assert(t is not None)
+
+            if t.state() == Task.STATE_DONE:
+                self.inProcCounterInc()
+                t.toProcState()
+
             return Error
 
         s = self._cInst.getModule(SERVER_M_NAME)
@@ -526,6 +535,7 @@ class Processor(Module, Subject):
         t.toProcState()
 
         self.addTask(t)
+        self.inProcCounterInc()
 
         return Ok
 
@@ -537,11 +547,15 @@ class Processor(Module, Subject):
 
         filter_f = lambda t: t.isReady() and (t.state() == Task.STATE_PROC or
                                        t.state() == Task.STATE_TRANSFER)
-
+        print([(t.tid(), t.isReady(), t.state()) for t in self._allTasks])
         with self._result_lock:
             (readies, not_readies) = partition(self._allTasks, filter_f)
+        print(readies)
 
         for t in readies:
+
+            # Descrease InProc counter
+            self.inProcCounterDec()
 
             if self._recyleInterrupt:
                 break
@@ -604,6 +618,7 @@ class Processor(Module, Subject):
                     if self._transBinaryTo(tid, path, lambda l: server.transfer(l)) == 0:
                         server.transfer(response)
                         t.toDoneState()
+
                     else:
                         break
 
@@ -634,6 +649,7 @@ class Processor(Module, Subject):
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                         except queue.Full:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
+
 
         self._recyleInProcessing = False
 
@@ -689,8 +705,6 @@ class Processor(Module, Subject):
         self._allTasks_dict[tid] = t
         self._allTasks.append(t)
 
-        self._numOfTasksInProc += 1
-
     def removeTask(self, tid:str) -> None:
 
         if tid not in self._allTasks_dict:
@@ -699,6 +713,10 @@ class Processor(Module, Subject):
         del self._allTasks_dict [tid]
         self._allTasks = [t for t in self._allTasks if t.tid() != tid]
 
+    def inProcCounterInc(self) -> None:
+        self._numOfTasksInProc += 1
+
+    def inProcCounterDec(self) -> None:
         self._numOfTasksInProc -= 1
 
 

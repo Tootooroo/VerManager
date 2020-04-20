@@ -40,8 +40,10 @@ class FunctionalTest(TestCase):
             c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
                        name = name)
             c.start()
+
             time.sleep(15)
             c.stop()
+
             c.join()
 
         # Create a server
@@ -51,37 +53,24 @@ class FunctionalTest(TestCase):
         time.sleep(1)
 
         # Create workers
-        client1 = Process(target=clientInterrupt, args = ("W1", ))
+        client1 = Process(target=clientStart, args = ("W1", ))
         time.sleep(3)
         client2 = Process(target=clientStart, args = ("W2", ))
         client3 = Process(target=clientStart, args = ("W3", ))
+        client4 = Process(target=clientStart, args = ("W4", ))
 
-        workers = [client1, client2, client3]
+        workers = [client1, client2, client3, client4]
 
         # Activate workers
         list( map(lambda c: c.start(), workers) )
 
         # Then wait a while so workers have enough time to connect to master
-        time.sleep(15)
+        time.sleep(25)
 
         # Get 'Dispatcher' Module on server so we can dispatch task to workers
         dispatcher = sInst.getModule("Dispatcher")
         if not isinstance(dispatcher, Dispatcher):
             self.assertTrue(False)
-
-        time.sleep(15)
-
-        from manager.master.workerRoom import M_NAME as WR_M_NAME
-        wr = sInst.getModule(WR_M_NAME)
-
-        if wr.postListener() is not None:
-            client4 = Process(target=clientStart, args = ("W4", ))
-            client4.start()
-
-            workers.append(client4)
-
-            # Wait at least WAITING_INTERVAL
-            time.sleep(15)
 
         # Dispatch task
         task1 = Task("122", "123", "122")
@@ -102,7 +91,7 @@ class FunctionalTest(TestCase):
         task4 = Task("126", "123", "126")
         dispatcher.dispatch(task4)
 
-        time.sleep(15)
+        time.sleep(30)
 
         self.assertTrue(os.path.exists("./Storage/122/122total"))
         self.assertTrue(os.path.exists("./Storage/124/124total"))
@@ -533,6 +522,12 @@ class UnitTest(TestCase):
         pt_ident = PostTask.genIdent("VersionToto")
         self.assertEqual(pt_ident, pt.id())
         postLetter = pt.toLetter()
+
+        deps = [t.id() for t in pt.dependence()]
+        deps_ = ["VersionToto__GL5610-v2", "VersionToto__GL5610-v3",
+                 "VersionToto__GL5610", "VersionToto__GL8900"]
+        self.assertEqual(4, len(deps))
+        self.assertEqual(deps_.sort(), deps.sort())
 
         self.assertEqual([], postLetter.frags())
         menus = postLetter.menus()

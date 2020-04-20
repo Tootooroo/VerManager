@@ -84,6 +84,7 @@ class Receiver(ModuleDaemon):
                         continue
 
                 else:
+                    print(reqLetter.toString())
                     processor.proc(reqLetter)
 
             except:
