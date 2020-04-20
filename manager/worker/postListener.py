@@ -236,6 +236,8 @@ class PostListener(ModuleDaemon, Observer):
                 # self._sock may be None during
                 # PostListener's addres updating
                 continue
+            except OSError:
+                continue
 
             wSock.settimeout(3)
             sockKeepalive(wSock, 10, 3)

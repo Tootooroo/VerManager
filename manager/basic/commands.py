@@ -168,7 +168,7 @@ class CleanCommand(Command):
     process of task on worker.
     """
 
-    def __init__(self, tid:str) -> None:
+    def __init__(self, tid: str) -> None:
         content = {"tid":tid}
         Command.__init__(self, CMD_CLEAN, content = content)
 
