@@ -8,7 +8,7 @@ import subprocess
 import queue
 import shutil
 
-from typing import Any, Optional, Callable, List, Tuple, Dict
+from typing import Any, Optional, Callable, List, Tuple, Dict, BinaryIO
 from multiprocessing import Pool, Manager
 from multiprocessing.pool import AsyncResult
 from threading import Event, Lock
@@ -20,6 +20,8 @@ from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
 from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
+from ..basic.util import partition, packShellCommands, execute_shell, pathSeperator
+from ..basic.storage import M_NAME as STO_M_NAME
 
 from ..basic.mmanager import Module
 
@@ -259,42 +261,49 @@ class Processor(Module, Subject):
         pass
 
     @staticmethod
-    def command_rework(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def command_rework_due_lis_lost(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+
         command = ReWorkCommand.fromLetter(cmdLetter)
         if command is None: return Error
 
-        tid = command.tid()
-        t = p.getTask(tid)
+        tids = command.tids()
 
-        # This task doesn't exists
-        # which means the task is failure so
-        # the task is removed.
-        if t is None:
+        # Interrupt the in transfered task
+        p.recyle_interrupt()
+
+        # Wait task exit
+        while p.isRecyleInProcessing(): time.sleep(0.01)
+
+        # clean provider
+        pr = cInst.getModule(POST_PROVIDER_M_NAME)
+        if pr is None:
             return Error
+        else:
+            pr.removeAllStuffs()
 
-        if t.state() >= Task.STATE_TRANSFER:
 
-            result = t.result()
-            if result.isSuccess is False:
-                return Ok
+        for tid in tids:
+            t = p.getTask(tid)
 
-            if t.state() == Task.STATE_TRANSFER:
-                # Interrupt the in transfered task
-                p.recyle_interrupt()
+            # This task doesn't exists
+            # which means the task is failure so
+            # the task is removed.
+            if t is None:
+                return Error
 
-                # Wait task exit
-                while p.isRecyleInProcessing(): time.sleep(0.01)
+            if t.state() >= Task.STATE_TRANSFER:
+                print("Rework: " + t.tid())
 
-                # clean provider
-                pr = cInst.getModule(POST_PROVIDER_M_NAME)
-                if pr is None:
-                    return Error
-                else:
-                    pr.removeAllStuffs()
+                result = t.result()
+
+                t.fileClose()
 
                 # Set task's state to In-Proc so it will be
                 # dealt by Recyle()
                 t.toProcState()
+
+        # Unblock recyle()
+        p.recyle_stop_interrupte()
 
         return Ok
 
@@ -493,6 +502,7 @@ class Processor(Module, Subject):
             t = self.getTask(tid)
             assert(t is not None)
 
+            t.fileClose()
             if t.state() == Task.STATE_DONE:
                 self.inProcCounterInc()
                 t.toProcState()
@@ -549,9 +559,6 @@ class Processor(Module, Subject):
 
         for t in readies:
 
-            # Descrease InProc counter
-            self.inProcCounterDec()
-
             if self._recyleInterrupt:
                 break
 
@@ -585,11 +592,10 @@ class Processor(Module, Subject):
 
             menu = result.menuId
 
-            server = self._cInst.getModule(SERVER_M_NAME)
-            provider = self._cInst.getModule(POST_PROVIDER_M_NAME)
-
             response = ResponseLetter(ident = self._cInst.getIdent(), tid = tid,
                                       state = Letter.RESPONSE_STATE_FINISHED)
+            server = self._cInst.getModule(SERVER_M_NAME)
+            provider = self._cInst.getModule(POST_PROVIDER_M_NAME)
 
             # Task is failure clean the task
             if result.isSuccess is False:
@@ -605,18 +611,20 @@ class Processor(Module, Subject):
 
                 # Remove the task from Processor
                 self.removeTask(t.tid())
-
+                self.inProcCounterDec()
             else:
                 # Transfer Binary
                 if needPost == "false":
                     # Tasks that no post can not be interrupted.
-                    if self._transBinaryTo(tid, path, lambda l: server.transfer(l)) == 0:
-                        server.transfer(response)
-                        t.toDoneState()
+                        if self._transBinaryTo(tid, t.file(),
+                                            t.outputFileName,
+                                            lambda l: server.transfer(l)) == 0:
+                            server.transfer(response)
+                            t.toDoneState()
 
-                    else:
-                        break
-
+                            self.inProcCounterDec()
+                        else:
+                            break
                 else:
                     if provider is None:
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
@@ -624,8 +632,9 @@ class Processor(Module, Subject):
                     else:
                         try:
                             # Transfer generated file to PostListener or master
-                            ret = self._transBinaryTo(tid, path,
-                                                      lambda l: provider.provide(l, 10),
+                            ret = self._transBinaryTo(tid, t.file(),
+                                                      t.outputFileName,
+                                                      lambda l: provider.provide(l, timeout = 2),
                                                       mid=menu,
                                                       parent=version)
 
@@ -634,17 +643,18 @@ class Processor(Module, Subject):
                                 # Notify to master
                                 server.transfer(response)
                                 t.toDoneState()
+
+                                # descreaseh InProc counter
+                                self.inProcCounterDec()
                             else:
                                 # Transfer is interrupted
+                                # it's state remain in transfered
                                 break
 
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                         except FileNotFoundError:
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
-                        except queue.Full:
-                            response.setState(Letter.RESPONSE_STATE_FAILURE)
-
 
         self._recyleInProcessing = False
 
@@ -652,23 +662,27 @@ class Processor(Module, Subject):
 
     # 0: Normal
     # 1: Be interrupted
-    def _transBinaryTo(self, tid:str, path:str,
+    def _transBinaryTo(self, tid:str,
+                       f_desc:BinaryIO,
+                       fileName: str,
                        transferRtn:Callable[[BinaryLetter], Any],
                        mid:str = "", parent:str = "") -> int:
 
         seperator = pathSeperator()
 
-        with open(path, "rb") as binFile:
-            fileName = path.split(seperator)[-1]
-
-            for line in binFile:
-
-                if self._recyleInterrupt:
-                    return 1
-
-                binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
-                                         fileName=fileName, parent=parent)
+        for line in f_desc:
+            binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
+                                        fileName=fileName, parent=parent)
+            try:
                 transferRtn(binLetter)
+            except queue.Full:
+                # Recover
+                f_desc.seek(-len(line), 1)
+
+                return 1
+
+            if self._recyleInterrupt:
+                return 1
 
         # Terminated binary letter
         binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu = mid,
@@ -721,6 +735,6 @@ cmdHandlers = {
     CMD_ACCEPT:          Processor.accepted_command,
     CMD_ACCEPT_RST:      Processor.accepted_reset_command,
     CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate,
-    CMD_REWORK_TASK:     Processor.command_rework,
+    CMD_REWORK_TASK:     Processor.command_rework_due_lis_lost,
     CMD_CLEAN:           Processor.command_clean
 } # type: Dict[str, CommandHandler]

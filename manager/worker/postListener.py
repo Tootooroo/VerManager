@@ -312,7 +312,7 @@ class PostProvider(Module, Observer):
             retry -= 1
 
             try:
-                print("Try to connect to " + self._address + ":" + str(self._port))
+                #print("Try to connect to " + self._address + ":" + str(self._port))
                 sock.connect((self._address, self._port))
                 break
 
@@ -331,9 +331,11 @@ class PostProvider(Module, Observer):
 
     def reconnect(self, retry:int = 0) -> State:
         if self._sock is not None:
-            self.disconnect()
+            self._sock.close()
+            self._sock = None
 
         ret = self.connectToListener(retry)
+
         if ret == Error:
             self._num_of_failed += 1
 
@@ -358,7 +360,12 @@ class PostProvider(Module, Observer):
 
                 self._num_of_failed = 0
 
+            return Error
+
         return Ok
+
+    def sock(self) -> Optional[socket.socket]:
+        return self._sock
 
     def disconnect(self) -> None:
         if self._sock is not None:
@@ -367,7 +374,7 @@ class PostProvider(Module, Observer):
             self._sock = None
 
     def provide(self, bin:BinaryLetter, timeout=None) -> State:
-        self._stuffQ.put(bin, timeout)
+        self._stuffQ.put(bin, timeout=timeout)
         return Ok
 
     def provide_step(self) -> State:
@@ -931,7 +938,7 @@ class PostProcessor(Thread):
             #        a specific value.
             if isPaired is False:
                 # Only retry to pair stuff within last 5 seconds.
-                if stuff.elapsed() < 5:
+                if stuff.elapsed() < 15:
                     self._stuffs.addStuff(stuff)
             else:
                 self.logging("Stuff " + stuff.name() + " paired")

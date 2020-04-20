@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from .letter import Letter, CommandLetter, Optional
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 class toLetter_need_implemented(Exception):
     pass
@@ -137,14 +137,14 @@ class ReWorkCommand(Command):
     Command to tell to worker that a task need to redo.
     """
 
-    def __init__(self, tid:str) -> None:
-        content = {"tid":tid}
+    def __init__(self, tids:List[str]) -> None:
+        content = {"tids":tids}
         Command.__init__(self, CMD_REWORK_TASK, content = content)
 
-        self._tid = tid
+        self._tids = tids
 
-    def tid(self) -> str:
-        return self._tid
+    def tids(self) -> List[str]:
+        return self._tids
 
     def toLetter(self) -> CommandLetter:
         return CommandLetter(self.type, content = self.content)
@@ -155,11 +155,11 @@ class ReWorkCommand(Command):
         if not isinstance(l, CommandLetter):
             return None
 
-        tid = l.getContent('tid')
-        if tid == "":
+        tids = l.getContent('tids')
+        if tids == "":
             return None
 
-        return ReWorkCommand(tid)
+        return ReWorkCommand(tids)
 
 
 class CleanCommand(Command):

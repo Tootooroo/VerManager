@@ -1,6 +1,9 @@
 # task.py
 
-from typing import Optional, Any
+import os
+
+from ..basic.util import pathSeperator
+from typing import Optional, Any, BinaryIO
 from multiprocessing.pool import AsyncResult
 
 class Task:
@@ -21,10 +24,30 @@ class Task:
         self._asyncResult = result
         self._ver = ver
 
+        self.outputFileName = filePath.split(pathSeperator())[-1]
         self.path = filePath
         self.res = None # type: Optional[Any]
 
         self._state = Task.STATE_PENDING
+
+        self._fileDesc = None # type: Optional[BinaryIO]
+
+    def file(self) -> Optional[BinaryIO]:
+        if not os.path.exists(self.path):
+            return None
+
+        if self._fileDesc is not None:
+            return self._fileDesc
+
+        self._fileDesc = open(self.path, "rb")
+        return self._fileDesc
+
+    def fileClose(self) -> None:
+        if self._fileDesc is None:
+            return None
+
+        self._fileDesc.close()
+        self._fileDesc = None
 
     def tid(self) -> str:
         return self._tid

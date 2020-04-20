@@ -475,18 +475,29 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 # Second: Send RE_WORK command to workers that dealing
                 #         dependence of this task.
-                workers = [self._taskTracker.whichWorker(dep.id()) for dep in deps]
-                commands = [ReWorkCommand(dep.id()) for dep in deps]
+                pairs = [(self._taskTracker.whichWorker(dep.id()), dep.id()) for dep in deps]
 
-                for w, c in zip(workers, commands):
-                    # If w is None means the depended task
-                    # is waiting for dispatch.
-                    if w is None:
-                        continue
+                workers = {w.getIdent():w for w, t_id in pairs if w is not None}
+
+                d = {} # type: Dict[str, List[str]]
+
+                for p in pairs:
+                    if p[0] is None: continue
+
+                    w_id = p[0].getIdent()
+
+                    if w_id not in d:
+                        d[w_id] = []
+
+                    d[w_id].append(p[1])
+
+                for w in d:
+                    assert(w in workers)
+
+                    c = ReWorkCommand(d[w])
 
                     try:
-                        print("To " + w.getIdent())
-                        w.control(c)
+                        workers[w].control(c)
                     except BrokenPipeError:
                         continue
 
