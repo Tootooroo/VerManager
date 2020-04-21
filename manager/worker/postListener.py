@@ -21,6 +21,8 @@ from ..basic.storage import Storage, StoChooser
 from ..basic.type import *
 from ..basic.request import LastLisAddrRequire
 
+from .type import SEND_STATE, SEND_STATES
+
 from typing import Optional, Any, Tuple, List, Dict, Union
 from threading import Thread, Lock
 from queue import Queue, Empty as Q_Empty
@@ -312,7 +314,7 @@ class PostProvider(Module, Observer):
             retry -= 1
 
             try:
-                #print("Try to connect to " + self._address + ":" + str(self._port))
+                print("Try to connect to " + self._address + ":" + str(self._port))
                 sock.connect((self._address, self._port))
                 break
 
@@ -377,22 +379,22 @@ class PostProvider(Module, Observer):
         self._stuffQ.put(bin, timeout=timeout)
         return Ok
 
-    def provide_step(self) -> State:
+    def provide_step(self) -> SEND_STATE:
 
         if self._isStop:
-            return Error
+            return SEND_STATES.UNAVAILABLE
 
         inProcessing = True
 
         if self._sock is None:
             if self.reconnect() == Error:
-                return Error
+                return SEND_STATES.UNAVAILABLE
 
         with self._Q_lock:
             try:
                 bin = self._stuffQ.get_nowait()
             except Q_Empty:
-                return Error
+                return SEND_STATES.NO_DATA
 
             while inProcessing:
                 try:
@@ -405,12 +407,15 @@ class PostProvider(Module, Observer):
                     if self.reconnect() == Error:
                         # Put into head of queue
                         self._stuffQ.queue.insert(0, bin) # type: ignore
+
+                        return SEND_STATES.UNAVAILABLE
+
                     else:
                         continue
 
                 inProcessing = False
 
-        return Ok
+        return SEND_STATES.DATA_SENDED
 
     def removeAllStuffs(self) -> None:
         with self._Q_lock:

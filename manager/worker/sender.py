@@ -9,6 +9,7 @@ from ..basic.mmanager import ModuleDaemon
 from ..basic.info import Info
 from ..basic.type import *
 from .server import Server
+from .type import SEND_STATE, SEND_STATES
 
 from threading import Condition
 
@@ -16,18 +17,52 @@ M_NAME = "Sender"
 
 SendRtn_NoWait_NoExcep = Callable[[], State]
 
+class SEND_RTN:
+
+    def __init__(self, rtn:SendRtn_NoWait_NoExcep, intvl:int) -> None:
+        self._rtn = rtn
+        self._able = True
+        self._last = datetime.utcnow()
+        self._intvl = intvl
+
+    def _isAbleToSend(self) -> bool:
+        if self._able is True:
+            return True
+        else:
+            intvl =  (datetime.utcnow() - self._last).seconds
+            return intvl >= self._intvl
+
+    def rtn(self) -> SendRtn_NoWait_NoExcep:
+        return self._rtn
+
+    def execute(self, time = None) -> SEND_STATE:
+        if self._isAbleToSend():
+            ret = self._rtn()
+
+            self._able = \
+                ret is SEND_STATES.NO_DATA or \
+                ret is SEND_STATES.DATA_SENDED
+
+            if time is not None:
+                self._last = time
+
+            return ret
+
+        else:
+            return False
+
+
 class Sender(ModuleDaemon):
 
-    def __init__(self, server:Server, info:Info, cInst:Any) -> None:
+    def __init__(self, info:Info, cInst:Any) -> None:
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
 
         self.cond = Condition()
-        self.server = server
 
         self._status = 0
 
-        self._send_rtns = [] # type: List[SendRtn_NoWait_NoExcep]
+        self._send_rtns = [] # type: List[SEND_RTN]
 
     def begin(self) -> None:
         return None
@@ -42,12 +77,12 @@ class Sender(ModuleDaemon):
         if rtn in self._send_rtns:
             return Error
 
-        self._send_rtns.append(rtn)
+        self._send_rtns.append(SEND_RTN(rtn, 5))
         return Ok
 
     def rtnUnRegister(self, rtn:SendRtn_NoWait_NoExcep) -> State:
         if rtn in self._send_rtns:
-            self._send_rtns.remove(rtn)
+            self._send_rtns = [r for r in self._send_rtns if rtn != r.rtn()]
 
         return Ok
 
@@ -57,7 +92,7 @@ class Sender(ModuleDaemon):
         cond.acquire()
 
         last = datetime.utcnow()
-        isIdle = lambda now,last: (now - last).seconds > 3
+        isIdle = lambda now,last: (now - last).seconds > 1
 
         while True:
             if self._status == 1:
@@ -68,7 +103,10 @@ class Sender(ModuleDaemon):
             now = datetime.utcnow()
 
             for rtn in self._send_rtns:
-                if rtn() is Ok: last = now
+                ret = rtn.execute(now)
+
+                if ret == SEND_STATES.DATA_SENDED:
+                    last = now
 
             if isIdle(now, last):
                 time.sleep(1)

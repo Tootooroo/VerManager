@@ -11,6 +11,7 @@ from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
 from ..basic.info import Info, M_NAME as INFO_M_NAME
 from ..basic.type import *
 from ..basic.util import sockKeepalive
+from .type import SEND_STATES, SEND_STATE
 
 from typing import Any, Union, Optional
 from threading import Lock
@@ -154,25 +155,25 @@ class Server(Module):
     def transfer(self, l) -> None:
         self.q.put(l)
 
-    def transfer_step(self, timeout:int = None) -> State:
+    def transfer_step(self, timeout:int = None) -> SEND_STATE:
 
         # Server module is in stop state.
         # Not allow to transfer messages until authorized by master
         if self._isStop or self._status != Server.STATE_TRANSFER:
-            return Error
+            return SEND_STATES.UNAVAILABLE
 
         try:
             response = self.q.get_nowait()
         except Empty:
-            return Error
+            return SEND_STATES.NO_DATA
 
         if self._send(response, retry = 1) == Server.SOCK_OK:
-            return Ok
+            return SEND_STATES.DATA_SENDED
         else:
             # Insert into head of the queue
             self.q.queue.insert(0, response) # type: ignore
 
-        return Error
+        return SEND_STATES.UNAVAILABLE
 
     def drop_all_messages(self) -> None:
         self.q.queue.clear() # type: ignore

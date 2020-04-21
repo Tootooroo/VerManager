@@ -110,7 +110,7 @@ class Client(Thread):
         m1 = Receiver(s, info, self)
         self._manager.addModule(m1)
 
-        m2 = Sender(s, info, self)
+        m2 = Sender(info, self)
         m2.rtnRegister(lambda : s.transfer_step(1))
         self._manager.addModule(m2)
 

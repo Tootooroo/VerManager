@@ -79,7 +79,9 @@ class ElectGroup:
         if ident in self._providers:
             return Error
 
-        w.role = Role_Provider
+        if w.role == None:
+            w.role = Role_Provider
+
         self._providers[ident] = w
         return Ok
 

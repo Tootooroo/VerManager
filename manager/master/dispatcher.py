@@ -227,7 +227,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # Aging
             now = datetime.utcnow()
             if needAging(now, last_aging):
-                print("Aging")
                 # Remove oudated tasks
                 self._taskAging()
 
@@ -276,7 +275,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     if self._dispatch(task) is False:
                         self._dispatch_logging("Dispatch task " + task.id() +
                                                 " failed. append to tail of queue")
-                        self.taskWait.append(task)
+                        self.taskWait.insert(0, task)
 
                         time.sleep(1)
 
@@ -311,7 +310,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     continue
                 else:
                     # Need to check that is this task dependen on another task
-                    deps = t.dependence()
+                    deps = t.dependedBy()
 
                     for dep in deps:
 
@@ -535,4 +534,5 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     return list(filter(lambda w: f_online_acceptable(w), workers))
 
 def theListener(workers: List[Worker]) -> List[Worker]:
+    print([w.role for w in workers])
     return list(filter(lambda w: w.role == Role_Listener, workers))

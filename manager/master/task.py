@@ -29,6 +29,10 @@ class TaskBase(ABC):
         """ Which task dependen to """
 
     @abstractmethod
+    def dependedBy(self) -> List['TaskBase']:
+        """ Return a liste of tasks that depend on this task  """
+
+    @abstractmethod
     def taskState(self) -> TaskState:
         """ State of Task """
 
@@ -161,6 +165,9 @@ class Task(TaskBase):
     def dependence(self) -> List['TaskBase']:
         return []
 
+    def dependedBy(self) -> List['TaskBase']:
+        return []
+
     # fixme: Python 3.5.3 raise an NameError exception:
     #        name 'BinaryIO' is not defined. Temporarily
     #        use Any to instead of BinaryIO
@@ -200,6 +207,9 @@ class SuperTask(Task):
         self._split()
 
     def dependence(self) -> List[TaskBase]:
+        return [c for c in self._children]
+
+    def dependedBy(self) -> List[TaskBase]:
         return []
 
     def getChildren(self) -> List[Task]:
@@ -401,6 +411,14 @@ class SingleTask(Task):
     def denpendence(self) -> List['TaskBase']:
         return []
 
+    def dependedBy(self) -> List['TaskBase']:
+        if self._parent is not None:
+            post = self._parent.getPostTask()
+            if post is not None:
+                return [self._parent, post]
+
+        return []
+
     def toLetter(self) -> NewLetter:
 
         build = self._build
@@ -469,6 +487,12 @@ class PostTask(Task):
 
         children = self._parent.getChildren()
         return [child for child in children if child is not self]
+
+    def dependedBy(self) -> List[TaskBase]:
+        if self._parent is not None:
+            return [self._parent]
+
+        return []
 
     def toLetter(self) -> PostTaskLetter:
 

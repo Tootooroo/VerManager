@@ -328,8 +328,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                         self._pManager.removeCandidate(ident)
                     self._pManager.removeProvider(ident)
 
-                    self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
-                    del self._workers_waiting [ident]
+                self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
+                del self._workers_waiting [ident]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))

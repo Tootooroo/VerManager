@@ -56,7 +56,6 @@ class RandomElectProtocol(PostElectProtocol):
                 # Add to group as a provider
                 if c.role == Role_Listener:
                     self.group.addProvider(c)
-                    c.role = Role_Listener
                 else:
                     self.group.addProvider(c)
 
