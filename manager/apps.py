@@ -22,11 +22,10 @@ class ManagerConfig(AppConfig):
         from manager.basic.info import Info
         import manager.master.master as S
 
-        if os.environ.get('RUN_MAIN') == 'true':
-            info = Info("./config.yaml")
-            sInst = S.ServerInst(info.getConfig("Address"),
-                                    info.getConfig("Port"),
-                                    "./config_test.yaml")
-            sInst.start()
+        info = Info("./config.yaml")
+        sInst = S.ServerInst(info.getConfig("Address"),
+                                info.getConfig("Port"),
+                                "./config_test.yaml")
+        sInst.start()
 
         S.ServerInstance = sInst
