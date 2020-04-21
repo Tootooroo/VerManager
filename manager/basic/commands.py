@@ -17,6 +17,7 @@ CMD_ACCEPT_RST = "accept_rst"
 CMD_LIS_ADDR_UPDATE = "lis_addr_update"
 CMD_REWORK_TASK = "REWORK"
 CMD_CLEAN = "CLEAN"
+CMD_LIS_LOST = "LISLOST"
 
 class Command:
 
@@ -191,3 +192,24 @@ class CleanCommand(Command):
             return None
 
         return CleanCommand(tid)
+
+class LisLostCommand(Command):
+    """
+    Command to notify to worker the listener is lost.
+    The worker should disconnected from listener and
+    waiting for new listener election.
+    """
+
+    def __init__(self) -> None:
+        Command.__init__(self, CMD_LIS_LOST, content = {})
+
+    def toLetter(self) -> CommandLetter:
+        return CommandLetter(self.type, content = {})
+
+    @staticmethod
+    def fromLetter(l:CommandLetter) -> Optional['LisLostCommand']:
+
+        if not isinstance(l, CommandLetter):
+            return None
+
+        return LisLostCommand()

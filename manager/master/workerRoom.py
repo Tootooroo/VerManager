@@ -33,7 +33,8 @@ from typing import *
 from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.master.logger import M_NAME as LOGGER_M_NAME
 
-from manager.basic.commands import AcceptCommand, AcceptRstCommand, LisAddrUpdateCmd
+from manager.basic.commands import AcceptCommand, AcceptRstCommand, \
+    LisAddrUpdateCmd, LisLostCommand
 
 M_NAME = "WorkerRoom"
 
@@ -324,8 +325,14 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     # Remove this worker from PostManager
                     # if it's also a listener then set listener to None
                     if self._pManager.isListener(ident):
+
+                        # Send command to notify workers that the listener
+                        # is lost.
+                        self.broadcast(LisLostCommand())
+
                         self._pManager.setListener(None)
                         self._pManager.removeCandidate(ident)
+
                     self._pManager.removeProvider(ident)
 
                 self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))

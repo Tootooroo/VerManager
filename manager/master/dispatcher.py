@@ -471,14 +471,31 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 # just redispatch this task again.
                 self.redispatch(t)
             else:
-                # This task is depend on another tasks
-                # need to restart it by following steps:
+                """
+                This task is depend on another tasks
+                need to restart it by following steps:
 
-                # First: Redispatch task
+                First: Redispatch task
+                """
                 self.redispatch(t)
 
-                # Second: Send RE_WORK command to workers that dealing
-                #         dependence of this task.
+                """
+                Second: Redispatch tasks that is
+                        already done by listener
+                """
+                tasksOnLost = self._taskTracker.tasksOfWorker(worker.getIdent())
+
+                # Find tasks that is done and depended by this task.
+                doneTasks = [task for task in tasksOnLost
+                             if task.isFinished() and t in task.dependedBy()]
+
+                for task in doneTasks:
+                    self.redispatch(task)
+
+                """
+                Third: Send RE_WORK command to workers that dealing
+                       dependence of this task.
+                """
                 pairs = [(self._taskTracker.whichWorker(dep.id()), dep.id()) for dep in deps]
 
                 workers = {w.getIdent():w for w, t_id in pairs if w is not None}

@@ -30,7 +30,8 @@ from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
 
-from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
+from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand, \
+    LisLostCommand
 
 from .server import M_NAME as SERVER_M_NAME
 from .postListener import M_NAME as POST_LISTENER_M_NAME
@@ -38,7 +39,7 @@ from .postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from .sender import M_NAME as SENDER_M_NAME
 
 from ..basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
-    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN
+    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN, CMD_LIS_LOST
 
 Procedure = Callable[[Server, Post, Letter, Info], None]
 CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
@@ -292,8 +293,6 @@ class Processor(Module, Subject):
                 return Error
 
             if t.state() >= Task.STATE_TRANSFER:
-                print("Rework: " + t.tid())
-
                 result = t.result()
 
                 t.fileClose()
@@ -343,6 +342,21 @@ class Processor(Module, Subject):
         # PostProvider update
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
             p.notify((1, address))
+
+        return Ok
+
+    @staticmethod
+    def command_lis_lost(p:'Processor', cmdLetter:CommandLetter,
+                         info:Info, cInst:Any) -> State:
+        """
+        The listener is lost from master. Re-elect will begin soon
+        close connection between PostProvier and PostListener.
+        """
+        pr = cInst.getModule(POST_PROVIDER_M_NAME)
+        if pr is None:
+            return Ok
+        else:
+            pr.disconnect()
 
         return Ok
 
@@ -552,10 +566,8 @@ class Processor(Module, Subject):
 
         filter_f = lambda t: t.isReady() and (t.state() == Task.STATE_PROC or
                                        t.state() == Task.STATE_TRANSFER)
-        print([(t.tid(), t.isReady(), t.state()) for t in self._allTasks])
         with self._result_lock:
             (readies, not_readies) = partition(self._allTasks, filter_f)
-        print(readies)
 
         for t in readies:
 
@@ -736,5 +748,6 @@ cmdHandlers = {
     CMD_ACCEPT_RST:      Processor.accepted_reset_command,
     CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate,
     CMD_REWORK_TASK:     Processor.command_rework_due_lis_lost,
-    CMD_CLEAN:           Processor.command_clean
+    CMD_CLEAN:           Processor.command_clean,
+    CMD_LIS_LOST:        Processor.command_lis_lost
 } # type: Dict[str, CommandHandler]

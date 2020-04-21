@@ -403,7 +403,6 @@ class PostProvider(Module, Observer):
 
                     sending(self._sock, bin)
                 except Exception:
-                    print("Provide_ste: try to reconnect")
                     if self.reconnect() == Error:
                         # Put into head of queue
                         self._stuffQ.queue.insert(0, bin) # type: ignore
@@ -411,6 +410,7 @@ class PostProvider(Module, Observer):
                         return SEND_STATES.UNAVAILABLE
 
                     else:
+                        self._stuffQ.queue.insert(0, bin)
                         continue
 
                 inProcessing = False

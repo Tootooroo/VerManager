@@ -81,6 +81,16 @@ class TaskTracker(Module):
 
         self._tasks[t_name].setWorker(worker)
 
+    def tasksOfWorker(self, w_name:str) -> List[Task]:
+        def p(unit):
+            w = unit.onWhichWorker()
+            if w is not None:
+                return w.getIdent() == w_name
+            else:
+                return False
+
+        return [unit.getTask() for unit in self._tasks.values() if p(unit)]
+
     def whichWorker(self, t_name:str) -> Optional[Worker]:
         if t_name not in self._tasks:
             return None
