@@ -257,7 +257,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 continue
 
             # Is there any workers acceptable
-            workers = self._workers.getWorkerWithCond(acceptableWorkers)
+            if isinstance(task, PostTask):
+                cond = theListener
+            else:
+                cond = acceptableWorkers
+
+            workers = self._workers.getWorkerWithCond(cond)
 
             if workers == []:
                 self._dispatch_logging("No acceptable worker")
