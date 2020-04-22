@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import *
 from functools import reduce
 from manager.basic.type import Ok, Error, State
-from manager.basic.letter import NewLetter, Letter, PostTaskLetter
+from manager.basic.letter import NewLetter, Letter, PostTaskLetter, BinaryLetter
 from manager.master.build import BuildSet
 from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
     REVISION_MAX_LENGTH
@@ -429,6 +429,14 @@ class SingleTask(Task):
     def isAChild(self) -> bool:
         return self._parent is not None
 
+    def isValid(self) -> bool:
+        cond1 = len(self.taskId) <= BinaryLetter.TASK_ID_FIELD_LEN
+        cond2 = len(self.vsn) <= VERSION_MAX_LENGTH
+        cond3 = len(self.sn) <= REVISION_MAX_LENGTH
+        cond4 = " " not in (self.taskId+self.vsn+self.sn)
+
+        return cond1 and cond2 and cond3 and cond4
+
     def denpendence(self) -> List['TaskBase']:
         return []
 
@@ -501,6 +509,14 @@ class PostTask(Task):
 
     def isAChild(self) -> bool:
         return self._parent is not None
+
+    def isValid(self) -> bool:
+        cond1 = len(self.taskId) <= BinaryLetter.TASK_ID_FIELD_LEN
+        cond2 = len(self.vsn) <= VERSION_MAX_LENGTH
+        cond3 = len(self.sn) <= REVISION_MAX_LENGTH
+        cond4 = " " not in (self.taskId+self.vsn+self.sn)
+
+        return cond1 and cond2 and cond3 and cond4
 
     def dependence(self) -> List[TaskBase]:
         if self._parent is None:

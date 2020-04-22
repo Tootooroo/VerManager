@@ -135,7 +135,7 @@ class Letter:
     """
     Req = "Req"
 
-    BINARY_HEADER_LEN = 196
+    BINARY_HEADER_LEN = 260
     BINARY_MIN_HEADER_LEN = 6
     LETTER_TYPE_LEN = 2
 
@@ -607,7 +607,7 @@ class BinaryLetter(Letter):
     TYPE_FIELD_LEN = 2
     LENGTH_FIELD_LEN = 4
     FILE_NAME_FIELD_LEN = 32
-    TASK_ID_FIELD_LEN = 64
+    TASK_ID_FIELD_LEN = 128
     PARENT_FIELD_LEN = 64
     MENU_FIELD_LEN = 30
 
@@ -637,10 +637,10 @@ class BinaryLetter(Letter):
     @staticmethod
     def parse(s: bytes) -> Optional['BinaryLetter']:
         fileName = s[6: 38].decode().replace(" ", "")
-        tid = s[38: 102].decode().replace(" ", "")
-        parent = s[102: 166].decode().replace(" ", "")
-        menu = s[166: 196].decode().replace(" ", "")
-        content = s[196: ]
+        tid = s[38: 166].decode().replace(" ", "")
+        parent = s[166: 230].decode().replace(" ", "")
+        menu = s[230 : 260].decode().replace(" ", "")
+        content = s[260: ]
 
         return BinaryLetter(tid, content, menu, fileName, parent = parent)
 

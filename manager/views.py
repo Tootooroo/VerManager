@@ -17,7 +17,7 @@ from django.shortcuts import get_object_or_404
 from .master.verControl import RevSync
 from .master.dispatcher import Dispatcher
 from .master.worker import Task
-from .basic.restricts import VERSION_MAX_LENGTH
+from .basic.restricts import VERSION_MAX_LENGTH, TASK_ID_MAX_LENGTH
 
 from .basic.type import *
 
@@ -74,13 +74,12 @@ def temporaryGen(request, revision:str):
     # Use date as version
     version = str(datetime.now())
     version = version.split(".")[0].replace("-", "").\
-        replace(":", "").replace(" ", "")
+        replace(":", "").replace(" ", "") + "_" + revision[0:10]
 
-    if len(version) > VERSION_MAX_LENGTH:
-        version = version[:VERSION_MAX_LENGTH]
+    tid = version+revision
+    task = Task(tid, revision, version, extra = {"Temporary":"true"})
 
-    task = Task(version+"_"+revision, revision, version, extra = {"Temporary":"true"})
-
+    import pdb; pdb.set_trace()
     if task.isValid() is False:
         return HttpResponseBadRequest()
 
