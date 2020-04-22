@@ -25,7 +25,7 @@ class ManagerConfig(AppConfig):
         info = Info("./config.yaml")
         sInst = S.ServerInst(info.getConfig("Address"),
                                 info.getConfig("Port"),
-                                "./config_test.yaml")
+                                "./config.yaml")
         sInst.start()
 
         S.ServerInstance = sInst
