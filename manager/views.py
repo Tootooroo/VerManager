@@ -72,13 +72,14 @@ def temporaryGen(request, revision:str):
         return HttpResponseBadRequest
 
     # Use date as version
-    version = str(datetime.now()).split(".")[0] + revision
-    version = version.replace(" ", "-")
+    version = str(datetime.now())
+    version = version.split(".")[0].replace("-", "").\
+        replace(":", "").replace(" ", "")
 
     if len(version) > VERSION_MAX_LENGTH:
         version = version[:VERSION_MAX_LENGTH]
 
-    task = Task(version, revision, version, extra = {"Temporary":"true"})
+    task = Task(version+"_"+revision, revision, version, extra = {"Temporary":"true"})
 
     if task.isValid() is False:
         return HttpResponseBadRequest()

@@ -625,7 +625,8 @@ class Processor(Module, Subject):
             else:
                 # Transfer Binary
                 if needPost == "false":
-                    # Tasks that no post can not be interrupted.
+                    try:
+                        # Tasks that no post can not be interrupted.
                         if self._transBinaryTo(tid, t.file(),
                                             t.outputFileName,
                                             lambda l: server.transfer(l)) == 0:
@@ -635,6 +636,8 @@ class Processor(Module, Subject):
                             self.inProcCounterDec()
                         else:
                             break
+                    except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                        response.setState(Letter.RESPONSE_STATE_FAILURE)
                 else:
                     if provider is None:
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
