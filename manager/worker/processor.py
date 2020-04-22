@@ -545,7 +545,7 @@ class Processor(Module, Subject):
         )
 
         filePath = reqLetter.getExtra()['resultPath']
-        t = Task(tid, version, res, filePath)
+        t = Task(tid, version, res, sto._path)
 
         # Changed task's state to Proc so it can be dealt by
         # recyle() onece it's ready.
