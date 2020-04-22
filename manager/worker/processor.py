@@ -197,8 +197,6 @@ class Processor(Module, Subject):
             if not os.path.exists(projName):
                 commands = ["git clone -b master " + repo_url] + commands
 
-            commands = building_cmds
-
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
             # environment.
