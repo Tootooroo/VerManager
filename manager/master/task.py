@@ -6,6 +6,8 @@ from functools import reduce
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, PostTaskLetter
 from manager.master.build import BuildSet
+from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
+    REVISION_MAX_LENGTH
 
 from datetime import datetime
 from threading import Lock
@@ -16,6 +18,7 @@ TaskState = int
 
 TaskType = int
 
+class TASK_FORMAT_ERROR(Exception): pass
 class TASK_TRANSFORM_ERROR(Exception): pass
 
 class TaskBase(ABC):
@@ -40,6 +43,9 @@ class TaskBase(ABC):
     def stateChange(self, state:TaskState) -> State:
         """ Change task's state """
 
+    @abstractmethod
+    def isValid(self) -> bool:
+        """ To check that is info in this task is valid  """
 
 class Task(TaskBase):
 
@@ -180,6 +186,14 @@ class Task(TaskBase):
     @staticmethod
     def isValidState(s:int) -> bool:
         return s >= Task.STATE_PREPARE and s <= Task.STATE_FAILURE
+
+    def isValid(self) -> bool:
+        cond1 = len(self.taskId) <= TASK_ID_MAX_LENGTH
+        cond2 = len(self.vsn) <= VERSION_MAX_LENGTH
+        cond3 = len(self.sn) <= REVISION_MAX_LENGTH
+        cond4 = " " not in (self.taskId+self.vsn+self.sn)
+
+        return cond1 and cond2 and cond3 and cond4
 
     def transform(self) -> 'Task':
         if type(self) is not Task:
@@ -343,6 +357,9 @@ class SuperTask(Task):
                             build = build,
                             extra = self.extra)
 
+            if st.isValid() is False:
+                raise TASK_FORMAT_ERROR
+
             st.setParent(self)
 
             group = self._buildSet.belongTo(build.getIdent())
@@ -372,6 +389,10 @@ class SuperTask(Task):
             merge.varAssign(varPairs)
 
         pt = PostTask(PostTask.genIdent(self.vsn), self.vsn, posts, frags, merge)
+
+        if pt.isValid() is False:
+            raise TASK_FORMAT_ERROR
+
         pt.setParent(self)
 
         children.append(pt)

@@ -123,12 +123,7 @@ def temporaryBuild_handling(eventListener: EventListener, task: Task) -> None:
     global chooserSet
     seperator = pathSeperator()
 
-    if isinstance(task, SuperTask):
-        # Binary file correspond to a SuperTask
-        # is transfer from PostListener.
-        taskId = PostTask.genIdent(task.id())
-    else:
-        taskId = task.id()
+    taskId = task.id()
 
     chooser = chooserSet[taskId]
     filePath = chooser.path()
@@ -172,6 +167,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
         else:
             dest = resultDir + seperator + fileName
             shutil.copy(chooser.path(), dest)
+
+        shutil.copy(chooser.path(), "public/"+fileName)
 
     except FileNotFoundError:
         logger = eventListener.getModule('Logger')

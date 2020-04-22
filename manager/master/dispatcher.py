@@ -21,7 +21,7 @@ from manager.master.postElection import Role_Listener, Role_Provider
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import *
 from manager.master.task import TaskState, Task, SuperTask, SingleTask, \
-    PostTask, TaskType
+    PostTask, TaskType, TASK_FORMAT_ERROR
 from manager.basic.type import *
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
@@ -143,6 +143,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return True
 
     def dispatch(self, task: Task) -> bool:
+
         self._dispatch_logging("Dispatch task " + task.id())
 
         if self._taskTracker.isInTrack(task.id()):
@@ -154,7 +155,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             return True
 
         # Bind task with a build or buildSet
-        task = self._bind(task)
+        try:
+            task = self._bind(task)
+        except TASK_FORMAT_ERROR:
+            return False
 
         self._taskTracker.track(task)
 
@@ -209,6 +213,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             try:
                 task = task.transform()
+            except TASK_FORMAT_ERROR:
+                raise TASK_FORMAT_ERROR
             except:
                 traceback.print_exc()
 

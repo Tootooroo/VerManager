@@ -861,6 +861,9 @@ class PostProcessor(Thread):
             output = post.getOutput()
             fileName = output.split(path_sep)[-1]
 
+            if len(fileName) > BinaryLetter.FILE_NAME_FIELD_LEN:
+                fileName = fileName[:BinaryLetter.FILE_NAME_FIELD_LEN]
+
             if output[0] == ".":
                 output = "Build" + path_sep + output
 
@@ -877,12 +880,13 @@ class PostProcessor(Thread):
                             server.transfer(binaryLetter)
 
                         except BinaryLetter.FIELD_LENGTH_EXCEPTION:
+                            traceback.print_exc()
                             response.setState(Letter.RESPONSE_STATE_FAILURE)
                             server.transfer(response)
 
                             # Remove working directory
                             shutil.rmtree(wDir)
-                            return None
+                            break
 
                     lastBin  = BinaryLetter(
                         postId, b"",
