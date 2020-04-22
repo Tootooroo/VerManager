@@ -220,10 +220,10 @@ class Processor(Module, Subject):
                 if returncode != 0 and returncode != 128:
                     return result
                 else:
-                    break
+                    # Store generated file into Storage
+                    shutil.copy(projName + pathSeperator() + result_path, path)
 
-            # Store generated file into Storage
-            shutil.copy(projName + pathSeperator() + result_path, path)
+                    break
 
         except Exception:
             traceback.print_exc()
