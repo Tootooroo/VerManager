@@ -79,7 +79,6 @@ def temporaryGen(request, revision:str):
     tid = version+revision
     task = Task(tid, revision, version, extra = {"Temporary":"true"})
 
-    import pdb; pdb.set_trace()
     if task.isValid() is False:
         return HttpResponseBadRequest()
 
