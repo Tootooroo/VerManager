@@ -83,7 +83,13 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
                 super = task.getParent()
                 assert(super is not None)
 
-                responseHandler_ResultStore(eventListener, super)
+                extra = super.getExtra()
+                assert(extra is not None)
+
+                if "Temporary" in extra:
+                    temporaryBuild_handling(eventListener, task)
+                else:
+                    responseHandler_ResultStore(eventListener, super)
 
                 super.toFinState()
 
@@ -112,6 +118,24 @@ def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
             # Remove Task from worker
             worker.removeTask(taskId)
+
+def temporaryBuild_handling(eventListener: EventListener, task: Task) -> None:
+    global chooserSet
+    seperator = pathSeperator()
+
+    if isinstance(task, SuperTask):
+        # Binary file correspond to a SuperTask
+        # is transfer from PostListener.
+        taskId = PostTask.genIdent(task.id())
+    else:
+        taskId = task.id()
+
+    chooser = chooserSet[taskId]
+    filePath = chooser.path()
+    fileName = filePath.split(seperator)[-1]
+
+    shutil.copy(filePath, "private" + seperator + fileName)
+
 
 def responseHandler_ResultStore(eventListener: EventListener,
                                 task: Task) -> None:

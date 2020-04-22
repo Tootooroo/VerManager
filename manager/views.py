@@ -3,6 +3,8 @@ import manager.apps
 import json
 import time
 
+from typing import Optional
+
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
 from django.views.decorators.csrf import csrf_exempt
@@ -10,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from functools import reduce
 from django.shortcuts import render
 from django.template import RequestContext
+from django.shortcuts import get_object_or_404
 
 from .master.verControl import RevSync
 from .master.dispatcher import Dispatcher
@@ -56,7 +59,27 @@ def newRev(request):
     RevSync.revNewPush(request)
     return HttpResponse()
 
-# request: {Version: 'ver_name'}
+@csrf_exempt
+def temporaryGen(request, revision:str):
+
+    if S.ServerInstance is None:
+        return HttpResponseBadRequest
+
+    dispatcher = S.ServerInstance.getModule('Dispatcher')
+
+    if dispatcher is None:
+        return HttpResponseBadRequest
+
+    # Use date as version
+    version = str(datetime.now()).split(" ")[0]
+
+    task = Task(version, revision, version, extra = {"Temporary":"true"})
+
+    if dispatcher.dispatch(task) == False: # type: ignore
+        return HttpResponseBadRequest
+
+    return HttpResponse()
+
 def generation(request):
     import os
 

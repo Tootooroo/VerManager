@@ -10,5 +10,8 @@ urlpatterns = [
     path('verRegister/verInfos', views.versionRetrive, name="versionRetrive"),
     path('verRegister/newRev', views.newRev, name="newRevision"),
     path('verRegister/generation', views.generation, name="generation"),
-    path('verRegister/isGenerateDone', views.isGenerationDone, name="isGenerateDone")
+    path('verRegister/isGenerateDone',
+         views.isGenerationDone, name="isGenerateDone"),
+    path('verRegister/tempGen/<str:revision>',
+         views.temporaryGen, name="tempVerGen")
 ]
