@@ -557,5 +557,4 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     return list(filter(lambda w: f_online_acceptable(w), workers))
 
 def theListener(workers: List[Worker]) -> List[Worker]:
-    print([w.role for w in workers])
     return list(filter(lambda w: w.role == Role_Listener, workers))
