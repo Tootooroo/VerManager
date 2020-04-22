@@ -1,5 +1,6 @@
 # EventHandlers.py
 
+import os
 import zipfile
 import shutil
 
@@ -129,6 +130,8 @@ def temporaryBuild_handling(eventListener: EventListener, task: Task) -> None:
     filePath = chooser.path()
     fileName = filePath.split(seperator)[-1]
 
+    if not os.path.exists("private"):
+        os.mkdir("private")
     shutil.copy(filePath, "private" + seperator + fileName)
 
 
@@ -168,6 +171,8 @@ def responseHandler_ResultStore(eventListener: EventListener,
             dest = resultDir + seperator + fileName
             shutil.copy(chooser.path(), dest)
 
+        if not os.path.exists("public"):
+            os.mkdir("public")
         shutil.copy(chooser.path(), "public/"+fileName)
 
     except FileNotFoundError:
