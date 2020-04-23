@@ -17,7 +17,6 @@ from manager.basic.mmanager import ModuleDaemon
 from queue import Queue, Empty
 
 from manager.basic.util import spawnThread, map_strict
-from manager.master.logger import Logger
 
 from manager.basic.letter import Letter
 from manager.basic.commands import Command, LisAddrUpdateCmd
@@ -48,6 +47,11 @@ wrLog = "wrLog"
 
 class WorkerRoom(ModuleDaemon, Subject, Observer):
 
+    NOTIFY_LOG = "log"
+    NOTIFY_CONN = "Conn"
+    NOTIFY_IN_WAIT = "Wait"
+    NOTIFY_DISCONN = "Disconn"
+
     WAITING_INTERVAL = 300
 
     EVENT_CONNECTED = 0
@@ -62,6 +66,10 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         # Subject init
         Subject.__init__(self, M_NAME)
+        self.addType(self.NOTIFY_CONN)
+        self.addType(self.NOTIFY_IN_WAIT)
+        self.addType(self.NOTIFY_DISCONN)
+        self.addType(self.NOTIFY_LOG)
 
         # Observer init
         Observer.__init__(self)
@@ -107,8 +115,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self._lastCandidates = [] # type: List[str]
 
-        self.logger = None # type: Optional[Logger]
-
     def begin(self) -> None:
         return None
 
@@ -122,12 +128,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
 
     def _WR_LOG(self, msg:str) -> None:
-        if self.logger is not None:
-            Logger.putLog(self.logger, wrLog, msg)
-        else:
-            self.logger = self._serverInst.getModule(LOGGER_M_NAME)
-            if self.logger is not None:
-                self.logger.log_register(wrLog)
+        self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
     def run(self) -> None:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -194,7 +195,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                             cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
                             self.broadcast(cmd)
 
-                    self.notify((WorkerRoom.EVENT_CONNECTED, workerInWait))
+                    self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
 
                     # Send an accept command to the worker
                     # so it able to transfer message.
@@ -212,7 +213,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 self.addWorker(acceptedWorker)
                 self._pManager.addCandidate(acceptedWorker)
 
-                self.notify((WorkerRoom.EVENT_CONNECTED, acceptedWorker))
+                self.notify(WorkerRoom.NOTIFY_CONN, acceptedWorker)
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self._lastChangedPoint).seconds
@@ -301,7 +302,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
                 self._workers_waiting[ident] = worker
 
-                self.notify((WorkerRoom.EVENT_WAITING, worker))
+                self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
     def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
@@ -335,7 +336,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
                     self._pManager.removeProvider(ident)
 
-                self.notify((WorkerRoom.EVENT_DISCONNECTED, worker))
+                self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
                 del self._workers_waiting [ident]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:

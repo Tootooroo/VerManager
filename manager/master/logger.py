@@ -8,6 +8,7 @@ from manager.basic.mmanager import ModuleDaemon
 from manager.basic.letter import Letter
 from manager.basic.type import *
 
+from manager.basic.observer import Observer
 
 import os
 
@@ -16,11 +17,12 @@ M_NAME ="Logger"
 LOG_ID = str
 LOG_MSG = str
 
-class Logger(ModuleDaemon):
+class Logger(ModuleDaemon, Observer):
 
     def __init__(self, path: str) -> None:
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
+        Observer.__init__(self)
 
         self.logPath = path
         self.logQueue = Queue(32) # type: Queue[Tuple[LOG_ID, LOG_MSG]]
@@ -88,3 +90,11 @@ class Logger(ModuleDaemon):
         formated_message = str(time) + " : " + message + '\n'
 
         return formated_message
+
+    def listenTo(self, data:Tuple[str, str]) -> None:
+        tunnelname, msg = data
+
+        if tunnelname not in self.logTunnels:
+            self.log_register(tunnelname)
+
+        self.log_put(tunnelname, msg)

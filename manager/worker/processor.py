@@ -61,11 +61,17 @@ class Result:
 
 class Processor(Module, Subject):
 
+    NOTIFY_POST_LISTENER = "lis"
+    NOTIFY_POST_PROVIDER = "pro"
+
     def __init__(self, info:Info, cInst:Any) -> None:
         global M_NAME
 
         Module.__init__(self, M_NAME)
+
         Subject.__init__(self, M_NAME)
+        self.addType(Processor.NOTIFY_POST_LISTENER)
+        self.addType(Processor.NOTIFY_POST_PROVIDER)
 
         self._max = int(info.getConfig('MAX_TASK_CAN_PROC'))
         self._numOfTasksInProc = 0
@@ -335,11 +341,11 @@ class Processor(Module, Subject):
 
         # PostListener update
         if cInst.isModuleExists(POST_LISTENER_M_NAME):
-            p.notify((0, address))
+            p.notify(Processor.NOTIFY_POST_LISTENER, address)
 
         # PostProvider update
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
-            p.notify((1, address))
+            p.notify(Processor.NOTIFY_POST_PROVIDER, address)
 
         return Ok
 
@@ -418,7 +424,7 @@ class Processor(Module, Subject):
             pl = PostListener(address, port, cInst)
             pl.start()
 
-            p.subscribe(pl)
+            p.subscribe(Processor.NOTIFY_POST_LISTENER, pl)
             pl.handler_install(M_NAME, pl.address_update)
 
             cInst.addModule(pl)
@@ -427,7 +433,7 @@ class Processor(Module, Subject):
             # so need to create a new one. But the address
             # used by the listener may out of date. Need
             # to notify a new address to the PostListener.
-            p.notify((0, address))
+            p.notify(Processor.NOTIFY_POST_LISTENER, address)
 
         # Resposne to configuration command
         server = cInst.getModule(SERVER_M_NAME)
@@ -443,7 +449,7 @@ class Processor(Module, Subject):
 
         sender = cInst.getModule(SENDER_M_NAME)
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
-            p.notify((1, address))
+            p.notify(Processor.NOTIFY_POST_PROVIDER, address)
         else:
             provider = PostProvider(address, port, cInst)
 
@@ -462,7 +468,7 @@ class Processor(Module, Subject):
 
             sender.rtnRegister(provider.provide_step)
 
-            p.subscribe(provider)
+            p.subscribe(Processor.NOTIFY_POST_PROVIDER, provider)
             provider.handler_install(M_NAME, provider.address_update)
 
             cInst.addModule(provider)

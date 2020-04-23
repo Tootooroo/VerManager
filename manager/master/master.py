@@ -92,23 +92,31 @@ class ServerInst(Thread):
         self.addModule(revSyncner)
 
         # Subscribe to subjects
-        eventListener.subscribe(workerRoom)
-        workerRoom.subscribe(eventListener)
-        workerRoom.subscribe(dispatcher)
-        dispatcher.subscribe(workerRoom)
+        eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
+        workerRoom.subscribe(WorkerRoom.NOTIFY_CONN, eventListener)
+        workerRoom.subscribe(WorkerRoom.NOTIFY_DISCONN, dispatcher)
+
+        workerRoom.subscribe(WorkerRoom.NOTIFY_LOG, logger)
+        eventListener.subscribe(EventListener.NOTIFY_LOG, logger)
+        dispatcher.subscribe(Dispatcher.NOTIFY_LOG, logger)
+
 
         # Install observer handlers to EventListener
-        eventListener.handler_install(WR_M_NAME, lambda data: workerRegister(eventListener, data))
+        new_worker_register = lambda data: workerRegister(eventListener, data)
+        eventListener.handler_install(WR_M_NAME, new_worker_register)
 
         # Install observer handlers to WorkerRoom
-        wr_handler_disconn = lambda data: workerRoom.notifyEventFd(WorkerRoom.EVENT_DISCONNECTED,
-                                                              data)
+        wr_handler_disconn = lambda data: workerRoom.notifyEventFd(
+            WorkerRoom.EVENT_DISCONNECTED, data)
         workerRoom.handler_install(EVENT_M_NAME, wr_handler_disconn)
-        workerRoom.handler_install(DISPATCHER_M_NAME, lambda data: workerRoom.tasks_clear())
 
         # Install observer handlers to Dispatcher
         handler_dispatcher = lambda data: dispatcher.workerLost_redispatch(data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
+
+        # Install log handler to logger
+        for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:
+            logger.handler_install(module, logger.listenTo)
 
         self._mmanager.startAll()
 

@@ -1,7 +1,7 @@
 # observer.py
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, overload
 
 class Observer(ABC):
     """
@@ -39,16 +39,41 @@ class Subject(ABC):
 
     def __init__(self, ident:str) -> None:
         self._subject_ident = ident
-        self._observers = [] # type: List[Observer]
+        self._observers = {} # type: Dict[str, List[Observer]]
 
-    def subscribe(self, ob: Observer) -> None:
-        if ob not in self._observers:
-            self._observers.append(ob)
+    def addType(self, type:str) -> None:
+        if type in self._observers:
+            return None
 
-    def withdraw(self, ob) -> None:
-        if ob in self._observers:
-            self._observers.remove(ob)
+        self._observers[type] = []
 
-    def notify(self, data:Any) -> None:
-        for ob in self._observers:
-            ob.update(self._subject_ident, data)
+    def removeType(self, type:str) -> None:
+        if type in self._observers:
+            del self._observers [type]
+
+    def subscribe(self, type:str, ob: Observer) -> None:
+        if type in self._observers:
+            obs_of_type = self._observers[type]
+
+            if ob not in obs_of_type:
+                obs_of_type.append(ob)
+
+    def withdraw(self, type:str, ob: Observer) -> None:
+        if type in self._observers:
+
+            if ob in self._observers[type]:
+                self._observers[type].remove(ob)
+
+    def withdrawAll(self, ob: Observer) -> None:
+        for type in self._observers:
+            obs = self._observers[type]
+
+            if ob in obs:
+                obs.remove(ob)
+
+    def notify(self, type:str, data:Any) -> None:
+        if type in self._observers:
+            obs = self._observers[type]
+
+            for ob in obs:
+                ob.update(self._subject_ident, data)

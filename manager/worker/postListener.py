@@ -199,11 +199,6 @@ class PostListener(ModuleDaemon, Observer):
         """
         role, address = data
 
-        # PostListener should not to concern
-        # such a message.
-        if role != 0:
-            return None
-
         if self._address != address:
             self._address = address
 
@@ -289,11 +284,6 @@ class PostProvider(Module, Observer):
     def address_update(self, data: Tuple[int, str]) -> None:
 
         role, address = data
-
-        # PostProvider should not to concern such
-        # a message.
-        if role != 1:
-            return None
 
         if self._address != address:
             self.setAddress(address, 8066)

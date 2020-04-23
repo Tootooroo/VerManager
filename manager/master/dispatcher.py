@@ -23,12 +23,13 @@ from manager.basic.type import *
 from manager.master.task import TaskState, Task, SuperTask, SingleTask, \
     PostTask, TaskType, TASK_FORMAT_ERROR
 from manager.basic.type import *
-from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.commands import ReWorkCommand
 
 class Dispatcher(ModuleDaemon, Subject, Observer):
+
+    NOTIFY_LOG = "log"
 
     def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
         global M_NAME
@@ -36,6 +37,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         ModuleDaemon.__init__(self, M_NAME)
 
         Subject.__init__(self, M_NAME)
+        self.addType(self.NOTIFY_LOG)
 
         Observer.__init__(self)
 
@@ -60,8 +62,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         self._workerLock = Lock()
         self._numOfWorkers = 0
 
-        self._logger = None # type: Optional[Logger]
-
     def begin(self) -> None:
         return None
 
@@ -69,14 +69,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return None
 
     def _dispatch_logging(self, msg:str) -> None:
-        if self._logger is None:
-            self._logger = self._sInst.getModule(LOGGER_M_NAME)
-            self._logger.log_register("dispatcher")
-
-            if self._logger is None:
-                return None
-
-        Logger.putLog(self._logger, "dispatcher", msg)
+        self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
 
     # Dispatch a task to a worker of
     # all by overhead of workers
@@ -452,13 +445,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             for child in children:
                 child.lastUpdate()
 
-    def workerLost_redispatch(self, data: Tuple[int, Worker]) -> None:
-
-        event, worker = data
-
-        # If event's value is 1 means the worker is lost.
-        if event != 1:
-            return None
+    def workerLost_redispatch(self, worker:Worker) -> None:
 
         tasks = worker.inProcTasks()
 

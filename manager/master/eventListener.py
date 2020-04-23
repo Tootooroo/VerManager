@@ -13,8 +13,6 @@ from manager.master.worker import Worker, Task
 from manager.basic.type import *
 from manager.basic.letter import Letter, BinaryLetter
 
-from manager.master.logger import M_NAME as LOGGER_M_NAME
-
 import traceback
 
 M_NAME = "EventListener"
@@ -26,6 +24,9 @@ Handler = Callable[['EventListener', Letter], None]
 
 class EventListener(ModuleDaemon, Subject, Observer):
 
+    NOTIFY_LOG = "log"
+    NOTIFY_LOST = "lost"
+
     def __init__(self, inst:Any) -> None:
         global letterLog, M_NAME
 
@@ -36,6 +37,8 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
         # Init as Subject
         Subject.__init__(self, M_NAME)
+        self.addType(self.NOTIFY_LOG)
+        self.addType(self.NOTIFY_LOST)
 
         # Init as Observer
         Observer.__init__(self)
@@ -90,15 +93,11 @@ class EventListener(ModuleDaemon, Subject, Observer):
         handlers = self.handlers[event]
         list(map(lambda h: h(self, letter), handlers)) # type: ignore
 
+    def event_log(self, msg:str) -> None:
+        self.notify(EventListener.NOTIFY_LOG, (letterLog, msg))
+
     def run(self) -> None:
         global letterLog
-        logger = self._sInst.getModule(LOGGER_M_NAME)
-
-        if logger is None:
-            raise COMPONENTS_LOG_NOT_INIT
-        else:
-            # Register log files
-            logger.log_register(letterLog)
 
         while True:
             # Polling every 10 seconds due to polling
@@ -116,30 +115,24 @@ class EventListener(ModuleDaemon, Subject, Observer):
                     letter = Worker.receving(sock)
 
                     if letter is None:
-                        logger.log_put(letterLog, "Letter is NoneType")
+                        self.event_log("Letter is NoneType")
                         continue
 
                     if not letter.validity():
-                        logger.log_put(letterLog, "Receive invalid letter " + letter.toString())
+                        self.event_log("Receive invalid letter " + letter.toString())
                         continue
                 except:
                     traceback.print_exc()
                     # Notify observers that a connection is lost.
-                    self.notify(fd)
+                    self.notify(EventListener.NOTIFY_LOST, fd)
                     self.entries.unregister(fd)
                     continue
 
                 if letter != None:
                     if not isinstance(letter, BinaryLetter):
-                        logger.log_put(letterLog, "Receive: " + letter.toString())
+                        self.event_log("Receive: " + letter.toString())
                     self.Acceptor(letter)
 
 def workerRegister(eventListener: EventListener,
-                   data:Tuple[int, Worker]) -> None:
-    event, worker = data
-
-    if event == 0:
-        # A worker is Connected need to listene to it.
-        eventListener.fdRegister(worker)
-    else:
-        return None
+                   worker:Worker) -> None:
+    eventListener.fdRegister(worker)
