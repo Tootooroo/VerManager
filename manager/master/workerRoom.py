@@ -176,8 +176,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     old_addr, old_port         = workerInWait.getAddress()
 
                     # Note: Need to setup worker's status before listener
-                    # address update otherwise listener itself will unable
-                    # to know address changed.
+                    #       address update otherwise listener itself will unable
+                    #       to know address changed.
                     workerInWait.setAddress((arrived_addr, arrived_port))
                     workerInWait.setState(Worker.STATE_ONLINE)
 
