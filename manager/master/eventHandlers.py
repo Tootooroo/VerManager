@@ -4,6 +4,8 @@ import os
 import zipfile
 import shutil
 
+from collections import namedtuple
+
 from manager.master.eventListener import EventListener, letterLog
 
 from manager.basic.type import Ok, Error, State
@@ -26,102 +28,158 @@ from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
 
-def packDataWithChangeLog(vsn: str, filePath: str, dest: str, log_start:str = "", log_end:str = "") -> str:
-    from manager.models import infoBetweenRev, Versions
+ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 
-    changeLog = infoBetweenRev(log_start, log_end)
+class EVENT_HANDLER_TOOLS:
 
-    with open("./log.txt", "w") as logFile:
-        for log in changeLog:
-            logFile.write(log)
+    chooserSet = {} # type: Dict[str, StoChooser]
 
-    zipFileName = vsn + ".rar"
+    PREPARE_ACTIONS = []  # type: List[ActionInfo]
+    IN_PROC_ACTIONS = []  # type: List[ActionInfo]
+    FIN_ACTIONS = []  # type: List[ActionInfo]
+    FAIL_ACTIONS = []  # type: List[ActionInfo]
 
-    zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
-    for aFile in ["./log.txt", filePath]:
-        zipFd.write(aFile)
-    zipFd.close()
+    ACTION_TBL = {
+        Task.STATE_IN_PROC  : IN_PROC_ACTIONS,
+        Task.STATE_FINISHED : FIN_ACTIONS,
+        Task.STATE_FAILURE  : FAIL_ACTIONS
+    } # type: Dict[int, List[ActionInfo]]
 
-    return zipFileName
+    @classmethod
+    def action_init(self, eventListener:EventListener) -> None:
+        # Fin action install
+        singletask_fin_action_info = ActionInfo(
+            isMatch = lambda t: isinstance(t, SingleTask),
+            execute = self._singletask_fin_action,
+            args = eventListener
+        )
+        self.install_action(Task.STATE_FINISHED, singletask_fin_action_info)
 
-chooserSet = {} # type: Dict[str, StoChooser]
+        posttask_fin_action_info = ActionInfo(
+            isMatch = lambda t: isinstance(t, PostTask),
+            execute = self._posttask_fin_action,
+            args = eventListener
+        )
+        self.install_action(Task.STATE_FINISHED, posttask_fin_action_info)
+
+        task_common_fin_action_info = ActionInfo(
+            isMatch = lambda t: True,
+            execute = self._tasks_fin_action,
+            args = eventListener
+        )
+        self.install_action(Task.STATE_FINISHED, task_common_fin_action_info)
+
+        # Fail action install
+        task_common_fail_action_info = ActionInfo(
+            isMatch = lambda t: True,
+            execute = self._tasks_fail_action,
+            args = eventListener
+        )
+        self.install_action(Task.STATE_FAILURE, task_common_fail_action_info)
+
+
+    @classmethod
+    def do_action(self, t:Task, state:int) -> None:
+        actions = self.ACTION_TBL[state]
+
+        for action in actions:
+            if action.isMatch(t):
+                action.execute(t, action.args)
+
+    @classmethod
+    def install_action(self, state:int, action:ActionInfo) -> None:
+        self.ACTION_TBL[state].append(action)
+
+    @staticmethod
+    def packDataWithChangeLog(vsn: str, filePath: str, dest: str,
+                            log_start:str = "", log_end:str = "") -> str:
+        from manager.models import infoBetweenRev, Versions
+
+        changeLog = infoBetweenRev(log_start, log_end)
+
+        with open("./log.txt", "w") as logFile:
+            for log in changeLog:
+                logFile.write(log)
+
+        zipFileName = vsn + ".rar"
+
+        zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
+        for aFile in ["./log.txt", filePath]:
+            zipFd.write(aFile)
+        zipFd.close()
+
+        return zipFileName
+
+    @staticmethod
+    def _singletask_fin_action(t:SingleTask, eventListener) -> None:
+        if t.getParent() is None:
+            responseHandler_ResultStore(t, eventListener)
+
+    @staticmethod
+    def _posttask_fin_action(t:PostTask, eventListener:EventListener) -> None:
+        super = t.getParent()
+        assert(super is not None)
+
+        extra = super.getExtra()
+        assert(extra is not None)
+
+        if "Temporary" in extra:
+            temporaryBuild_handling(t, eventListener)
+        else:
+            responseHandler_ResultStore(super, eventListener)
+
+        super.toFinState()
+
+    @staticmethod
+    def _tasks_fin_action(t:Task, eventListener:EventListener) -> None:
+        taskId = t.id()
+        chooserSet = EVENT_HANDLER_TOOLS.chooserSet
+        if taskId in chooserSet:
+            del chooserSet [taskId]
+
+    @staticmethod
+    def _tasks_fail_action(t:Task, eventListener:EventListener) -> None:
+
+        if isinstance(t, SingleTask) or isinstance(t, PostTask):
+
+            if t.isAChild():
+                dispatcher = eventListener.getModule(DISPATCHER_M_NAME)
+                assert(dispatcher is not None)
+
+                parent = t.getParent()
+                if isinstance(parent, SuperTask):
+                    dispatcher.cancel(parent.id())
 
 def responseHandler(eventListener:EventListener, letter:Letter) -> None:
 
-    global chooserSet
-
-    if letter.typeOfLetter() != Letter.Response:
+    if not isinstance(letter, ResponseLetter):
         return None
 
     ident = letter.getHeader('ident')
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    workers = eventListener.getModule('WorkerRoom') # type: Optional[WorkerRoom]
-    assert(workers is not None)
+    wr = eventListener.getModule('WorkerRoom') \
+        #type: Optional[WorkerRoom]
+    assert(wr is not None)
 
-    worker = workers.getWorker(ident)
+    task = wr.getTaskOfWorker(ident, taskId)
 
-    if worker is None:
+    if task is None or not Task.isValidState(state):
         return None
 
-    task = worker.searchTask(taskId)
+    if task.stateChange(state) is Error:
+        return None
 
-    if task is not None and Task.isValidState(state):
+    EVENT_HANDLER_TOOLS.do_action(task, state)
 
-        ret = task.stateChange(state)
-        # Invalid state shift.
-        if ret is Error:
-            return None
+    if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
+        wr.removeTaskFromWorker(ident, taskId)
 
-        if state == Task.STATE_FINISHED:
+def temporaryBuild_handling(task:Task, eventListener: EventListener) -> None:
 
-            if isinstance(task, SingleTask):
-                if task.getParent() is None:
-                    responseHandler_ResultStore(eventListener, task)
+    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
-            elif isinstance(task, PostTask):
-                super = task.getParent()
-                assert(super is not None)
-
-                extra = super.getExtra()
-                assert(extra is not None)
-
-                if "Temporary" in extra:
-                    temporaryBuild_handling(eventListener, task)
-                else:
-                    responseHandler_ResultStore(eventListener, super)
-
-                super.toFinState()
-
-            print("Remove Task: " + taskId)
-            worker.removeTask(taskId)
-
-            # Close chooser
-            if taskId in chooserSet:
-                chooser = chooserSet[taskId]
-                del chooserSet [taskId]
-
-        elif state == Task.STATE_FAILURE:
-
-            # If this task is a member of SuperTask
-            # then we need to cancel all tasks that
-            # belong to the SuperTask
-            if isinstance(task, SingleTask) or isinstance(task, PostTask):
-
-                if task.isAChild():
-                    dispatcher = eventListener.getModule(DISPATCHER_M_NAME) \
-                        # type: Dispatcher
-
-                    parent = task.getParent()
-                    if parent is not None:
-                        dispatcher.cancel(parent.id())
-
-            # Remove Task from worker
-            worker.removeTask(taskId)
-
-def temporaryBuild_handling(eventListener: EventListener, task: Task) -> None:
-    global chooserSet
     seperator = pathSeperator()
 
     taskId = task.id()
@@ -135,10 +193,9 @@ def temporaryBuild_handling(eventListener: EventListener, task: Task) -> None:
     shutil.copy(filePath, "private" + seperator + fileName)
 
 
-def responseHandler_ResultStore(eventListener: EventListener,
-                                task: Task) -> None:
+def responseHandler_ResultStore(task:Task, eventListener: EventListener) -> None:
 
-    global chooserSet
+    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
     seperator = pathSeperator()
 
@@ -164,9 +221,12 @@ def responseHandler_ResultStore(eventListener: EventListener,
         fileName = chooser.path().split(seperator)[-1]
 
         if extra is not None and "logFrom" in extra and "logTo" in extra:
-            fileName = packDataWithChangeLog(fileName,
-                                             chooser.path(), resultDir,
-                                             extra['logFrom'], extra['logTo'])
+            fileName = EVENT_HANDLER_TOOLS.packDataWithChangeLog(
+                fileName, chooser.path(), resultDir,
+                extra['logFrom'],
+                extra['logTo']
+            )
+
         else:
             dest = resultDir + seperator + fileName
             shutil.copy(chooser.path(), dest)
@@ -184,9 +244,10 @@ def responseHandler_ResultStore(eventListener: EventListener,
 
 
 def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
-    global chooserSet
 
     import traceback
+
+    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
     if not isinstance(letter, BinaryLetter):
         return None

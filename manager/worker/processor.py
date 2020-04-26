@@ -111,11 +111,9 @@ class Processor(Module, Subject):
             if self.server is None:
                 return None
 
-            regLetter = LogRegLetter(self._cInst.getIdent(), LOG_ID)
-            self.server.transfer(regLetter)
+            self.server.log_register(LOG_ID)
 
-        logLetter = LogLetter(self._cInst.getIdent(), LOG_ID, msg)
-        self.server.transfer(logLetter)
+        self.server.log(LOG_ID, msg)
 
 
     def maxTasksAbleToProc(self) -> int:
@@ -202,6 +200,8 @@ class Processor(Module, Subject):
 
             if not os.path.exists(projName):
                 commands = ["git clone -b master " + repo_url] + commands
+
+            commands = building_cmds
 
             # Pack all building commands into a single string
             # so all of them will be executed in the same shell
@@ -437,11 +437,9 @@ class Processor(Module, Subject):
 
         # Resposne to configuration command
         server = cInst.getModule(SERVER_M_NAME)
-
-        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE,
-                                   CmdResponseLetter.STATE_SUCCESS,
-                                   extra = {"isListener":"true"})
-        server.transfer(letter)
+        server.control_response(CMD_POST_TYPE,
+                                CmdResponseLetter.STATE_SUCCESS,
+                                extra = {"isListener":"true"})
         return Ok
 
     @staticmethod
@@ -475,10 +473,8 @@ class Processor(Module, Subject):
 
         # Response to configuraton command
         server = cInst.getModule(SERVER_M_NAME)
-        letter = CmdResponseLetter(cInst.getIdent(), CMD_POST_TYPE,
-                                   CmdResponseLetter.STATE_SUCCESS,
-                                   extra={"isListener":"false"})
-        server.transfer(letter)
+        server.control_response(CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
+                                extra={"isListener":"false"})
         return Ok
 
     def stop_task(self, taskId:str) -> None:
@@ -530,9 +526,7 @@ class Processor(Module, Subject):
         s = self._cInst.getModule(SERVER_M_NAME)
 
         # Notify master this task is change into in_processing state
-        response = ResponseLetter(ident=self._cInst.getIdent(),
-                                tid=tid, state=Letter.RESPONSE_STATE_IN_PROC)
-        s.transfer(response)
+        s.response_in_proc(tid)
 
         event = self._manager.Event()
         self._shell_events[tid] = event
@@ -616,8 +610,7 @@ class Processor(Module, Subject):
             # Task is failure clean the task
             if result.isSuccess is False:
                 # Tell to master this task is failed.
-                response.setState(Letter.RESPONSE_STATE_FAILURE)
-                server.transfer(response)
+                server.response_failure(tid)
                 t.toDoneState()
 
                 # Delete file correspond to this task
@@ -635,8 +628,8 @@ class Processor(Module, Subject):
                         # Tasks that no post can not be interrupted.
                         if self._transBinaryTo(tid, t.file(),
                                             t.outputFileName,
-                                            lambda l: server.transfer(l)) == 0:
-                            server.transfer(response)
+                                            lambda l: server.bytesSend(l)) == 0:
+                            server.response_fin(tid)
                             t.toDoneState()
 
                             self.inProcCounterDec()
@@ -646,8 +639,7 @@ class Processor(Module, Subject):
                         response.setState(Letter.RESPONSE_STATE_FAILURE)
                 else:
                     if provider is None:
-                        response.setState(Letter.RESPONSE_STATE_FAILURE)
-                        server.transfer(response)
+                        server.response_failure(tid)
                     else:
                         try:
                             # Transfer generated file to PostListener or master
@@ -660,7 +652,7 @@ class Processor(Module, Subject):
                             # Transfer done
                             if ret == 0:
                                 # Notify to master
-                                server.transfer(response)
+                                server.response_fin(tid)
                                 t.toDoneState()
 
                                 # descreaseh InProc counter
@@ -686,8 +678,6 @@ class Processor(Module, Subject):
                        fileName: str,
                        transferRtn:Callable[[BinaryLetter], Any],
                        mid:str = "", parent:str = "") -> int:
-
-        seperator = pathSeperator()
 
         for line in f_desc:
             binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,

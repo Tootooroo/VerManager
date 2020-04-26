@@ -1,5 +1,7 @@
 # Server.py
 
+import manager.master.eventHandlers as EventHandler
+
 from typing import *
 from socket import *
 from threading import Thread
@@ -80,6 +82,8 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Log, logHandler)
         eventListener.registerEvent(Letter.Req, lisAddrUpdateHandler)
         self.addModule(eventListener)
+
+        EventHandler.EVENT_HANDLER_TOOLS.action_init(eventListener)
 
         logDir = info.getConfig('LogDir')
         logger = Logger(logDir)

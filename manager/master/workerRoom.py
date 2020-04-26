@@ -235,6 +235,23 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def postListener(self) -> Optional[Worker]:
         return self._pManager.getListener()
 
+    def getTaskOfWorker(self, wId:str, tid:str) -> Optional[Task]:
+        worker = self.getWorker(wId)
+        if worker is None:
+            return None
+        else:
+            task = worker.searchTask(tid)
+
+        return task
+
+    def removeTaskFromWorker(self, wId:str, tid:str) -> None:
+        worker = self.getWorker(wId)
+        if worker is None:
+            return None
+        else:
+            worker.removeTask(tid)
+
+
     # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
     # minutes if the workers is still disconnected then change

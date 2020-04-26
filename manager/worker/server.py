@@ -7,13 +7,14 @@ import platform
 from ..basic.mmanager import Module
 
 from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
-    receving as letter_receving, sending as letter_sending
+    receving as letter_receving, sending as letter_sending, LogRegLetter, LogLetter, \
+    CmdResponseLetter
 from ..basic.info import Info, M_NAME as INFO_M_NAME
 from ..basic.type import *
 from ..basic.util import sockKeepalive
 from .type import SEND_STATES, SEND_STATE
 
-from typing import Any, Union, Optional
+from typing import Any, Union, Optional, BinaryIO, Dict
 from threading import Lock
 from queue import Queue, Empty
 
@@ -142,6 +143,35 @@ class Server(Module):
             self.sock.close()
 
         self._status = Server.STATE_DISCONNECTED
+
+    def _response_task_state(self, tid:str, state:str) -> None:
+        response = ResponseLetter(self._cInst.getIdent(), tid, state)
+        self.transfer(response)
+
+    def response_in_proc(self, tid:str) -> None:
+        self._response_task_state(tid, Letter.RESPONSE_STATE_IN_PROC)
+
+    def response_fin(self, tid:str) -> None:
+        self._response_task_state(tid, Letter.RESPONSE_STATE_FINISHED)
+
+    def response_failure(self, tid:str) -> None:
+        self._response_task_state(tid, Letter.RESPONSE_STATE_FAILURE)
+
+    def control_response(self, cmd_type:str, state:str, extra:Dict[str, str]) -> None:
+        cmd_response = CmdResponseLetter(self._cInst.getIdent(),
+                                         cmd_type, state, extra)
+        self.transfer(cmd_response)
+
+    def bytesSend(self, l:BinaryLetter) -> None:
+        self.transfer(l)
+
+    def log_register(self, id:str) -> None:
+        regLetter = LogRegLetter(self._cInst.getIdent(), id)
+        self.transfer(regLetter)
+
+    def log(self, id:str, msg:str) -> None:
+        logLetter = LogLetter(self._cInst.getIdent(), id, msg)
+        self.transfer(logLetter)
 
     def waitLetter(self) -> Union[int, Letter]:
         return self._recv(5)
