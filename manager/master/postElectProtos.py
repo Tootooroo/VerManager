@@ -1,7 +1,10 @@
 # postElectProtos.py
 
+import traceback
+
+from datetime import datetime
 from functools import reduce
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 from queue import Queue, Empty as queue_Empty
 from manager.basic.type import Ok, Error, State
@@ -38,48 +41,76 @@ class RandomElectProtocol(PostElectProtocol):
         listener = self.group.getListener()
         assert(listener is not None)
 
-        (host, port) = listener.getAddress()
-
-        candidates = self.group.candidateIter()
-
-        cmd_set_provider = PostConfigCmd(host, self._proto_port,
-                                         PostConfigCmd.ROLE_PROVIDER)
-        for c in candidates:
-            # fixme: May cause performance problem you can
-            #        send all command in onece. And wait a
-            #        constant time for all response.
-            l = self._send_command_and_wait(c, cmd_set_provider, timeout = 2)
-            if l is None: continue
-
-            # fixme: Need to deal with failed of provider configure
-            if l.getState() is CmdResponseLetter.STATE_SUCCESS:
-                # Add to group as a provider
-                if c.role == Role_Listener:
-                    self.group.addProvider(c)
-                else:
-                    self.group.addProvider(c)
-
-                self.group.removeCandidate_(c)
+        self._ProvidersInit(listener.getAddress())
 
         self.isInit = True
 
         return Ok
 
-    def _send_command_and_wait(self, w:Worker, cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
+    def _ProvidersInit(self, lisAddr:Tuple[str, int]) -> None:
+
+        if self.group is None:
+            return None
+
+        host, port = lisAddr
+
+        candidates = self.group.candidateIter()
+        cmd_set_provider = PostConfigCmd(host, self._proto_port,
+                                         PostConfigCmd.ROLE_PROVIDER)
+
+        inWait = {} # type: Dict[str, Worker]
+        for c in candidates:
+            ret = self._send_command(c, cmd_set_provider)
+            if ret is None:
+                continue
+
+            inWait[c.getIdent()] = c
+
+
+        needWait = lambda t: (datetime.utcnow() - t).seconds < 1
+        beginTime = datetime.utcnow()
+
+        while needWait(beginTime):
+            if len(inWait) == 0:
+                break
+
+            response = self.waitMsg(timeout = 1)
+            if response is None:
+                continue
+
+            if response.getState() is CmdResponseLetter.STATE_SUCCESS:
+                ident = response.getIdent()
+                worker = inWait[ident]
+
+                self.group.addProvider(worker)
+                self.group.removeCandidate_(worker)
+
+                del inWait [ident]
+
+
+    def _send_command(self, w:Worker, cmd:Command, timeout=None) -> State:
+
         try:
             w.control(cmd)
-            response = self.waitMsg(timeout=timeout)
-
-            while response.getIdent() != w.getIdent():
-                response = self.waitMsg(timeout=timeout)
-
         except (BrokenPipeError, queue_Empty):
-            return None
+            return Error
         except:
-            import traceback
             traceback.print_exc()
+            return Error
 
+        return Ok
+
+
+    def _send_command_and_wait(self, w:Worker,
+                               cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
+
+        ret = self._send_command(w, cmd, timeout = timeout)
+        if ret is Error:
             return None
+
+        response = self.waitMsg(timeout=timeout)
+        while response.getIdent() != w.getIdent():
+            response = self.waitMsg(timeout=timeout)
 
         return response
 
@@ -140,16 +171,7 @@ class RandomElectProtocol(PostElectProtocol):
 
                 self.msgClear()
 
-                candidates_iter = self.group.candidateIter()
-                for candidate in candidates_iter:
-                    l = self._send_command_and_wait(candidate, cmd_set_provider,
-                                                    timeout=2)
-                    if l is None: continue
-
-                    if l.getState() is CmdResponseLetter.STATE_SUCCESS:
-                        self.group.addProvider(candidate)
-                        self.group.removeCandidate_(candidate)
-
+                self._ProvidersInit(listener.getAddress())
 
                 return Ok
 
