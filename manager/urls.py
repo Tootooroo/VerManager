@@ -1,17 +1,18 @@
 from django.urls import path, include
+from rest_framework import routers
+from .views import VersionViewSet, RevisionViewSet
 from . import views
 
 app_name = 'manager'
+
+router = routers.SimpleRouter()
+router.register(r'versions', VersionViewSet)
+router.register(r'revisions', RevisionViewSet)
+print(router.urls)
+
 urlpatterns = [
     path('', views.index, name='index'),
     path('verManager', views.verManagerPage, name="verMngPage"),
-    path('verRegister/register', views.register, name="register"),
-    path('verRegister/infos', views.revisionRetrive, name="revisionRetrive"),
-    path('verRegister/verInfos', views.versionRetrive, name="versionRetrive"),
     path('verRegister/newRev', views.newRev, name="newRevision"),
-    path('verRegister/generation', views.generation, name="generation"),
-    path('verRegister/isGenerateDone',
-         views.isGenerationDone, name="isGenerateDone"),
-    path('verRegister/tempGen/<str:revision>',
-         views.temporaryGen, name="tempVerGen")
+    path('api/', include(router.urls))
 ]

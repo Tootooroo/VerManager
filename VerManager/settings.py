@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework'
 ]
 
 MIDDLEWARE = [
@@ -124,7 +125,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
-    '/home/aydenlin/Projects/VerManager/manager/static/',
+    '/home/aydenlin/Projects/VerManager/manager/static/browser/dist/browserr',
     '/home/aydenlin/Projects/VerManager/data'
 )
 
