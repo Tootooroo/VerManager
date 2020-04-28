@@ -26,4 +26,9 @@ export class VerRegisterComponent implements OnInit {
             .subscribe();
     }
 
+    versions(): void {
+        this.verService.getAllVersions()
+            .subscribe(versions => console.log(versions));
+    }
+
 }

@@ -125,7 +125,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
-    '/home/aydenlin/Projects/VerManager/manager/static/browser/dist/browserr',
+    '/home/aydenlin/Projects/VerManager/manager/static/browser/dist/browser',
     '/home/aydenlin/Projects/VerManager/data'
 )
 

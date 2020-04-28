@@ -8,7 +8,7 @@ import { Version } from './version';
 })
 export class VersionService {
 
-    private verUrl = 'versions';
+    private verUrl = 'manager/api/versions';
 
     httpOptions = {
         headers: new HttpHeaders({ 'Content-Type': 'application/json' }),
