@@ -106,7 +106,6 @@ class FunctionalTest(TestCase):
         time.sleep(10)
 
 
-
 class UnitTest(TestCase):
 
     def tes_new_rev(self):

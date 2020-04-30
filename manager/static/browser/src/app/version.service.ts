@@ -23,7 +23,7 @@ export class VersionService {
         return this.http.get<Version>(url);
     }
 
-    getAllVersions(): Observable<Version[]> {
+    getVersions(): Observable<Version[]> {
         return this.http.get<Version[]>(this.verUrl);
     }
 

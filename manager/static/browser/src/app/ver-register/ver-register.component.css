@@ -1,0 +1,43 @@
+mat-action-list {
+    margin: 0 0 2em 0;
+    list-style-type: none;
+    padding: 0;
+    width: 40em;
+    max-height: 40em;
+    overflow: auto;
+}
+
+#revList mat-list {
+    position: relative;
+    cursor: pointer;
+    background-color: #EEE;
+    margin: .5em;
+    padding: .3em 0;
+    height: 1.6em;
+    border-radius: 4px;
+    max-width: 35em;
+    min-width: 35em;
+}
+
+#revList mat-list:hover {
+    color: #607D8B;
+    background-color: #DDD;
+    left: .1em;
+}
+
+#revList a:hover {
+    color:#607D8B;
+}
+
+button {
+  background-color: #eee;
+  border: none;
+  border-radius: 4px;
+  font-family: Arial;
+  width: 5em;
+}
+
+a {
+    display: inline-block;
+    width: 30em;
+}

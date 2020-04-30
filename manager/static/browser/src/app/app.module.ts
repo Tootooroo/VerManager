@@ -6,6 +6,8 @@ import { AppComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { VerGenComponent } from './ver-gen/ver-gen.component';
 import { VerRegisterComponent } from './ver-register/ver-register.component';
+import { MatListModule } from '@angular/material/list';
+import { MatExpansionModule } from '@angular/material/expansion';
 
 @NgModule({
     declarations: [
@@ -16,7 +18,9 @@ import { VerRegisterComponent } from './ver-register/ver-register.component';
     imports: [
         BrowserModule,
         BrowserAnimationsModule,
-        HttpClientModule
+        HttpClientModule,
+        MatListModule,
+        MatExpansionModule,
     ],
     providers: [],
     bootstrap: [AppComponent]

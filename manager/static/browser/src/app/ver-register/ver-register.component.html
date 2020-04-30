@@ -1,6 +1,6 @@
-<div>
-  <input #verName/>
-  <button (click)="versions()">
-    register
-  </button>
-</div>
+<mat-action-list id="revList" (scroll)="onScroll($event)">
+  <mat-list *ngFor="let revision of revisions">
+    <a>{{revision.comment | slice: 0:35}}</a>
+    <button class="revButton">Register</button>
+  </mat-list>
+</mat-action-list>

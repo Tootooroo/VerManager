@@ -79,6 +79,16 @@ class VersionViewSet(viewsets.ModelViewSet):
 
         return Response()
 
+    @action(detail=True, methods=['delete'])
+    def delete(self, request, pk=None) -> Response:
+        try:
+            theVersion = Versions.objects.get(pk=pk)
+            theVersion.delete()
+        except ObjectDoesNotExist:
+            return HttpResponseBadRequest()
+
+        return Response()
+
     @action(detail=True, methods=['put'])
     def generate(self, request, pk=None) -> Response:
         generate_info = BuildInfoSerializer(data=request.data)
@@ -117,8 +127,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         version = version.split(".")[0].replace("-", "").\
             replace(":", "").replace(" ", "") + "_" + revision[0:10]
 
-        tid = version+revision
-        task = Task(tid, revision, version, extra = {"Temporary":"true"})
+        task = Task(version, revision, version, extra = {"Temporary":"true"})
 
         if not task.isValid():
             return HttpResponseBadRequest()
@@ -156,8 +165,41 @@ class VersionViewSet(viewsets.ModelViewSet):
 
 
 class RevisionViewSet(viewsets.ModelViewSet):
-    queryset = Revisions.objects.all()
+    queryset = Revisions.objects.all().order_by('-dateTime')
     serializer_class = RevisionSerializer
+
+    @action(detail=True, methods=['get'])
+    def getSomeRevsFrom(self, request, pk=None) -> Response:
+        try:
+            num = int(request.query_params['num'])
+            if num == 0:
+                return HttpResponseNotModified()
+        except (ValueError, KeyError):
+            return HttpResponseBadRequest()
+
+        beginRev = self.get_object()
+        revs = Revisions.objects.order_by('-dateTime').\
+            filter(dateTime__lt=beginRev.dateTime)
+        revs.order_by('-dateTime')
+
+
+
+        serilizer = self.get_serializer(revs[:num], many=True)
+        return Response(serilizer.data)
+
+    @action(detail=False, methods=['get'])
+    def getSomeRevs(self, request) -> Response:
+        try:
+            num = int(request.query_params['num'])
+            if num == 0:
+                return HttpResponseNotModified()
+        except (ValueError, KeyError):
+            return HttpResponseBadRequest()
+
+        revs = Revisions.objects.all().order_by('-dateTime')
+        serializer = self.get_serializer(revs[:num], many=True)
+
+        return Response(serializer.data)
 
 
 def index(request):
