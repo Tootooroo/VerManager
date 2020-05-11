@@ -1,1 +1,27 @@
-<p>ver-gen works!</p>
+<h4>Version Generate</h4>
+<mat-form-field>
+  <mat-label>Version</mat-label>
+  <mat-select>
+    <mat-option *ngFor="let version of versions" [value]="version.vsn">
+      {{version.vsn}}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
+
+<mat-form-field>
+  <mat-label>Log from</mat-label>
+  <mat-select #logFrom>
+    <mat-option *ngFor="let revision of revisions" [value]="revision.sn">
+      {{revision.sn}}
+    </mat-option>
+  </mat-select>
+</mat-form-field>
+
+<mat-form-field>
+  <mat-label>Log from</mat-label>
+  <mat-select #logTo>
+    <mat-option *ngFor="let revision of revisions" [value]="revision.sn">
+      {{revision.sn}}
+    </mat-option>
+  </mat-select>
+</mat-form-field>

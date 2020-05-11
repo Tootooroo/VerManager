@@ -192,12 +192,11 @@ class PostListener(ModuleDaemon, Observer):
         return Ok
 
 
-    def address_update(self, data:Tuple[int, str]) -> None:
+    def address_update(self, address:str) -> None:
         """
         Handler to processing message from processor that about
         the listener's address is changed.
         """
-        role, address = data
 
         if self._address != address:
             self._address = address

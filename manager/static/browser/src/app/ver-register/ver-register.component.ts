@@ -1,8 +1,9 @@
-import { Component, OnInit, AfterViewInit, AfterViewChecked } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { VersionService } from '../version.service';
 import { RevisionService } from '../revision.service';
 import { Version } from '../version';
 import { Revision } from '../revision';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { SlicePipe } from '@angular/common';
 
 @Component({
@@ -19,17 +20,27 @@ export class VerRegisterComponent implements OnInit {
     revList: HTMLElement | null = null;
 
     constructor(private verService: VersionService,
-        private revService: RevisionService) { }
+        private revService: RevisionService,
+        private dialog: MatDialog) { }
 
     ngOnInit(): void {
         this.getVersions();
         this.getSomeRevs(null, 20);
     }
 
-    register(vsn: string, rev: string): void {
-        const ver: Version = { vsn, rev };
-        this.verService.addVersion(ver)
-            .subscribe();
+    register(rev: string): void {
+        const ref = this.dialog.open(RegisterDialog, {
+            width: '250px'
+        });
+
+        ref.afterClosed().subscribe(result => {
+
+            if (result !== undefined) {
+                const ver: Version = { vsn: result, sn: rev };
+                this.verService.addVersion(ver)
+                    .subscribe();
+            }
+        });
     }
 
     remove(ver: Version): void {
@@ -66,6 +77,21 @@ export class VerRegisterComponent implements OnInit {
                     this.revisions = this.revisions.concat(revisions);
                 });
         }
+    }
+}
 
+@Component({
+    selector: 'register-dialog',
+    templateUrl: 'register-dialog.html'
+})
+export class RegisterDialog {
+
+    public version: string;
+
+    constructor(
+        public dialogRef: MatDialogRef<RegisterDialog>) { }
+
+    onCancel(): void {
+        this.dialogRef.close();
     }
 }

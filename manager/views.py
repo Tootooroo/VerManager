@@ -28,7 +28,7 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .serializers import VersionSerializer, RevisionSerializer, \
-    BuildInfoSerializer
+    BuildInfoSerializer, VersionInfoSerializer
 
 import manager.master.master as S
 import traceback
@@ -44,14 +44,15 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def register(self, request) -> Response:
         try:
-            serilizer = VersionSerializer(data=request.data)
+            serializer = VersionInfoSerializer(data=request.data)
 
-            if not serilizer.is_valid():
+            if not serializer.is_valid():
                 return HttpResponseBadRequest()
 
             vers = Versions.objects.filter(vsn=serilizer.data['vsn'])
-            if vers == []:
-                newVer = Versions(vsn=version, sn=revsion)
+            if list(vers) == []:
+                newVer = Versions(vsn=serializer.data['vsn'],
+                                  sn=serializer.data['sn'])
                 newVer.save()
             else:
                 return HttpResponseBadRequest("exists")
@@ -65,7 +66,7 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['put'])
     def ver_update(self, request) -> Response:
         try:
-            serializer_data = VersionSerializer(data=request.data)
+            serializer_data = VersionInfoSerializer(data=request.data)
 
             if not serializer_data.is_valid():
                 return HttpResponseBadRequest()
@@ -182,8 +183,6 @@ class RevisionViewSet(viewsets.ModelViewSet):
             filter(dateTime__lt=beginRev.dateTime)
         revs.order_by('-dateTime')
 
-
-
         serilizer = self.get_serializer(revs[:num], many=True)
         return Response(serilizer.data)
 
@@ -205,8 +204,10 @@ class RevisionViewSet(viewsets.ModelViewSet):
 def index(request):
     return render(request, 'index.html')
 
+
 def verManagerPage(request):
     return render(request, 'verManager.html')
+
 
 @csrf_exempt
 def newRev(request):

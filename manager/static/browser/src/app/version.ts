@@ -1,6 +1,6 @@
 export interface Version {
     vsn: string;
-    rev: string;
+    sn: string;
 }
 
 export interface BuildInfo {
