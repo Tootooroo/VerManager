@@ -280,10 +280,7 @@ class PostProvider(Module, Observer):
         self._address = address
         self._port = port
 
-    def address_update(self, data: Tuple[int, str]) -> None:
-
-        role, address = data
-
+    def address_update(self, address:str) -> None:
         if self._address != address:
             self.setAddress(address, 8066)
 
