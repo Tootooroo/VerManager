@@ -8,7 +8,6 @@ app_name = 'manager'
 router = routers.SimpleRouter()
 router.register(r'versions', VersionViewSet)
 router.register(r'revisions', RevisionViewSet)
-print(router.urls)
 
 urlpatterns = [
     path('', views.index, name='index'),

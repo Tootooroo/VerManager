@@ -87,19 +87,17 @@ class RandomElectProtocol(PostElectProtocol):
 
                 del inWait [ident]
 
-
     def _send_command(self, w:Worker, cmd:Command, timeout=None) -> State:
 
         try:
             w.control(cmd)
         except (BrokenPipeError, queue_Empty):
             return Error
-        except:
+        except Exception:
             traceback.print_exc()
             return Error
 
         return Ok
-
 
     def _send_command_and_wait(self, w:Worker,
                                cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
@@ -109,8 +107,8 @@ class RandomElectProtocol(PostElectProtocol):
             return None
 
         response = self.waitMsg(timeout=timeout)
-        while response.getIdent() != w.getIdent():
-            response = self.waitMsg(timeout=timeout)
+        if response is None:
+            return None
 
         return response
 
@@ -151,7 +149,6 @@ class RandomElectProtocol(PostElectProtocol):
 
         return (Ok, l.getIdent())
 
-
     def step(self) -> State:
 
         assert(self.group is not None)
@@ -166,9 +163,6 @@ class RandomElectProtocol(PostElectProtocol):
                 return Ok
             else:
                 host, _ = listener.getAddress()
-                cmd_set_provider = PostConfigCmd(host, self._proto_port,
-                                                    PostConfigCmd.ROLE_PROVIDER)
-
                 self.msgClear()
 
                 self._ProvidersInit(listener.getAddress())

@@ -1,7 +1,7 @@
 # postelection.py
 
 from functools import reduce
-from queue import Queue
+from queue import Queue, Empty as QUEUE_EMPTY
 
 from threading import Lock
 from manager.basic.util import partition
@@ -167,8 +167,11 @@ class PostElectProtocol:
     def msgTransfer(self, l:CmdResponseLetter) -> None:
         self.msgQueue.put(l)
 
-    def waitMsg(self, timeout=None) -> CmdResponseLetter:
-        return self.msgQueue.get(timeout=timeout)
+    def waitMsg(self, timeout=None) -> Optional[CmdResponseLetter]:
+        try:
+            return self.msgQueue.get(timeout=timeout)
+        except QUEUE_EMPTY:
+            return None
 
     def msgClear(self) -> None:
         self.msgQueue.queue.clear()
@@ -188,6 +191,7 @@ class PostElectProtocol:
         providers_ident = list(map(lambda p: p.getIdent(), providers))
 
         return (listener_ident, providers_ident)
+
 
 class PostManager:
 
