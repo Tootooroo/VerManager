@@ -1,3 +1,12 @@
 <h1>{{title}}</h1>
-<app-ver-register></app-ver-register>
-<app-ver-gen></app-ver-gen>
+<mat-grid-list cols="4" rowHeight="1:2">
+
+  <mat-grid-tile [colspan]='2' [rowspan]='1'>
+  <app-ver-register></app-ver-register>
+  </mat-grid-tile>
+
+  <mat-grid-tile>
+  <app-ver-gen></app-ver-gen>
+  </mat-grid-tile>
+
+</mat-grid-list>

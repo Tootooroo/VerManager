@@ -21,4 +21,4 @@ class VersionInfoSerializer(serializers.Serializer):
 
 class BuildInfoSerializer(serializers.Serializer):
     log_from = serializers.CharField(max_length=60)
-    log_to   = serializers.CharField(max_length=60)
+    log_to = serializers.CharField(max_length=60)

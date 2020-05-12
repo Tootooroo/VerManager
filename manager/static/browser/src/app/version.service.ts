@@ -41,7 +41,7 @@ export class VersionService {
     }
 
     generate(build: VersionBuild): Observable<any> {
-        const genUrl = `${this.verUrl}/build.ver.vsn/generate/`;
+        const genUrl = `${this.verUrl}/${build.ver.vsn}/generate/`;
         return this.http.put(genUrl, build.info, this.httpOptions);
     }
 

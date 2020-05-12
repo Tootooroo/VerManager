@@ -27,8 +27,17 @@ export class VerGenComponent implements OnInit {
             .subscribe(revisions => this.revisions = revisions);
     }
 
-    generate(version: Version, buildInfo: BuildInfo): void {
+    generate(version: Version, ...infos: string[]): void {
+        let buildInfo: BuildInfo;
+
+        if (infos.length === 2) {
+            buildInfo = { logFrom: infos[0], logTo: infos[1] };
+        } else if (infos.length === 0) {
+            buildInfo = {};
+        }
+
         const build: VersionBuild = { ver: version, info: buildInfo };
-        this.verService.generate(build);
+        console.log(build);
+        this.verService.generate(build).subscribe();
     }
 }

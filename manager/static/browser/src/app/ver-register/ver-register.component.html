@@ -1,6 +1,8 @@
-<mat-action-list id="revList" (scroll)="onScroll($event)">
-  <mat-list *ngFor="let revision of revisions">
-    <a>{{revision.comment | slice: 0:35}}</a>
-    <button class="revButton" (click)="register(revision.sn)">Register</button>
-  </mat-list>
-</mat-action-list>
+<div id="RegPanel" class="mat-elevation-z5">
+  <mat-action-list id="revList" (scroll)="onScroll($event)">
+    <mat-list *ngFor="let revision of revisions">
+      <a>{{revision.comment | slice: 0:35}}</a>
+      <button class="revButton" (click)="register(revision.sn)">Register</button>
+    </mat-list>
+  </mat-action-list>
+</div>

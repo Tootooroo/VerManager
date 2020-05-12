@@ -92,18 +92,22 @@ class VersionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['put'])
     def generate(self, request, pk=None) -> Response:
-        generate_info = BuildInfoSerializer(data=request.data)
-        if not generate_info.is_valid():
-            return HttpResponseBadRequest("Generate info is not valid")
+
+        if len(request.data) == 0:
+            extra = {}
+        else:
+            generate_info = BuildInfoSerializer(data=request.data)
+            if not generate_info.is_valid():
+                return HttpResponseBadRequest("Generate info is not valid")
+
+            extra = generate_info.data
 
         try:
             version = Versions.objects.get(pk=pk)
         except ObjectDoesNotExist:
             return HttpResponseBadRequest("Version does not exists.")
 
-        extra = generate_info.data
-
-        task = Task(pk, version.sn, pk, extra = extra)
+        task = Task(pk, version.sn, pk, extra=extra)
         if task.isValid() is False:
             return HttpResponseBadRequest()
 

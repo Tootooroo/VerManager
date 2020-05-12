@@ -1,8 +1,14 @@
+#RegPanel {
+    border-style: none;
+    border-width: 3px;
+    padding: 15px;
+}
+
 mat-action-list {
     margin: 0 0 2em 0;
     list-style-type: none;
     padding: 0;
-    width: 40em;
+    width: 38em;
     max-height: 40em;
     overflow: auto;
 }
