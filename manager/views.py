@@ -149,7 +149,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
         if not dispatcher.isTaskExists(pk):
-            return HttpResponseBadRequest()
+            return HttpResponseNotModified()
 
         if dispatcher.isTaskFinished(pk):
             resultUrl = dispatcher.retrive(pk)

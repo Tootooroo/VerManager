@@ -45,4 +45,9 @@ export class VersionService {
         return this.http.put(genUrl, build.info, this.httpOptions);
     }
 
+    waitFinished(version: Version): Observable<string> {
+        const url = `${this.verUrl}/${version.vsn}/gen_status_query/`;
+        return this.http.post<string>(url, {}, this.httpOptions);
+    }
+
 }
