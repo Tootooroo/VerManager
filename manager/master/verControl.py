@@ -74,7 +74,6 @@ class RevSync(ModuleDaemon):
 
         return Ok
 
-
     def revTransfer(rev, tz):
         revision = Revisions(sn=rev.id,
                              author=rev.author_name,

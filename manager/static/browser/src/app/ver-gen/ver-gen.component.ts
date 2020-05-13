@@ -9,7 +9,7 @@ import { Version, VersionBuild, BuildInfo } from '../version';
 import { Revision } from '../revision';
 import { HttpErrorResponse } from '@angular/common/http';
 
-enum VerStatus {
+enum VerErrors {
     IN_PROCESSING_STATUS = 0,
     FAILURE_STATUS = 1
 }
@@ -36,42 +36,58 @@ export class VerGenComponent implements OnInit {
             .subscribe(revisions => this.revisions = revisions);
     }
 
-    generate(version: Version, ...infos: string[]): void {
-        let buildInfo: BuildInfo;
+    generate(version: Version | undefined, ...infos: string[]): void {
+        let buildInfo: BuildInfo = {};
 
-        if (infos.length === 2) {
-            buildInfo = { logFrom: infos[0], logTo: infos[1] };
-        } else if (infos.length === 0) {
-            buildInfo = {};
+        if (typeof version !== 'undefined') {
+
+            if (infos.length === 2) {
+                buildInfo = { logFrom: infos[0], logTo: infos[1] };
+            }
+
+            const build: VersionBuild = { ver: version, info: buildInfo };
+            this.verService.generate(build)
+                .subscribe(() => {
+                    /* Disable genbutton */
+                    const button: HTMLButtonElement =
+                        document.getElementById('genButton') as HTMLButtonElement;
+                    button.disabled = true;
+
+                    this.waitFinished(version);
+                });
         }
-
-        const build: VersionBuild = { ver: version, info: buildInfo };
-        this.verService.generate(build).subscribe();
     }
 
     private waitFinErrHandle(error: HttpErrorResponse) {
         if (error.status === 304) {
             /* Version generation is in processing */
-            return of(VerStatus.IN_PROCESSING_STATUS);
+            return of(VerErrors.IN_PROCESSING_STATUS).pipe(delay(3000));
         } else if (error.status === 400) {
-            return of(VerStatus.FAILURE_STATUS);
+            return of(VerErrors.FAILURE_STATUS);
         }
     }
 
     waitFinished(version: Version): void {
         this.verService.waitFinished(version)
-            .pipe(
-                /* Delay 1000ms to control rate of query */
-                delay(3000),
-                catchError(this.waitFinErrHandle)
-            )
-            .subscribe(status => {
-                switch (status) {
-                    case VerStatus.IN_PROCESSING_STATUS:
-                        this.waitFinished(version);
-                        break;
-                    case VerStatus.FAILURE_STATUS:
-                        break;
+            .pipe(catchError(this.waitFinErrHandle))
+            .subscribe(result => {
+                if (typeof result === 'string') {
+                    /* enable button */
+                    const button: HTMLButtonElement =
+                        document.getElementById('genButton') as HTMLButtonElement;
+                    button.disabled = false;
+
+                    location.assign(result);
+                } else {
+                    const status = result as VerErrors;
+                    switch (status) {
+                        case VerErrors.IN_PROCESSING_STATUS:
+                            this.waitFinished(version);
+                            break;
+                        case VerErrors.FAILURE_STATUS:
+                            alert('Generation Failed');
+                            break;
+                    }
                 }
             });
     }

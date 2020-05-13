@@ -6,8 +6,6 @@
 import time
 import traceback
 
-M_NAME = "Dispatcher"
-
 from typing import *
 from functools import reduce
 from datetime import datetime
@@ -26,6 +24,8 @@ from manager.basic.type import *
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.commands import ReWorkCommand
+
+M_NAME = "Dispatcher"
 
 class Dispatcher(ModuleDaemon, Subject, Observer):
 

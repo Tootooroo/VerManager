@@ -18,7 +18,7 @@ from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
 from ..basic.info import Info
 from ..basic.mmanager import MManager, ModuleDaemon, Module, ModuleName
 from ..basic.storage import Storage, StoChooser
-from ..basic.type import *
+from ..basic.type import State, Ok, Error
 from ..basic.request import LastLisAddrRequire
 
 from .type import SEND_STATE, SEND_STATES

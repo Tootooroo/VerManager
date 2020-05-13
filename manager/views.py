@@ -107,6 +107,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         except ObjectDoesNotExist:
             return HttpResponseBadRequest("Version does not exists.")
 
+        print(extra)
         task = Task(pk, version.sn, pk, extra=extra)
         if task.isValid() is False:
             return HttpResponseBadRequest()
@@ -149,7 +150,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
         if not dispatcher.isTaskExists(pk):
-            return HttpResponseNotModified()
+            return HttpResponseBadRequest("Not Exists")
 
         if dispatcher.isTaskFinished(pk):
             resultUrl = dispatcher.retrive(pk)
