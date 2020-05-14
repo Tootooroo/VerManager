@@ -3,14 +3,11 @@
 import os
 import platform
 import shutil
-import traceback
 
-from functools import reduce
-from typing import Optional, Dict, BinaryIO, Any, List, IO
+from typing import Optional, Dict, BinaryIO, Any, List
 
 from .mmanager import Module
-from manager.basic.type import *
-from manager.basic.util import pathStrConcate
+from manager.basic.type import State, Ok, Error
 
 if platform.system() == 'Windows':
     seperator = "\\"
@@ -19,13 +16,14 @@ else:
 
 M_NAME = "Storage"
 
+
 class STORAGE_IDENT_NOT_FOUND(Exception):
     pass
 
 
 class StoChooser:
 
-    def __init__(self, path:str) -> None:
+    def __init__(self, path:  str) -> None:
 
         self._path = path
 
@@ -46,21 +44,15 @@ class StoChooser:
         return self._path
 
     def isValid(self) -> bool:
-
-        try:
-            fd = self._fd
-        except:
-            return False
-
         return True
 
-    def store(self, content:bytes) -> None:
+    def store(self, content: bytes) -> None:
 
         fd = self._fd
 
         fd.write(content)
 
-    def retrive(self, count:int) -> bytes:
+    def retrive(self, count: int) -> bytes:
 
         fd = self._fd
 
@@ -78,9 +70,10 @@ class StoChooser:
         fd = self._fd
         fd.seek(0, 0)
 
+
 class File:
 
-    def __init__(self, name:str, path:str) -> None:
+    def __init__(self, name: str, path: str) -> None:
         self.name = name
         self._path = path
 
@@ -88,7 +81,7 @@ class File:
         # If a file on disk is not exists. The object
         # should not be able to create.
         if not os.path.exists(path):
-            with open(self._path, "wb") as f : pass
+            open(self._path, "wb")
 
     def open(self) -> StoChooser:
         return StoChooser(self._path)
@@ -99,13 +92,14 @@ class File:
     def path(self) -> str:
         return self._path
 
+
 class Box:
 
-    def __init__(self, name:str, where:'Storage') -> None:
+    def __init__(self, name: str, where: 'Storage') -> None:
         self._ident = name
 
         self._where = where
-        self._files = {} # type: Dict[str, File]
+        self._files = {}  # type:  Dict[str, File]
 
         self._path = where.sotragePath() + seperator + name
 
@@ -117,7 +111,8 @@ class Box:
     def _recover(self) -> State:
         files = os.listdir(self._path)
 
-        files = list(filter(lambda f: os.path.isfile(self._path+seperator+f), files))
+        files = list(filter(lambda f:  os.path.isfile(self._path+seperator+f),
+                            files))
         if len(files) == 0:
             return Ok
 
@@ -132,23 +127,26 @@ class Box:
     def files(self) -> List[File]:
         return list(self._files.values())
 
-    def getFile(self, fileName:str) -> Optional[File]:
-        if fileName not in self._files: return None
+    def getFile(self, fileName: str) -> Optional[File]:
+        if fileName not in self._files:
+            return None
         return self._files[fileName]
 
-    def openFile(self, fileName:str) -> Optional[StoChooser]:
-        if fileName not in self._files: return None
+    def openFile(self, fileName: str) -> Optional[StoChooser]:
+        if fileName not in self._files:
+            return None
         return self._files[fileName].open()
 
-    def exists(self, fileName:str) -> bool:
+    def exists(self, fileName: str) -> bool:
         return fileName in self._files
 
-    def add(self, fileName:str, file:File) -> None:
-        if self.exists(fileName): return None
+    def add(self, fileName: str, file: File) -> None:
+        if self.exists(fileName):
+            return None
 
         self._files[fileName] = file
 
-    def remove(self, fileName:str) -> None:
+    def remove(self, fileName: str) -> None:
 
         if not self.exists(fileName):
             return None
@@ -157,15 +155,15 @@ class Box:
 
         try:
             theFile.remove()
-        except:
+        except Exception:
             pass
 
-        del self._files [fileName]
+        del self._files[fileName]
 
     def path(self) -> str:
         return self._where.sotragePath() + seperator + self._ident
 
-    def newFile(self, name:str) -> Optional[StoChooser]:
+    def newFile(self, name: str) -> Optional[StoChooser]:
         if name in self._files:
             return None
 
@@ -176,7 +174,7 @@ class Box:
 
         return StoChooser(filePath)
 
-    def copyFrom(self, filePath:str, fileName:str) -> State:
+    def copyFrom(self, filePath: str, fileName: str) -> State:
         # Copy a file specified by the filePath to this box.
 
         if self.exists(fileName):
@@ -184,18 +182,19 @@ class Box:
 
         newFilePath = self._path + seperator + fileName
         shutil.copy(filePath, newFilePath)
-        f = File(fileName, newFilePath)
+        File(fileName, newFilePath)
 
         return Ok
 
-    def copyTo(self, fileName:str, filePath:str) -> State:
+    def copyTo(self, fileName: str, filePath: str) -> State:
         # Copy a file from given location to this box
 
         if not self.exists(fileName):
             return Error
 
         f = self.getFile(fileName)
-        if f is None: return Error
+        if f is None:
+            return Error
 
         shutil.copy(f.path(), filePath)
 
@@ -204,14 +203,15 @@ class Box:
     def numOfFiles(self) -> int:
         return len(self._files)
 
+
 class Storage(Module):
 
-    def __init__(self, path:str, inst:Any) -> None:
+    def __init__(self, path: str, inst: Any) -> None:
 
         Module.__init__(self, M_NAME)
 
         self._sInst = inst
-        self._boxes = {} # type: Dict[str, Box]
+        self._boxes = {}  # type:  Dict[str, Box]
         self._num = 0
 
         # Need to check that is the path valid
@@ -233,7 +233,8 @@ class Storage(Module):
         global seperator
 
         boxes = os.listdir(self._path)
-        boxes = list(filter(lambda f: os.path.isdir(self._path+seperator+f), boxes))
+        boxes = list(filter(lambda f:  os.path.isdir(self._path+seperator+f),
+                            boxes))
 
         for boxName in boxes:
             box = Box(boxName, self)
@@ -242,7 +243,7 @@ class Storage(Module):
     def recover(self) -> None:
         self._recover()
 
-    def create(self, boxName:str, fileName:str) -> Optional[StoChooser]:
+    def create(self, boxName: str, fileName: str) -> Optional[StoChooser]:
         """
         Create a file within a box if the box is not exists then Create
         that box and then create the file with given fileName.
@@ -261,33 +262,35 @@ class Storage(Module):
         assert(theBox is not None)
 
         f = theBox.getFile(fileName)
-        if f is not None: return f.open()
+        if f is not None:
+            return f.open()
 
         # The file is not exist.
         return theBox.newFile(fileName)
 
-    def _createBox(self, boxName:str) -> State:
+    def _createBox(self, boxName: str) -> State:
         if self._isExists(boxName):
             return Error
 
         self._boxes[boxName] = Box(boxName, self)
         return Ok
 
-    def _getBox(self, boxName:str) -> Optional[Box]:
+    def _getBox(self, boxName: str) -> Optional[Box]:
         if boxName not in self._boxes:
             return None
         return self._boxes[boxName]
 
-    def open(self, boxName:str, fileName:str) -> Optional[StoChooser]:
+    def open(self, boxName: str, fileName: str) -> Optional[StoChooser]:
         if boxName not in self._boxes:
             return None
 
         theBox = self._boxes[boxName]
         return theBox.openFile(fileName)
 
-    def delete(self, boxName:str, fileName:str) -> None:
+    def delete(self, boxName: str, fileName: str) -> None:
         """
-        Delete a file specified by the fileName of the box specified by boxName.
+        Delete a file specified by the fileName
+        of the box specified by boxName.
         """
         if boxName not in self._boxes:
             return None
@@ -296,13 +299,13 @@ class Storage(Module):
         box.remove(fileName)
 
         if box.numOfFiles() == 0:
-            del self._boxes [boxName]
+            del self._boxes[boxName]
             os.rmdir(box.path())
 
-    def _isExists(self, boxName:str) -> bool:
+    def _isExists(self, boxName: str) -> bool:
         return boxName in self._boxes
 
-    def isFileExists(self, boxName:str, fileName:str) -> bool:
+    def isFileExists(self, boxName: str, fileName: str) -> bool:
         pass
 
     def numOfFiles(self) -> int:
@@ -313,7 +316,7 @@ class Storage(Module):
 
         return total
 
-    def getFile(self, boxName:str, fileName:str) -> Optional[File]:
+    def getFile(self, boxName: str, fileName: str) -> Optional[File]:
         if boxName not in self._boxes:
             return None
 
@@ -323,7 +326,7 @@ class Storage(Module):
 
         return theBox.getFile(fileName)
 
-    def filesOf(self, boxName:str) -> List[File]:
+    def filesOf(self, boxName: str) -> List[File]:
         if boxName not in self._boxes:
             return []
 
@@ -333,7 +336,7 @@ class Storage(Module):
     def sotragePath(self) -> str:
         return self._path
 
-    def copyFrom(self, filePath:str, boxName:str, fileName:str) -> State:
+    def copyFrom(self, filePath: str, boxName: str, fileName: str) -> State:
 
         if not os.path.isfile(filePath):
             # File support only.
@@ -345,9 +348,9 @@ class Storage(Module):
 
         return theBox.copyFrom(filePath, fileName)
 
-    def copyTo(self, boxName:str, fileName:str, dest:str) -> State:
+    def copyTo(self, boxName: str, fileName: str, dest: str) -> State:
 
-        if not boxName in self._boxes:
+        if boxName not in self._boxes:
             return Error
 
         theBox = self._getBox(boxName)

@@ -6,21 +6,23 @@ from datetime import datetime
 from functools import reduce
 from typing import List, Tuple, Optional, Dict
 
-from queue import Queue, Empty as queue_Empty
+from queue import Empty as queue_Empty
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import CmdResponseLetter
 from manager.basic.commands import Command, PostConfigCmd
 from manager.master.worker import Worker
-from manager.master.postElection import PostElectProtocol, ElectGroup, \
-    Role_Listener, Role_Provider
+from manager.master.postElection import PostElectProtocol, Role_Provider
 
-class ELECT_PROTO_INIT_FAILED(Exception): pass
+
+class ELECT_PROTO_INIT_FAILED(Exception):
+    pass
+
 
 class RandomElectProtocol(PostElectProtocol):
 
     def __init__(self) -> None:
         PostElectProtocol.__init__(self)
-        self._blackList = [] # type: List[str]
+        self._blackList = []  # type: List[str]
 
         self._proto_port = 8066
 
@@ -29,7 +31,7 @@ class RandomElectProtocol(PostElectProtocol):
         if self.group is None:
             return Error
 
-        if self.group.numOfCandidates() is 0:
+        if self.group.numOfCandidates() == 0:
             return Error
 
         # Listener elect
@@ -47,7 +49,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def _ProvidersInit(self, lisAddr:Tuple[str, int]) -> None:
+    def _ProvidersInit(self, lisAddr: Tuple[str, int]) -> None:
 
         if self.group is None:
             return None
@@ -58,7 +60,7 @@ class RandomElectProtocol(PostElectProtocol):
         cmd_set_provider = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_PROVIDER)
 
-        inWait = {} # type: Dict[str, Worker]
+        inWait = {}  # type: Dict[str, Worker]
         for c in candidates:
             ret = self._send_command(c, cmd_set_provider)
             if ret is None:
@@ -74,7 +76,7 @@ class RandomElectProtocol(PostElectProtocol):
             if len(inWait) == 0:
                 break
 
-            response = self.waitMsg(timeout = 1)
+            response = self.waitMsg(timeout=1)
             if response is None:
                 continue
 
@@ -85,9 +87,9 @@ class RandomElectProtocol(PostElectProtocol):
                 self.group.addProvider(worker)
                 self.group.removeCandidate_(worker)
 
-                del inWait [ident]
+                del inWait[ident]
 
-    def _send_command(self, w:Worker, cmd:Command, timeout=None) -> State:
+    def _send_command(self, w: Worker, cmd: Command, timeout=None) -> State:
 
         try:
             w.control(cmd)
@@ -99,10 +101,11 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def _send_command_and_wait(self, w:Worker,
-                               cmd:Command, timeout=None) -> Optional[CmdResponseLetter]:
+    def _send_command_and_wait(self, w: Worker,
+                               cmd: Command,
+                               timeout=None) -> Optional[CmdResponseLetter]:
 
-        ret = self._send_command(w, cmd, timeout = timeout)
+        ret = self._send_command(w, cmd, timeout=timeout)
         if ret is Error:
             return None
 
@@ -127,8 +130,6 @@ class RandomElectProtocol(PostElectProtocol):
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
-        providers = self.group.getProviders()
-
         (host, port) = listener.getAddress()
 
         cmd_set_listener = PostConfigCmd(host, self._proto_port,
@@ -138,16 +139,18 @@ class RandomElectProtocol(PostElectProtocol):
         # due to failed election before.
         self.msgClear()
 
-        l = self._send_command_and_wait(listener, cmd_set_listener, timeout=2)
-        if l is None: return (Error, "")
+        letter = self._send_command_and_wait(listener, cmd_set_listener,
+                                             timeout=2)
+        if letter is None:
+            return (Error, "")
 
-        state = l.getState()
+        state = letter.getState()
         if state == CmdResponseLetter.STATE_FAILED:
-            return (Error, l.getIdent())
+            return (Error, letter.getIdent())
 
         self.group.setListener(listener)
 
-        return (Ok, l.getIdent())
+        return (Ok, letter.getIdent())
 
     def step(self) -> State:
 
@@ -186,5 +189,5 @@ class RandomElectProtocol(PostElectProtocol):
     def terminate(self) -> State:
         pass
 
-    def _random_elect(self, w1:Worker, w2:Worker) -> Worker:
+    def _random_elect(self, w1: Worker, w2: Worker) -> Worker:
         return w1

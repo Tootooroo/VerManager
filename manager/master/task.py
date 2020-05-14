@@ -1,10 +1,12 @@
 # task.py
 
 from abc import ABC, abstractmethod
-from typing import *
+from typing import List, Dict, Optional, \
+    BinaryIO, Union, Any, Tuple, Callable
 from functools import reduce
 from manager.basic.type import Ok, Error, State
-from manager.basic.letter import NewLetter, Letter, PostTaskLetter, BinaryLetter
+from manager.basic.letter import NewLetter, Letter, \
+    PostTaskLetter, BinaryLetter
 from manager.master.build import BuildSet
 from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
     REVISION_MAX_LENGTH
@@ -12,14 +14,20 @@ from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
 from datetime import datetime
 from threading import Lock
 
-from manager.master.build import Build, BuildSet, Post, Merge
+from manager.master.build import Build, Post, Merge
 
 TaskState = int
 
 TaskType = int
 
-class TASK_FORMAT_ERROR(Exception): pass
-class TASK_TRANSFORM_ERROR(Exception): pass
+
+class TASK_FORMAT_ERROR(Exception):
+    pass
+
+
+class TASK_TRANSFORM_ERROR(Exception):
+    pass
+
 
 class TaskBase(ABC):
 
@@ -40,12 +48,13 @@ class TaskBase(ABC):
         """ State of Task """
 
     @abstractmethod
-    def stateChange(self, state:TaskState) -> State:
+    def stateChange(self, state: TaskState) -> State:
         """ Change task's state """
 
     @abstractmethod
     def isValid(self) -> bool:
         """ To check that is info in this task is valid  """
+
 
 class Task(TaskBase):
 
@@ -64,15 +73,15 @@ class Task(TaskBase):
     STATE_FAILURE = 3
 
     STATE_TOPOLOGY = {
-        STATE_PREPARE:[STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],
-        STATE_IN_PROC:[STATE_IN_PROC, STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
-        STATE_FINISHED:[STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
-        STATE_FAILURE:[STATE_FAILURE]
-    } # type: Dict[int, List[int]]
+        STATE_PREPARE: [STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],
+        STATE_IN_PROC: [STATE_IN_PROC, STATE_PREPARE,
+                        STATE_FINISHED, STATE_FAILURE],
+        STATE_FINISHED: [STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
+        STATE_FAILURE: [STATE_FAILURE]
+    }  # type:  Dict[int, List[int]]
 
-
-    def __init__(self, id: str, sn:str, vsn:str,
-                 extra:Dict[str, str] = {}) -> None:
+    def __init__(self, id:  str, sn: str, vsn: str,
+                 extra: Dict[str, str] = {}) -> None:
 
         self.taskId = id
 
@@ -82,7 +91,7 @@ class Task(TaskBase):
         self.extra = extra
 
         # Files that relate to this task
-        self._files = None  # type: Optional[BinaryIO]
+        self._files = None  # type:  Optional[BinaryIO]
 
         self.state = Task.STATE_PREPARE
 
@@ -91,7 +100,7 @@ class Task(TaskBase):
         # back totally.
         self.data = ""
 
-        self.build = None # type: Optional[Union[Build, BuildSet]]
+        self.build = None  # type:  Optional[Union[Build, BuildSet]]
 
         # Indicate that the number of request to the task
         self.refs = 1
@@ -101,7 +110,7 @@ class Task(TaskBase):
     def getType(self) -> TaskType:
         return self.type
 
-    def setType(self, type:TaskType) -> None:
+    def setType(self, type: TaskType) -> None:
         self.type = type
 
     def getExtra(self) -> Optional[Dict[str, str]]:
@@ -125,13 +134,13 @@ class Task(TaskBase):
     def taskState(self) -> TaskState:
         return self.state
 
-    def setBuild(self, b:Union[Build, BuildSet]) ->  None:
+    def setBuild(self, b: Union[Build, BuildSet]) -> None:
         self.build = b
 
     def isBindWithBuild(self) -> bool:
         return self.build is not None
 
-    def stateChange(self, state:int) -> State:
+    def stateChange(self, state: int) -> State:
         ableStates = Task.STATE_TOPOLOGY[self.taskState()]
 
         if state in ableStates:
@@ -153,7 +162,7 @@ class Task(TaskBase):
     def toFailState(self) -> State:
         return self.stateChange(Task.STATE_FAILURE)
 
-    def setData(self, data: str) -> None:
+    def setData(self, data:  str) -> None:
         self.data = data
 
     def isPrepare(self) -> bool:
@@ -174,7 +183,7 @@ class Task(TaskBase):
     def dependedBy(self) -> List['TaskBase']:
         return []
 
-    # fixme: Python 3.5.3 raise an NameError exception:
+    # fixme:  Python 3.5.3 raise an NameError exception:
     #        name 'BinaryIO' is not defined. Temporarily
     #        use Any to instead of BinaryIO
     def file(self) -> Optional[Any]:
@@ -184,7 +193,7 @@ class Task(TaskBase):
         pass
 
     @staticmethod
-    def isValidState(s:int) -> bool:
+    def isValidState(s: int) -> bool:
         return s >= Task.STATE_PREPARE and s <= Task.STATE_FAILURE
 
     def isValid(self) -> bool:
@@ -200,22 +209,26 @@ class Task(TaskBase):
             return self
 
         if isinstance(self.build, Build):
-            return SingleTask(self.id(), self.sn, self.vsn, self.build, self.extra)
+            return SingleTask(self.id(), self.sn, self.vsn,
+                              self.build, self.extra)
         elif isinstance(self.build, BuildSet):
-            return SuperTask(self.id(), self.sn, self.vsn, self.build, self.extra)
+            return SuperTask(self.id(), self.sn, self.vsn,
+                             self.build, self.extra)
 
         raise TASK_TRANSFORM_ERROR
+
 
 class SuperTask(Task):
 
     Type = 1
 
-    def __init__(self, id:str, sn:str, revision:str, buildSet:BuildSet, extra:Dict) -> None:
+    def __init__(self, id: str, sn: str, revision: str,
+                 buildSet: BuildSet, extra: Dict) -> None:
 
         Task.__init__(self, id, sn, revision, extra)
 
         self.type = SuperTask.Type
-        self._children = [] # type: List['Task']
+        self._children = []  # type:  List['Task']
         self._buildSet = buildSet
 
         self._split()
@@ -229,18 +242,18 @@ class SuperTask(Task):
     def getChildren(self) -> List[Task]:
         return self._children
 
-    def getChild(self, ident:str) -> Optional[Task]:
-        maybe_the_child = list(filter(lambda w: w.id() == ident,
+    def getChild(self, ident: str) -> Optional[Task]:
+        maybe_the_child = list(filter(lambda w:  w.id() == ident,
                                       self._children))
 
         count = len(maybe_the_child)
-        if count is 1:
+        if count == 1:
             return maybe_the_child[0]
 
         return None
 
-    def getGroupOf(self, tid:str) -> Optional[List[Task]]:
-        group = []  # type: List[Task]
+    def getGroupOf(self, tid: str) -> Optional[List[Task]]:
+        group = []  # type:  List[Task]
 
         builds = self._buildSet.belongTo(tid)
         if builds is None:
@@ -284,7 +297,8 @@ class SuperTask(Task):
         return Error
 
     def toFailState(self) -> State:
-        failedChildren = list(filter(lambda child: child.isFailure(), self._children))
+        failedChildren = list(filter(lambda child:  child.isFailure(),
+                                     self._children))
 
         if len(failedChildren) > 0:
             self.state = Task.STATE_FAILURE
@@ -292,7 +306,7 @@ class SuperTask(Task):
 
         return Error
 
-    def toState_force(self, state:TaskState) -> State:
+    def toState_force(self, state: TaskState) -> State:
         ret = True
 
         for c in self._children:
@@ -307,8 +321,7 @@ class SuperTask(Task):
 
         return Ok
 
-
-    def setBuildSet(self, buildSet:BuildSet) -> None:
+    def setBuildSet(self, buildSet: BuildSet) -> None:
         self._buildSet = buildSet
 
     def getPostTask(self) -> Optional['PostTask']:
@@ -317,8 +330,7 @@ class SuperTask(Task):
                 return child
         return None
 
-
-    def isInPost(self, bId:str) -> bool:
+    def isInPost(self, bId: str) -> bool:
         pass
 
     def _split(self) -> None:
@@ -327,14 +339,14 @@ class SuperTask(Task):
         # and Post group's member's id too.
         builds = self._buildSet.getBuilds()
 
-        children = [] # type: List[Task]
+        children = []  # type:  List[Task]
 
         # Function to attach version ident to SingleTask's tid.
-        prefix = lambda ident: self.id() + "__" + ident
+        prefix = lambda ident:  self.id() + "__" + ident
 
-        # fixme: should provide a command object so we can easily to
+        # fixme:  should provide a command object so we can easily to
         #        handle variable in command.
-        varPairs = [] # type: List[Tuple[str, str]]
+        varPairs = []  # type:  List[Tuple[str, str]]
         extra = self.getExtra()
 
         if extra is not None:
@@ -353,9 +365,10 @@ class SuperTask(Task):
             if varPairs != []:
                 build.varAssign(varPairs)
 
-            st = SingleTask(prefix(build.getIdent()), sn = self.sn, revision = self.vsn,
-                            build = build,
-                            extra = self.extra)
+            st = SingleTask(prefix(build.getIdent()), sn=self.sn,
+                            revision=self.vsn,
+                            build=build,
+                            extra=self.extra)
 
             if st.isValid() is False:
                 raise TASK_FORMAT_ERROR
@@ -369,9 +382,11 @@ class SuperTask(Task):
             children.append(st)
 
         # Build frags
-        allBuilds_ident = list(map(lambda b: b.getIdent(), self._buildSet.getBuilds()))
-        predicate = lambda ident: self._buildSet.belongTo(ident) is None
-        frags = [prefix(ident) for ident in allBuilds_ident if predicate(ident)]
+        allBuilds_ident = list(map(lambda b:  b.getIdent(),
+                                   self._buildSet.getBuilds()))
+        predicate = lambda ident:  self._buildSet.belongTo(ident) is None
+        frags = [prefix(ident) for ident in allBuilds_ident
+                 if predicate(ident)]
 
         # Get posts from BuildSet and attach version to member's id.
         posts = self._buildSet.getPosts()
@@ -379,16 +394,16 @@ class SuperTask(Task):
             if varPairs != []:
                 post.varAssign(varPairs)
 
-            cmds = post.getCmds()
             members = post.getMembers()
-            members = list(map(lambda member: prefix(member), members))
+            members = list(map(lambda member:  prefix(member), members))
             post.setMembers(members)
 
         merge = self._buildSet.getMerge()
         if varPairs != []:
             merge.varAssign(varPairs)
 
-        pt = PostTask(PostTask.genIdent(self.vsn), self.vsn, posts, frags, merge)
+        pt = PostTask(PostTask.genIdent(self.vsn),
+                      self.vsn, posts, frags, merge)
 
         if pt.isValid() is False:
             raise TASK_FORMAT_ERROR
@@ -399,28 +414,29 @@ class SuperTask(Task):
 
         self._children = children
 
+
 class SingleTask(Task):
 
     Type = 2
 
-    def __init__(self, id:str, sn:str, revision:str,
-                 build:Build,
-                 extra:Dict = {}) -> None:
+    def __init__(self, id: str, sn: str, revision: str,
+                 build: Build,
+                 extra: Dict = {}) -> None:
 
         Task.__init__(self, id, sn, revision, extra)
 
         self.type = SingleTask.Type
         self._build = build
-        self._parent = None # type: Optional[SuperTask]
-        self._postGroup = None # type: Optional[str]
+        self._parent = None  # type:  Optional[SuperTask]
+        self._postGroup = None  # type:  Optional[str]
 
-    def setParent(self, parent:SuperTask) -> None:
+    def setParent(self, parent: SuperTask) -> None:
         self._parent = parent
 
     def getParent(self) -> Optional[SuperTask]:
         return self._parent
 
-    def setGroup(self, group:str) -> None:
+    def setGroup(self, group: str) -> None:
         self._postGroup = group
 
     def getGroup(self) -> Optional[str]:
@@ -451,12 +467,11 @@ class SingleTask(Task):
     def toLetter(self) -> NewLetter:
 
         build = self._build
-        extra = {"resultPath":build.getOutput(), "cmds":build.getCmd()}
+        extra = {"resultPath": build.getOutput(), "cmds": build.getCmd()}
 
         if self.isAChild():
-            parent_ident = self.getParent().id() # type: ignore
+            parent_ident = self.getParent().id()  # type:  ignore
             needPost = "true"
-            group = self._parent.getGroupOf(self.id()) # type: ignore
         else:
             parent_ident = ""
             needPost = "false"
@@ -467,10 +482,10 @@ class SingleTask(Task):
             menu = self._postGroup
 
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
-                         parent = parent_ident,
-                         extra = extra,
-                         menu = menu,
-                         needPost = needPost)
+                         parent=parent_ident,
+                         extra=extra,
+                         menu=menu,
+                         needPost=needPost)
 
     def isBindWithBuild(self) -> bool:
         return self._build is not None
@@ -480,8 +495,8 @@ class PostTask(Task):
 
     Type = 3
 
-    def __init__(self, ident:str, version:str,
-                 groups:List[Post], frags:List[str], merge:Merge) -> None:
+    def __init__(self, ident: str, version: str,
+                 groups: List[Post], frags: List[str], merge: Merge) -> None:
 
         Task.__init__(self, ident, "", version)
 
@@ -489,13 +504,13 @@ class PostTask(Task):
         self._postGroups = groups
         self._frags = frags
         self._merge = merge
-        self._parent = None # type: Optional[SuperTask]
+        self._parent = None  # type:  Optional[SuperTask]
 
     @staticmethod
-    def genIdent(ident:str) -> str:
+    def genIdent(ident: str) -> str:
         return ident+"__Post"
 
-    def setParent(self, parent:SuperTask) -> None:
+    def setParent(self, parent: SuperTask) -> None:
         self._parent = parent
 
     def getParent(self) -> Optional[SuperTask]:
@@ -504,7 +519,7 @@ class PostTask(Task):
     def getGroups(self) -> List[Post]:
         return self._postGroups
 
-    def setGroups(self, groups:List[Post]) -> None:
+    def setGroups(self, groups: List[Post]) -> None:
         self._postGroups = groups
 
     def isAChild(self) -> bool:
@@ -535,14 +550,14 @@ class PostTask(Task):
 
         version = self.vsn
         posts = self._postGroups
-        menuLetters = list(map(lambda p: p.toMenuLetter(version), posts))
+        menuLetters = list(map(lambda p:  p.toMenuLetter(version), posts))
 
         postTaskLetter = PostTaskLetter(self.vsn+"__Post",
                                         self.vsn,
                                         self._merge.getCmds(),
                                         self._merge.getOutput(),
                                         frags=self._frags,
-                                        menus = {})
+                                        menus={})
         for menuLetter in menuLetters:
             postTaskLetter.addMenu(menuLetter)
 
@@ -552,12 +567,12 @@ class PostTask(Task):
 # Every task in TaskGroup must be unique in the TaskGroup
 class TaskGroup:
     def __init__(self) -> None:
-        # {Type:Tasks}
-        self._tasks = {} # type: Dict[TaskType, Dict[str, Task]]
+        # {Type: Tasks}
+        self._tasks = {}  # type:  Dict[TaskType, Dict[str, Task]]
         self._numOfTasks = 0
         self._lock = Lock()
 
-    def newTask(self, task: Task) -> None:
+    def newTask(self, task:  Task) -> None:
         type = task.getType()
         tid = task.id()
 
@@ -576,17 +591,18 @@ class TaskGroup:
             if not isinstance(task, PostTask):
                 self._numOfTasks += 1
 
-    def remove(self, id: str) -> State:
-        with self._lock: return self.__remove(id)
+    def remove(self, id:  str) -> State:
+        with self._lock:
+            return self.__remove(id)
 
-    def __remove(self, id:str) -> State:
+    def __remove(self, id: str) -> State:
         for tasks in self._tasks.values():
 
-            if not id in tasks:
+            if id not in tasks:
                 continue
 
             task = tasks[id]
-            del tasks [id]
+            del tasks[id]
 
             if not isinstance(task, PostTask):
                 self._numOfTasks -= 1
@@ -595,7 +611,7 @@ class TaskGroup:
 
         return Error
 
-    def _mark(self, id: str, st: TaskState) -> State:
+    def _mark(self, id:  str, st:  TaskState) -> State:
         task = self.search(id)
         if task is None:
             return Error
@@ -604,35 +620,37 @@ class TaskGroup:
         return Ok
 
     def toList(self) -> List[Task]:
-        with self._lock: return self._toList_non_lock()
+        with self._lock:
+            return self._toList_non_lock()
 
     def _toList_non_lock(self) -> List[Task]:
         task_dicts = list(self._tasks.values())
-        task_lists = list(map(lambda d: list(d.values()), task_dicts))
+        task_lists = list(map(lambda d:  list(d.values()), task_dicts))
 
-        return reduce(lambda acc, cur: acc + cur, task_lists, [])
+        return reduce(lambda acc, cur:  acc + cur, task_lists, [])
 
     def toList_(self) -> List[str]:
-        l = self.toList()
-        l_id = map(lambda t: t.id(), l)
+        letter = self.toList()
+        l_id = map(lambda t:  t.id(), letter)
 
         return list(l_id)
 
-    def isExists(self, ident:str) -> bool:
-        with self._lock: return self.__isExists(ident)
+    def isExists(self, ident: str) -> bool:
+        with self._lock:
+            return self.__isExists(ident)
 
-    def __isExists(self, ident:str) -> bool:
+    def __isExists(self, ident: str) -> bool:
         task_dicts = list(self._tasks.values())
 
         for tasks in task_dicts:
-            if not id in tasks:
+            if id not in tasks:
                 continue
 
             return True
 
         return False
 
-    def removeTasks(self, predicate:Callable[[Task], bool]) -> None:
+    def removeTasks(self, predicate: Callable[[Task], bool]) -> None:
         with self._lock:
             for t in self._toList_non_lock():
                 ret = predicate(t)
@@ -640,19 +658,19 @@ class TaskGroup:
                 if ret is True:
                     self.__remove(t.id())
 
-    def markPre(self, id: str) -> State:
+    def markPre(self, id:  str) -> State:
         return self._mark(id, Task.STATE_PREPARE)
 
-    def markInProc(self, id:str) -> State:
+    def markInProc(self, id: str) -> State:
         return self._mark(id, Task.STATE_IN_PROC)
 
-    def markFin(self, id: str) -> State:
+    def markFin(self, id:  str) -> State:
         return self._mark(id, Task.STATE_FINISHED)
 
-    def markFail(self, id: str) -> State:
+    def markFail(self, id:  str) -> State:
         return self._mark(id, Task.STATE_FAILURE)
 
-    def search(self, id: str) -> Union[Task, None]:
+    def search(self, id:  str) -> Union[Task, None]:
         with self._lock:
             tasks_dicts = list(self._tasks.values())
 

@@ -1,11 +1,12 @@
 # mmanager.py
 
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, List
-from threading import Thread, Event
+from typing import Optional, List, Dict
+from threading import Thread
 from .util import partition
 
-from .type import *
+from .type import State, Ok, Error
+
 
 class Daemon(Thread):
 
@@ -13,16 +14,16 @@ class Daemon(Thread):
         Thread.__init__(self)
         self.daemon = True
 
-
     def stop(self) -> None:
         raise Exception
 
     def needStop(self) -> bool:
         raise Exception
 
+
 class Module(ABC):
 
-    def __init__(self, mName:str) -> None:
+    def __init__(self, mName: str) -> None:
         self._mName = mName
 
     def getName(self) -> str:
@@ -36,27 +37,30 @@ class Module(ABC):
     def cleanup(self) -> None:
         pass
 
+
 class ModuleDaemon(Module, Daemon):
 
-    def __init__(self, mName:str) -> None:
+    def __init__(self, mName: str) -> None:
         Module.__init__(self, mName)
         Daemon.__init__(self)
 
+
 ModuleName = str
+
 
 class MManager:
 
     def __init__(self):
-        self._modules = {} # type: Dict[ModuleName, Module]
+        self._modules = {}  # type: Dict[ModuleName, Module]
         self._num = 0
 
-    def isModuleExists(self, mName:ModuleName) -> bool:
+    def isModuleExists(self, mName: ModuleName) -> bool:
         return mName in self._modules
 
     def numOfModules(self):
         return self._num
 
-    def getModule(self, mName:ModuleName) -> Optional[Module]:
+    def getModule(self, mName: ModuleName) -> Optional[Module]:
         if self.isModuleExists(mName):
             return self._modules[mName]
 
@@ -66,14 +70,16 @@ class MManager:
         return list(self._modules.values())
 
     def getAlives(self) -> List[Module]:
-        (alives, dies) = partition(self._modules, lambda m: m.is_alive())
+        (alives, dies) = partition(list(self._modules.values()),
+                                   lambda m: m.is_alive())
         return alives
 
     def getDies(self) -> List[Module]:
-        (alives, dies) = partition(self._modules, lambda m: m.is_alive())
+        (alives, dies) = partition(list(self._modules.values()),
+                                   lambda m: m.is_alive())
         return dies
 
-    def addModule(self, m:Module) -> State:
+    def addModule(self, m: Module) -> State:
         mName = m.getName()
 
         if self.isModuleExists(mName):
@@ -84,7 +90,7 @@ class MManager:
 
         return Ok
 
-    def removeModule(self, mName:ModuleName) -> Optional[Module]:
+    def removeModule(self, mName: ModuleName) -> Optional[Module]:
         if self.isModuleExists(mName):
             m = self._modules[mName]
 
@@ -92,7 +98,7 @@ class MManager:
             if isinstance(m, ModuleDaemon):
                 m.stop()
 
-            del self._modules [mName]
+            del self._modules[mName]
             self._num -= 1
 
             return m
@@ -102,12 +108,14 @@ class MManager:
     def start(self, mName) -> None:
         if self.isModuleExists(mName):
             m = self._modules[mName]
-            m.start()
+            if isinstance(m, ModuleDaemon):
+                m.start()
 
     def stop(self, mName) -> None:
         if self.isModuleExists(mName):
             m = self._modules[mName]
-            m.stop()
+            if isinstance(m, ModuleDaemon):
+                m.stop()
 
     def startAll(self) -> None:
         allMods = self.getAllModules()

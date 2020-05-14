@@ -1,21 +1,21 @@
 # logger.py
 
+import os
+
 from datetime import datetime
 from queue import Queue
-from typing import *
+from typing import Dict, TextIO, Tuple
 
 from manager.basic.mmanager import ModuleDaemon
-from manager.basic.letter import Letter
-from manager.basic.type import *
+from manager.basic.type import State, Ok, Error
 
 from manager.basic.observer import Observer
 
-import os
-
-M_NAME ="Logger"
+M_NAME = "Logger"
 
 LOG_ID = str
 LOG_MSG = str
+
 
 class Logger(ModuleDaemon, Observer):
 
@@ -25,7 +25,7 @@ class Logger(ModuleDaemon, Observer):
         Observer.__init__(self)
 
         self.logPath = path
-        self.logQueue = Queue(32) # type: Queue[Tuple[LOG_ID, LOG_MSG]]
+        self.logQueue = Queue(32)  # type: Queue[Tuple[LOG_ID, LOG_MSG]]
         self.logTunnels = {} # type: Dict[str, TextIO]
 
         if not os.path.exists(path):
@@ -39,7 +39,7 @@ class Logger(ModuleDaemon, Observer):
 
     def run(self) -> None:
         while True:
-            msgUnit = self.logQueue.get() # type: Tuple[LOG_ID, LOG_MSG]
+            msgUnit = self.logQueue.get()  # type: Tuple[LOG_ID, LOG_MSG]
             self._output(msgUnit)
 
     def log_put(self, lid: LOG_ID, msg: LOG_MSG) -> None:
@@ -57,18 +57,17 @@ class Logger(ModuleDaemon, Observer):
         return Ok
 
     def log_close(self, logId: LOG_ID) -> None:
-        if not logId in self.logTunnels:
+        if logId not in self.logTunnels:
             return None
 
         fd = self.logTunnels[logId]
         fd.close()
 
-
     def _output(self, unit: Tuple[LOG_ID, LOG_MSG]) -> None:
         logId = unit[0]
         logMessage = unit[1]
 
-        if not logId in self.logTunnels:
+        if logId not in self.logTunnels:
             return None
 
         logFile = self.logTunnels[logId]
@@ -78,7 +77,7 @@ class Logger(ModuleDaemon, Observer):
         logFile.flush()
 
     @staticmethod
-    def putLog(log:'Logger', lid:LOG_ID, msg:LOG_MSG) -> None:
+    def putLog(log: 'Logger', lid: LOG_ID, msg: LOG_MSG) -> None:
         if log is None:
             return None
 
@@ -91,7 +90,7 @@ class Logger(ModuleDaemon, Observer):
 
         return formated_message
 
-    def listenTo(self, data:Tuple[str, str]) -> None:
+    def listenTo(self, data: Tuple[str, str]) -> None:
         tunnelname, msg = data
 
         if tunnelname not in self.logTunnels:

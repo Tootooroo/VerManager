@@ -34,7 +34,6 @@ export class VerRegisterComponent implements OnInit {
         });
 
         ref.afterClosed().subscribe(result => {
-
             if (result !== undefined) {
                 const ver: Version = { vsn: result, sn: rev };
                 this.verService.addVersion(ver)

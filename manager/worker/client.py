@@ -2,13 +2,10 @@
 # Usage: python server.py <configPath>
 
 import sys
-import os
-import platform
 
 from threading import Thread
-from typing import Union, List, Optional
+from typing import Optional
 
-from ..basic.letter import Letter, ResponseLetter, BinaryLetter
 from ..basic.info import Info
 from ..basic.mmanager import MManager, Module
 from ..basic.storage import Storage
@@ -17,11 +14,11 @@ from .processor import Processor
 from .sender import Sender
 from .receiver import Receiver
 from .server import Server
-from .post import Post
 
 from .server import M_NAME as SERVER_M_NAME
 from .receiver import M_NAME as RECEIVER_M_NAME
 from .processor import M_NAME as PROCESSOR_M_NAME
+
 
 class Client(Thread):
 
@@ -111,7 +108,7 @@ class Client(Thread):
         self._manager.addModule(m1)
 
         m2 = Sender(info, self)
-        m2.rtnRegister(lambda : s.transfer_step(1))
+        m2.rtnRegister(lambda: s.transfer_step(1))
         self._manager.addModule(m2)
 
         m3 = Processor(info, self)

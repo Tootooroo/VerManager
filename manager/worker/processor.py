@@ -8,19 +8,18 @@ import subprocess
 import queue
 import shutil
 
-from typing import Any, Optional, Callable, List, Tuple, Dict, BinaryIO
+from typing import Any, Optional, Callable, List, Dict, BinaryIO
 from multiprocessing import Pool, Manager
-from multiprocessing.pool import AsyncResult
 from threading import Event, Lock
 
 from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
-    LogLetter, LogRegLetter, CmdResponseLetter, ResponseLetter, BinaryLetter, \
-    CancelLetter
+    CmdResponseLetter, ResponseLetter, BinaryLetter, CancelLetter
 
 from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
-from ..basic.util import partition, packShellCommands, execute_shell, pathSeperator
+from ..basic.util import partition, packShellCommands, \
+    execute_shell, pathSeperator
 from ..basic.storage import M_NAME as STO_M_NAME
 
 from ..basic.mmanager import Module
@@ -30,8 +29,7 @@ from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
 
-from ..basic.commands import Command, PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand, \
-    LisLostCommand
+from ..basic.commands import PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
 
 from .server import M_NAME as SERVER_M_NAME
 from .postListener import M_NAME as POST_LISTENER_M_NAME
@@ -47,11 +45,12 @@ CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
 M_NAME = "Processor"
 LOG_ID = "Processor"
 
+
 class Result:
 
-    def __init__(self, tid:str, mid:str,
-                 filePath:str, needPost:str,
-                 version:str, isSuccess:bool) -> None:
+    def __init__(self, tid: str, mid: str,
+                 filePath: str, needPost: str,
+                 version: str, isSuccess: bool) -> None:
         self.tid = tid
         self.path = filePath
         self.needPost = needPost
@@ -59,12 +58,13 @@ class Result:
         self.isSuccess = isSuccess
         self.menuId = mid
 
+
 class Processor(Module, Subject):
 
     NOTIFY_POST_LISTENER = "lis"
     NOTIFY_POST_PROVIDER = "pro"
 
-    def __init__(self, info:Info, cInst:Any) -> None:
+    def __init__(self, info: Info, cInst: Any) -> None:
         global M_NAME
 
         Module.__init__(self, M_NAME)
@@ -80,18 +80,18 @@ class Processor(Module, Subject):
         self._pool = Pool(self._poolSize)
         self._info = info
 
-        self._procedure = None # type: Optional[Callable]
+        self._procedure = None  # type:  Optional[Callable]
 
         # (tid, parent, result)
-        self._allTasks = [] # type: List[Task]
+        self._allTasks = []  # type:  List[Task]
         self._result_lock = Lock()
 
         # Query purpose
-        self._allTasks_dict = {} # type: Dict[str, Task]
+        self._allTasks_dict = {}  # type:  Dict[str, Task]
 
         self._manager = Manager()
         # Collections of event used to stop building processing.
-        self._shell_events = {} # type: Dict[str, Event]
+        self._shell_events = {}  # type:  Dict[str, Event]
 
         self._recyleInterrupt = False
         self._recyleInProcessing = False
@@ -102,7 +102,7 @@ class Processor(Module, Subject):
     def cleanup(self) -> None:
         return None
 
-    def logging(self, msg:str) -> None:
+    def logging(self, msg: str) -> None:
         global LOG_ID
 
         if not hasattr(self, 'server'):
@@ -115,7 +115,6 @@ class Processor(Module, Subject):
 
         self.server.log(LOG_ID, msg)
 
-
     def maxTasksAbleToProc(self) -> int:
         return self._max
 
@@ -125,12 +124,13 @@ class Processor(Module, Subject):
     def poolSize(self) -> int:
         return self._poolSize
 
-    def setProcedure(self, procedure:Callable[[Server, Letter, Info], None]) -> None:
+    def setProcedure(self, procedure: Callable[[Server, Letter, Info],
+                                               None]) -> None:
         self._procedure = procedure
 
-    def proc(self, reqLetter:Letter) -> None:
+    def proc(self, reqLetter: Letter) -> None:
 
-        # fixme: need to deal with exception of command or
+        # fixme:  need to deal with exception of command or
         #        newtask
         if isinstance(reqLetter, CommandLetter):
             self.proc_command(reqLetter)
@@ -141,7 +141,7 @@ class Processor(Module, Subject):
         elif isinstance(reqLetter, CancelLetter):
             self.proc_cancel(reqLetter)
 
-    def proc_cancel(self, letter:CancelLetter) -> State:
+    def proc_cancel(self, letter: CancelLetter) -> State:
         ident = letter.getIdent()
         type = letter.getType()
 
@@ -153,7 +153,7 @@ class Processor(Module, Subject):
 
         elif type == CancelLetter.TYPE_POST:
             post_listener = self._cInst.getModule(POST_LISTENER_M_NAME) \
-                # type: Optional[PostListener]
+                # type:  Optional[PostListener]
 
             if post_listener is not None:
                 post_listener.postRemove(ident)
@@ -161,10 +161,10 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def do_proc(reqLetter: NewLetter, info: Info, stop:Event, path:str) -> Result:
-        isSuccess = True
+    def do_proc(reqLetter:  NewLetter, info:  Info,
+                stop: Event, path: str) -> Result:
+
         try:
-            workerName = info.getConfig('WORKER_NAME')
             extra = reqLetter.getExtra()
             building_cmds = extra['cmds']
             result_path = extra['resultPath']
@@ -176,7 +176,7 @@ class Processor(Module, Subject):
             if platform.system() == "Windows":
                 result_path = result_path.replace("/", "\\")
 
-        except:
+        except Exception:
             traceback.print_exc()
 
         # rocessing
@@ -185,7 +185,6 @@ class Processor(Module, Subject):
             projName = info.getConfig("PROJECT_NAME")
             revision = reqLetter.getContent('sn')
             version = reqLetter.getContent('vsn')
-            version_date = reqLetter.getContent('datetime')
 
             result = Result(tid, menuId, result_path, needPost, version, False)
 
@@ -236,8 +235,9 @@ class Processor(Module, Subject):
         result.isSuccess = True
         return result
 
-    def proc_post(self, postTaskLetter:PostTaskLetter) -> State:
-        listener = self._cInst.getModule(POST_LISTENER_M_NAME) # type: PostListener
+    def proc_post(self, postTaskLetter: PostTaskLetter) -> State:
+        listener = self._cInst.getModule(POST_LISTENER_M_NAME) \
+            # type:  PostListener
 
         # This worker is not a listener
         if listener is None:
@@ -247,10 +247,9 @@ class Processor(Module, Subject):
 
         return Ok
 
-    def proc_command(self, cmdLetter:CommandLetter) -> State:
+    def proc_command(self, cmdLetter: CommandLetter) -> State:
 
         type = cmdLetter.getHeader('type')
-        subType = cmdLetter.getHeader('extra')
 
         if type not in cmdHandlers:
             return Error
@@ -260,14 +259,17 @@ class Processor(Module, Subject):
         return handler(self, cmdLetter, self._info, self._cInst)
 
     @staticmethod
-    def command_clean(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def command_clean(p: 'Processor', cmdLetter: CommandLetter,
+                      info: Info, cInst: Any) -> State:
         pass
 
     @staticmethod
-    def command_rework_due_lis_lost(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def command_rework_due_lis_lost(p: 'Processor', cmdLetter: CommandLetter,
+                                    info: Info, cInst: Any) -> State:
 
         command = ReWorkCommand.fromLetter(cmdLetter)
-        if command is None: return Error
+        if command is None:
+            return Error
 
         tids = command.tids()
 
@@ -275,7 +277,8 @@ class Processor(Module, Subject):
         p.recyle_interrupt()
 
         # Wait task exit
-        while p.isRecyleInProcessing(): time.sleep(0.01)
+        while p.isRecyleInProcessing():
+            time.sleep(0.01)
 
         # clean provider
         pr = cInst.getModule(POST_PROVIDER_M_NAME)
@@ -283,7 +286,6 @@ class Processor(Module, Subject):
             return Error
         else:
             pr.removeAllStuffs()
-
 
         for tid in tids:
             t = p.getTask(tid)
@@ -295,7 +297,6 @@ class Processor(Module, Subject):
                 return Error
 
             if t.state() >= Task.STATE_TRANSFER:
-                result = t.result()
 
                 t.fileClose()
 
@@ -309,7 +310,8 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def post_config(p:'Processor', cmdLetter:CommandLetter, info:Info, cInst:Any) -> State:
+    def post_config(p: 'Processor', cmdLetter: CommandLetter,
+                    info: Info, cInst: Any) -> State:
 
         cmd = PostConfigCmd.fromLetter(cmdLetter)
 
@@ -321,15 +323,17 @@ class Processor(Module, Subject):
         role = cmd.role()
 
         if role is PostConfigCmd.ROLE_LISTENER:
-            return Processor._postListener_config(p, address, port, info, cInst)
+            return Processor._postListener_config(p, address,
+                                                  port, info, cInst)
         elif role is PostConfigCmd.ROLE_PROVIDER:
-            return Processor._postProvider_config(p, address, port, info, cInst)
+            return Processor._postProvider_config(p, address,
+                                                  port, info, cInst)
 
         return Error
 
     @staticmethod
-    def lisAddrUpdate(p: 'Processor', cmdLetter:CommandLetter,
-                      info:Info, cInst:Any) -> State:
+    def lisAddrUpdate(p:  'Processor', cmdLetter: CommandLetter,
+                      info: Info, cInst: Any) -> State:
 
         cmd = LisAddrUpdateCmd.fromLetter(cmdLetter)
         if cmd is None:
@@ -348,8 +352,8 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def command_lis_lost(p:'Processor', cmdLetter:CommandLetter,
-                         info:Info, cInst:Any) -> State:
+    def command_lis_lost(p: 'Processor', cmdLetter: CommandLetter,
+                         info: Info, cInst: Any) -> State:
         """
         The listener is lost from master. Re-elect will begin soon
         close connection between PostProvier and PostListener.
@@ -363,11 +367,11 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def accepted_command(p: 'Processor', cmdLetter:CommandLetter,
-                         info:Info, cInst:Any) -> State:
+    def accepted_command(p:  'Processor', cmdLetter: CommandLetter,
+                         info: Info, cInst: Any) -> State:
         """
-        Worker has been accepted by master so worker is able to transfer messages
-        to master.
+        Worker has been accepted by master so worker is
+        able to transfer messages to master.
         """
         server = cInst.getModule(SERVER_M_NAME)
         if server is None:
@@ -377,8 +381,8 @@ class Processor(Module, Subject):
         return Ok
 
     @staticmethod
-    def accepted_reset_command(p:'Processor', cmdLetter:CommandLetter,
-                               info:Info, cInst:Any) -> State:
+    def accepted_reset_command(p: 'Processor', cmdLetter: CommandLetter,
+                               info: Info, cInst: Any) -> State:
         """
         Worker should be reset itself before it transfer any data to master.
         """
@@ -415,8 +419,8 @@ class Processor(Module, Subject):
         return Processor.accepted_command(p, cmdLetter, info, cInst)
 
     @staticmethod
-    def _postListener_config(p:'Processor', address:str,
-                              port:int, info:Info, cInst:Any) -> State:
+    def _postListener_config(p: 'Processor', address: str,
+                             port: int, info: Info, cInst: Any) -> State:
 
         if not cInst.isModuleExists(POST_LISTENER_M_NAME):
             pl = PostListener(address, port, cInst)
@@ -437,11 +441,12 @@ class Processor(Module, Subject):
         server = cInst.getModule(SERVER_M_NAME)
         server.control_response(CMD_POST_TYPE,
                                 CmdResponseLetter.STATE_SUCCESS,
-                                extra = {"isListener":"true"})
+                                extra={"isListener": "true"})
         return Ok
 
     @staticmethod
-    def _postProvider_config(p:'Processor', address:str, port:int, info:Info, cInst:Any) -> State:
+    def _postProvider_config(p: 'Processor', address: str, port: int,
+                             info: Info, cInst: Any) -> State:
 
         sender = cInst.getModule(SENDER_M_NAME)
         if cInst.isModuleExists(POST_PROVIDER_M_NAME):
@@ -472,10 +477,10 @@ class Processor(Module, Subject):
         # Response to configuraton command
         server = cInst.getModule(SERVER_M_NAME)
         server.control_response(CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
-                                extra={"isListener":"false"})
+                                extra={"isListener": "false"})
         return Ok
 
-    def stop_task(self, taskId:str) -> None:
+    def stop_task(self, taskId: str) -> None:
         if taskId in self._shell_events:
             self._shell_events[taskId].set()
 
@@ -500,7 +505,7 @@ class Processor(Module, Subject):
     def recyle_stop_interrupte(self) -> None:
         self._recyleInterrupt = False
 
-    def proc_newtask(self, reqLetter:NewLetter) -> State:
+    def proc_newtask(self, reqLetter: NewLetter) -> State:
         if not self.isAbleToProc():
             return Error
 
@@ -542,7 +547,6 @@ class Processor(Module, Subject):
             Processor.do_proc, (reqLetter, self._info, event, sto._path)
         )
 
-        filePath = reqLetter.getExtra()['resultPath']
         t = Task(tid, version, res, sto._path)
 
         # Changed task's state to Proc so it can be dealt by
@@ -560,8 +564,9 @@ class Processor(Module, Subject):
 
         self._recyleInProcessing = True
 
-        filter_f = lambda t: t.isReady() and (t.state() == Task.STATE_PROC or
-                                       t.state() == Task.STATE_TRANSFER)
+        filter_f = lambda t:  t.isReady() and \
+            (t.state() == Task.STATE_PROC or t.state() == Task.STATE_TRANSFER)
+
         with self._result_lock:
             (readies, not_readies) = partition(self._allTasks, filter_f)
 
@@ -576,9 +581,9 @@ class Processor(Module, Subject):
             version = t.version()
 
             if tid in self._shell_events:
-                del self._shell_events [tid]
+                del self._shell_events[tid]
 
-            result = t.result() # type: Result
+            result = t.result()  # type:  Result
             version = result.version
             tid = result.tid
             needPost = result.needPost
@@ -600,8 +605,8 @@ class Processor(Module, Subject):
 
             menu = result.menuId
 
-            response = ResponseLetter(ident = self._cInst.getIdent(), tid = tid,
-                                      state = Letter.RESPONSE_STATE_FINISHED)
+            response = ResponseLetter(ident=self._cInst.getIdent(), tid=tid,
+                                      state=Letter.RESPONSE_STATE_FINISHED)
             server = self._cInst.getModule(SERVER_M_NAME)
             provider = self._cInst.getModule(POST_PROVIDER_M_NAME)
 
@@ -625,8 +630,8 @@ class Processor(Module, Subject):
                     try:
                         # Tasks that no post can not be interrupted.
                         if self._transBinaryTo(tid, t.file(),
-                                            t.outputFileName,
-                                            lambda l: server.bytesSend(l)) == 0:
+                                               t.outputFileName,
+                                               lambda l:  server.bytesSend(l)) == 0:
                             server.response_fin(tid)
                             t.toDoneState()
 
@@ -643,7 +648,7 @@ class Processor(Module, Subject):
                             # Transfer generated file to PostListener or master
                             ret = self._transBinaryTo(tid, t.file(),
                                                       t.outputFileName,
-                                                      lambda l: provider.provide(l, timeout = 2),
+                                                      lambda l:  provider.provide(l, timeout = 2),
                                                       mid=menu,
                                                       parent=version)
 
@@ -669,17 +674,17 @@ class Processor(Module, Subject):
 
         return len(readies)
 
-    # 0: Normal
-    # 1: Be interrupted
-    def _transBinaryTo(self, tid:str,
-                       f_desc:BinaryIO,
-                       fileName: str,
-                       transferRtn:Callable[[BinaryLetter], Any],
-                       mid:str = "", parent:str = "") -> int:
+    # 0:  Normal
+    # 1:  Be interrupted
+    def _transBinaryTo(self, tid: str,
+                       f_desc: BinaryIO,
+                       fileName:  str,
+                       transferRtn: Callable[[BinaryLetter], Any],
+                       mid: str = "", parent: str = "") -> int:
 
         for line in f_desc:
             binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
-                                        fileName=fileName, parent=parent)
+                                     fileName=fileName, parent=parent)
             try:
                 transferRtn(binLetter)
             except queue.Full:
@@ -692,8 +697,8 @@ class Processor(Module, Subject):
                 return 1
 
         # Terminated binary letter
-        binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu = mid,
-                                    fileName=fileName, parent = parent)
+        binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu=mid,
+                                      fileName=fileName, parent=parent)
         transferRtn(binLetter_last)
 
         return 0
@@ -701,7 +706,7 @@ class Processor(Module, Subject):
     def isRecyleInProcessing(self) -> bool:
         return self._recyleInProcessing
 
-    def isReqInProc(self, tid:str, parent:str = "") -> bool:
+    def isReqInProc(self, tid: str, parent: str = "") -> bool:
         return tid in self._allTasks_dict
 
     def isAbleToProc(self) -> bool:
@@ -712,7 +717,7 @@ class Processor(Module, Subject):
             return self._allTasks_dict[tid]
         return None
 
-    def addTask(self, t:Task) -> None:
+    def addTask(self, t: Task) -> None:
         tid = t.tid()
 
         if tid in self._allTasks_dict:
@@ -721,12 +726,12 @@ class Processor(Module, Subject):
         self._allTasks_dict[tid] = t
         self._allTasks.append(t)
 
-    def removeTask(self, tid:str) -> None:
+    def removeTask(self, tid: str) -> None:
 
         if tid not in self._allTasks_dict:
             return None
 
-        del self._allTasks_dict [tid]
+        del self._allTasks_dict[tid]
         self._allTasks = [t for t in self._allTasks if t.tid() != tid]
 
     def inProcCounterInc(self) -> None:
@@ -736,13 +741,12 @@ class Processor(Module, Subject):
         self._numOfTasksInProc -= 1
 
 
-
 cmdHandlers = {
-    CMD_POST_TYPE:       Processor.post_config,
-    CMD_ACCEPT:          Processor.accepted_command,
-    CMD_ACCEPT_RST:      Processor.accepted_reset_command,
-    CMD_LIS_ADDR_UPDATE: Processor.lisAddrUpdate,
-    CMD_REWORK_TASK:     Processor.command_rework_due_lis_lost,
-    CMD_CLEAN:           Processor.command_clean,
-    CMD_LIS_LOST:        Processor.command_lis_lost
-} # type: Dict[str, CommandHandler]
+    CMD_POST_TYPE:        Processor.post_config,
+    CMD_ACCEPT:           Processor.accepted_command,
+    CMD_ACCEPT_RST:       Processor.accepted_reset_command,
+    CMD_LIS_ADDR_UPDATE:  Processor.lisAddrUpdate,
+    CMD_REWORK_TASK:      Processor.command_rework_due_lis_lost,
+    CMD_CLEAN:            Processor.command_clean,
+    CMD_LIS_LOST:         Processor.command_lis_lost
+}  # type:  Dict[str, CommandHandler]

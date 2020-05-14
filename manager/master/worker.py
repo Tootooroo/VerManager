@@ -4,28 +4,22 @@
 # provide communication interface to another module
 
 import socket
-import select
 import traceback
-
 from typing import Tuple, Optional, List, Dict, Callable
-
 from .task import Task, TaskGroup, SingleTask, PostTask
-from datetime import datetime, timedelta
-
-from functools import reduce
-from threading import Thread, Lock
-
-from manager.basic.letter import Letter, NewLetter, \
-    receving as letter_receving, sending as letter_sending, CancelLetter
-from manager.basic.type import Ok, Error
-from manager.basic.commands import Command
+from datetime import datetime
 from threading import Lock
+from manager.basic.letter import Letter, receving as letter_receving, \
+    sending as letter_sending, CancelLetter
+from manager.basic.commands import Command
 
-from manager.master.build import Post
-
-class WorkerInitFailed(Exception): pass
 
 WorkerState = int
+
+
+class WorkerInitFailed(Exception):
+    pass
+
 
 class Worker:
 
@@ -33,13 +27,13 @@ class Worker:
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, sock: socket.socket, address:Tuple[str, int]) -> None:
-        self.role = None # type: Optional[int]
+    def __init__(self, sock: socket.socket, address: Tuple[str, int]) -> None:
+        self.role = None  # type: Optional[int]
         self.sock = sock
         self.address = address
         self.max = 0
         self.inProcTask = TaskGroup()
-        self.menus = [] # type: List[Tuple[str, str]]
+        self.menus = []  # type: List[Tuple[str, str]]
         self.ident = ""
         self.needUpdate = False
 
@@ -51,11 +45,15 @@ class Worker:
         self.state = Worker.STATE_OFFLINE
 
         # Counters
-        # 1.wait_counter: ther number of seconds that a worker stay in STATE_WAITING
-        # 2.offline_counter: the number of seconds that a worker stay in STATE_OFFLINE
-        # 3.online_counter: the number of seconds that a worker stay in STATE_ONLINE
-        # 4.clock: Record the time while state of Worker is changed and counter 1 to 3
-        #          is calculated via clock. Clock is not accessable by user directly.
+        # 1.wait_counter: ther number of seconds
+        #                 that a worker stay in STATE_WAITING
+        # 2.offline_counter: the number of seconds that a worker
+        #                    stay in STATE_OFFLINE
+        # 3.online_counter: the number of seconds that a worker stay
+        #                   in STATE_ONLINE
+        # 4.clock: Record the time while state of Worker is changed
+        #          and counter 1 to 3 is calculated via
+        #          clock. Clock is not accessable by user directly.
         #
         # counters[STATE_ONLINE] : online_counter
         # counters[STATE_WAITING] : wait_counter
@@ -64,13 +62,14 @@ class Worker:
         self._clock = datetime.now()
 
     def active(self) -> None:
-        # Prevent permanent blocking from waiting for PropertyNotify from worker
+        # Prevent permanent blocking from waiting
+        # for PropertyNotify from worker
         self.sock.settimeout(10)
 
         try:
-            l = self._recv()
+            letter = self._recv()
 
-            if l is None:
+            if letter is None:
                 raise WorkerInitFailed()
 
         except socket.timeout:
@@ -78,9 +77,9 @@ class Worker:
 
         self.sock.settimeout(None)
 
-        if Letter.typeOfLetter(l) == Letter.PropertyNotify:
-            self.max = l.propNotify_MAX()
-            self.ident = l.propNotify_IDENT()
+        if Letter.typeOfLetter(letter) == Letter.PropertyNotify:
+            self.max = letter.propNotify_MAX()
+            self.ident = letter.propNotify_IDENT()
             self.state = Worker.STATE_ONLINE
             self._clock = datetime.utcnow()
         else:
@@ -118,7 +117,7 @@ class Worker:
     def getAddress(self) -> Tuple[str, int]:
         return self.address
 
-    def setAddress(self, address:Tuple[str, int]) -> None:
+    def setAddress(self, address: Tuple[str, int]) -> None:
         self.address = address
 
     def getIdent(self) -> str:
@@ -148,7 +147,7 @@ class Worker:
     def removeTask(self, tid: str) -> None:
         self.inProcTask.remove(tid)
 
-    def removeTaskWithCond(self, predicate:Callable[[Task], bool]) -> None:
+    def removeTaskWithCond(self, predicate: Callable[[Task], bool]) -> None:
         return self.inProcTask.removeTasks(predicate)
 
     def maxNumOfTask(self) -> int:
@@ -157,7 +156,7 @@ class Worker:
     def numOfTaskProc(self) -> int:
         return self.inProcTask.numOfTasks()
 
-    def control(self, cmd:Command) -> None:
+    def control(self, cmd: Command) -> None:
         letter = cmd.toLetter()
         self._send(letter)
 
@@ -194,13 +193,14 @@ class Worker:
 
         self.inProcTask.remove(id)
 
-
     def status(self) -> Dict:
-        status_dict = { "max":self.max,
-                        "sock":self.sock,
-                        "processing":self.inProcTask.numOfTasks(),
-                        "inProcTask":self.inProcTask.toList_(),
-                        "ident":self.ident}
+        status_dict = {
+            "max": self.max,
+            "sock": self.sock,
+            "processing": self.inProcTask.numOfTasks(),
+            "inProcTask": self.inProcTask.toList_(),
+            "ident": self.ident
+        }
         return status_dict
 
     @staticmethod
@@ -216,7 +216,8 @@ class Worker:
 
     def _send(self, l: Letter) -> None:
         try:
-            with self.sendLock: Worker.sending(self.sock, l)
+            with self.sendLock:
+                Worker.sending(self.sock, l)
         except BrokenPipeError:
             raise BrokenPipeError
         except Exception:

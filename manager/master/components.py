@@ -1,14 +1,14 @@
 # components.py
 
-from typing import *
+from typing import Any
 
-dispatcher = None # type: Any
+dispatcher = None  # type: Any
 
-workerRoom = None # type: Any
+workerRoom = None  # type: Any
 
-eventListener = None # type: Any
+eventListener = None  # type: Any
 
-logger = None # type: Any
+logger = None  # type: Any
 
 # Info module, contain infomations about configuration file
-config = None # type: Any
+config = None  # type: Any

@@ -1,13 +1,13 @@
 # info.py
 
 import typing
-from typing import Generic, TypeVar
 from yaml import load, SafeLoader
 from functools import reduce
 
 from manager.basic.mmanager import Module
 
 M_NAME = "Info"
+
 
 # Abstruction of configuration file
 class Info(Module):
@@ -24,7 +24,6 @@ class Info(Module):
 
     def cleanup(self) -> None:
         return None
-
 
     def getConfig(self, *cfgKeys) -> typing.Any:
         cfgValue = self._config

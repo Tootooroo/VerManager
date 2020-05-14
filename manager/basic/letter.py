@@ -3,46 +3,54 @@
 # How to communicate with worker ?
 
 import json
+import socket
 
 import traceback
 from typing import Optional, Dict, \
     Any, List, Union, Tuple, Callable
 
-def newTaskLetterValidity(letter:  'Letter') -> bool:
+
+def newTaskLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('sn') != "" and \
                letter.getContent('vsn') != ""
 
     return isHValid and isCValid
 
-def responseLetterValidity(letter:  'Letter') -> bool:
+
+def responseLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != "" and letter.getHeader('tid') != ""
     isCValid = letter.getContent('state') != ""
 
     return isHValid and isCValid
 
-def propertyLetterValidity(letter:  'Letter') -> bool:
+
+def propertyLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('ident') != ""
     isCValid = letter.getContent('MAX') != "" and letter.getContent('PROC') != ""
 
     return isHValid and isCValid
 
-def binaryLetterValidity(letter:  'Letter') -> bool:
+
+def binaryLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('tid') != ""
     isCValid = letter.getContent('bytes') != ""
 
     return isHValid and isCValid
 
-def logLetterValidity(letter:  'Letter') -> bool:
+
+def logLetterValidity(letter: 'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
     isCValid = letter.getContent('logMsg') != ""
 
     return isHValid and isCValid
 
+
 def logRegisterLetterValidity(letter:  'Letter') -> bool:
     isHValid = letter.getHeader('logId') != ""
 
     return isHValid
+
 
 class Letter:
 
@@ -166,7 +174,7 @@ class Letter:
         return Letter.format % (self.type_, headerStr, contentStr)
 
     def __repr__(self) -> str:
-         # length of content after length
+        # length of content after length
         headerStr = str(self.header).replace("'", "\"")
         contentStr = str(self.content).replace("'", "\"")
         return Letter.format % (self.type_, headerStr, contentStr)
@@ -217,7 +225,8 @@ class Letter:
         else:
             return ""
 
-    # If a letter is received completely return 0 otherwise return the remaining bytes
+    # If a letter is received completely return 0 otherwise
+    # return the remaining bytes
     @staticmethod
     def letterBytesRemain(s:  bytes) -> int:
         if len(s) < 2:
@@ -234,7 +243,7 @@ class Letter:
             return length - (len(s) - 2)
 
     @staticmethod
-    def parse(s :  bytes) -> Optional['Letter']:
+    def parse(s: bytes) -> Optional['Letter']:
         # To check that is BinaryFile type or another
         if int.from_bytes(s[: 2], "big") == 1:
             return BinaryLetter.parse(s)
@@ -242,10 +251,10 @@ class Letter:
             return Letter._parse(s)
 
     @staticmethod
-    def _parse(s:  bytes) -> Optional['Letter']:
+    def _parse(s: bytes) -> Optional['Letter']:
         try:
-            letter = s[2: ].decode()
-        except:
+            letter = s[2:].decode()
+        except Exception:
             traceback.print_exc()
             raise Exception
 
@@ -262,10 +271,13 @@ class Letter:
     # PropertyNotify letter interface
     def propNotify_MAX(self) -> int:
         return int(self.content['MAX'])
+
     def propNotify_PROC(self) -> int:
         return int(self.content['PROC'])
+
     def propNotify_IDENT(self) -> str:
         return self.header['ident']
+
 
 def bytesDivide(s: bytes) -> Tuple:
     letter = s[2: ].decode()
@@ -276,6 +288,7 @@ def bytesDivide(s: bytes) -> Tuple:
     content = dict_['content']
 
     return (type_, header, content)
+
 
 class NewLetter(Letter):
 
@@ -301,14 +314,14 @@ class NewLetter(Letter):
             return None
 
         return NewLetter(
-            tid = header['tid'],
-            sn = content['sn'],
-            vsn = content['vsn'],
-            datetime = content['datetime'],
-            menu = header['menu'],
-            parent = header['parent'],
-            extra = content['extra'],
-            needPost = header['needPost'])
+            tid=header['tid'],
+            sn=content['sn'],
+            vsn=content['vsn'],
+            datetime=content['datetime'],
+            menu=header['menu'],
+            parent=header['parent'],
+            extra=content['extra'],
+            needPost=header['needPost'])
 
     def getTid(self) -> str:
         return self.getHeader('tid')
@@ -338,13 +351,14 @@ class NewLetter(Letter):
 class CancelLetter(Letter):
 
     TYPE_SINGLE = "Single"
-    TYPE_POST   = "Post"
+    TYPE_POST = "Post"
 
-    def __init__(self, taskId:str, type:str) -> None:
-        Letter.__init__(self, Letter.TaskCancel, {"taskId":taskId, "type":type}, {})
+    def __init__(self, taskId: str, type: str) -> None:
+        Letter.__init__(self, Letter.TaskCancel,
+                        {"taskId": taskId, "type": type}, {})
 
     @staticmethod
-    def parse(s:bytes) -> Optional['CancelLetter']:
+    def parse(s: bytes) -> Optional['CancelLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.TaskCancel:
@@ -358,27 +372,31 @@ class CancelLetter(Letter):
     def getType(self) -> str:
         return self.getHeader('type')
 
-    def setType(self, type:str) -> None:
+    def setType(self, type: str) -> None:
         self.setHeader('type', type)
+
 
 CmdType = int
 CmdSubType = int
 
+
 class CommandLetter(Letter):
 
-    def __init__(self, type: str, content: Dict[str, str], target: str = "", extra: str = "") -> None:
+    def __init__(self, type:  str, content:  Dict[str, str], target:  str = "",
+                 extra: str = "") -> None:
         Letter.__init__(self, Letter.Command,
-                        {"type": type, "target": target, "extra": extra},
+                        {"type":  type, "target":  target, "extra":  extra},
                         content)
 
     @staticmethod
-    def parse(s: bytes) -> Optional['CommandLetter']:
+    def parse(s:  bytes) -> Optional['CommandLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Command:
             return None
 
-        return CommandLetter(header['type'], content, header['target'], header['extra'])
+        return CommandLetter(header['type'], content, header['target'],
+                             header['extra'])
 
     def getType(self) -> str:
         return self.getHeader('type')
@@ -389,22 +407,25 @@ class CommandLetter(Letter):
     def getExtra(self) -> Any:
         return self.getHeader('extra')
 
-    def content_(self, key:str) -> str:
+    def content_(self, key: str) -> str:
         return self.getContent(key)
+
 
 class CmdResponseLetter(Letter):
 
     STATE_SUCCESS = "s"
-    STATE_FAILED  = "f"
+    STATE_FAILED = "f"
 
-    def __init__(self, wIdent: str, type: str, state: str, extra: Dict[str, str],
-                 reason: str = "", target: str = "")  -> None:
+    def __init__(self, wIdent:  str, type:  str,
+                 state:  str, extra:  Dict[str, str],
+                 reason:  str = "", target:  str = "") -> None:
         Letter.__init__(self, Letter.CmdResponse,
-                        {"ident": wIdent, "type": type, "state": state, "target": target},
-                        {"reason": reason, "extra": extra})
+                        {"ident":  wIdent, "type":  type,
+                         "state": state, "target":  target},
+                        {"reason":  reason, "extra":  extra})
 
     @staticmethod
-    def parse(s: bytes) -> Optional['CmdResponseLetter']:
+    def parse(s:  bytes) -> Optional['CmdResponseLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.CmdResponse:
@@ -412,8 +433,8 @@ class CmdResponseLetter(Letter):
 
         return CmdResponseLetter(header['ident'], header['type'], header['state'],
                                  content['extra'],
-                                 target = header['target'],
-                                 reason = content['reason'])
+                                 target=header['target'],
+                                 reason=content['reason'])
 
     def getIdent(self) -> str:
         return self.getHeader('ident')
@@ -430,18 +451,21 @@ class CmdResponseLetter(Letter):
     def getTarget(self) -> str:
         return self.getHeader('target')
 
-    def getExtra(self, key: str) -> Any:
+    def getExtra(self, key:  str) -> Any:
         return self.getContent('extra')[key]
+
 
 class PostTaskLetter(Letter):
 
-    def __init__(self, ident:str, ver:str, cmds:List[str], output:str, menus:Dict, frags:List) -> None:
+    def __init__(self, ident: str, ver: str, cmds: List[str], output: str,
+                 menus: Dict, frags: List) -> None:
+
         Letter.__init__(self, Letter.Post,
-                        {"ident":ident, "version":ver, "output":output},
-                        {"cmds":cmds, "Menus":menus, "Fragments":frags})
+                        {"ident": ident, "version": ver, "output": output},
+                        {"cmds": cmds, "Menus": menus, "Fragments": frags})
 
     @staticmethod
-    def parse(s:bytes) -> Optional['PostTaskLetter']:
+    def parse(s: bytes) -> Optional['PostTaskLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Post:
@@ -449,7 +473,8 @@ class PostTaskLetter(Letter):
 
         return PostTaskLetter(header['ident'], header['version'],
                               content['cmds'], header['output'],
-                              menus = content['Menus'], frags = content['Fragments'])
+                              menus=content['Menus'],
+                              frags=content['Fragments'])
 
     def getIdent(self) -> str:
         return self.getHeader("ident")
@@ -463,7 +488,7 @@ class PostTaskLetter(Letter):
     def getOutput(self) -> str:
         return self.getHeader('output')
 
-    def addFrag(self, fragId:str) -> None:
+    def addFrag(self, fragId: str) -> None:
         frags = self.getContent('Fragments')
 
         if fragId in frags:
@@ -471,7 +496,7 @@ class PostTaskLetter(Letter):
 
         frags.append(fragId)
 
-    def addMenu(self, menu:'MenuLetter') -> None:
+    def addMenu(self, menu: 'MenuLetter') -> None:
         mid = menu.getMenuId()
 
         menus = self.getContent('Menus')
@@ -479,14 +504,15 @@ class PostTaskLetter(Letter):
         if mid in menus:
             return None
 
-        menus[mid] = {"mid":mid, "cmds":menu.getCmds(),
-                      "depends":menu.getDepends(),
-                      "output":menu.getOutput()}
+        menus[mid] = {"mid": mid, "cmds": menu.getCmds(),
+                      "depends": menu.getDepends(),
+                      "output": menu.getOutput()}
 
-    def getMenu(self, mid:str) -> 'MenuLetter':
+    def getMenu(self, mid: str) -> 'MenuLetter':
         theMenu = self.getContent('Menus')[mid]
 
-        return MenuLetter(self.getVersion(), mid, theMenu['cmds'], theMenu['depends'],
+        return MenuLetter(self.getVersion(), mid, theMenu['cmds'],
+                          theMenu['depends'],
                           theMenu['output'])
 
     def menus(self) -> List[str]:
@@ -496,22 +522,28 @@ class PostTaskLetter(Letter):
         return self.getContent("Fragments")
 
 
-
 class MenuLetter(Letter):
 
-    def __init__(self, ver: str, mid: str, cmds: List[str], depends: List[str], output: str) -> None:
-        Letter.__init__(self, Letter.NewMenu, {"mid": mid, "version": ver},
-                        {"cmds": cmds, "depends": depends, "output": output})
+    def __init__(self, ver:  str, mid:  str, cmds:  List[str],
+                 depends:  List[str], output:  str) -> None:
+
+        Letter.__init__(self, Letter.NewMenu,
+                        {"mid":  mid, "version":  ver},
+                        {
+                            "cmds":  cmds, "depends":
+                            depends, "output":  output
+                        })
 
     @staticmethod
-    def parse(s: bytes) -> Optional['MenuLetter']:
+    def parse(s:  bytes) -> Optional['MenuLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.NewMenu:
             return None
 
         return MenuLetter(header['version'], header['mid'],
-                          content['cmds'], content['depends'], content['output'])
+                          content['cmds'], content['depends'],
+                          content['output'])
 
     def getVersion(self) -> str:
         return self.getHeader("version")
@@ -528,18 +560,20 @@ class MenuLetter(Letter):
     def getOutput(self) -> str:
         return self.getContent('output')
 
+
 class ResponseLetter(Letter):
 
-    def __init__(self, ident: str, tid: str, state: str, parent: str = "") -> None:
+    def __init__(self, ident:  str, tid:  str, state:  str,
+                 parent: str = "") -> None:
         Letter.__init__(
             self,
             Letter.Response,
-            {"ident": ident, "tid": tid, "parent": parent},
-            {"state": state}
+            {"ident":  ident, "tid":  tid, "parent":  parent},
+            {"state":  state}
         )
 
     @staticmethod
-    def parse(s: bytes) -> Optional['ResponseLetter']:
+    def parse(s:  bytes) -> Optional['ResponseLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Response:
@@ -564,21 +598,22 @@ class ResponseLetter(Letter):
     def getState(self) -> str:
         return self.getContent('state')
 
-    def setState(self, state:str) -> None:
+    def setState(self, state: str) -> None:
         self.setContent('state', state)
+
 
 class PropLetter(Letter):
 
-    def __init__(self, ident: str, max: str, proc: str) -> None:
+    def __init__(self, ident:  str, max:  str, proc:  str) -> None:
         Letter.__init__(
             self,
             Letter.PropertyNotify,
-            {"ident": ident},
-            {"MAX": max, "PROC": proc}
+            {"ident":  ident},
+            {"MAX":  max, "PROC":  proc}
         )
 
     @staticmethod
-    def parse(s: bytes) -> Optional['PropLetter']:
+    def parse(s:  bytes) -> Optional['PropLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.PropertyNotify:
@@ -599,6 +634,7 @@ class PropLetter(Letter):
     def getProc(self) -> str:
         return self.getContent('PROC')
 
+
 class BinaryLetter(Letter):
 
     TYPE_DATA = 1
@@ -611,22 +647,36 @@ class BinaryLetter(Letter):
     PARENT_FIELD_LEN = 64
     MENU_FIELD_LEN = 30
 
-    class FIELD_LENGTH_EXCEPTION(Exception): pass
+    class FIELD_LENGTH_EXCEPTION(Exception):
+        pass
 
-    def __init__(self, tid: str, bStr: bytes, menu: str = "",
-                 fileName: str = "", parent: str = "",
-                 last: str = "false") -> None:
+    def __init__(self, tid:  str, bStr:  bytes, menu:  str = "",
+                 fileName:  str = "", parent:  str = "",
+                 last:  str = "false") -> None:
 
-        BinaryLetter.field_length_check(BinaryLetter.FILE_NAME_FIELD_LEN, fileName)
-        BinaryLetter.field_length_check(BinaryLetter.TASK_ID_FIELD_LEN, tid)
-        BinaryLetter.field_length_check(BinaryLetter.PARENT_FIELD_LEN, parent)
-        BinaryLetter.field_length_check(BinaryLetter.MENU_FIELD_LEN, menu)
+        BinaryLetter.field_length_check(
+            BinaryLetter.FILE_NAME_FIELD_LEN,
+            fileName
+        )
+        BinaryLetter.field_length_check(
+            BinaryLetter.TASK_ID_FIELD_LEN,
+            tid
+        )
+        BinaryLetter.field_length_check(
+            BinaryLetter.PARENT_FIELD_LEN,
+            parent
+        )
+        BinaryLetter.field_length_check(
+            BinaryLetter.MENU_FIELD_LEN,
+            menu
+        )
 
         Letter.__init__(
             self,
             Letter.BinaryFile,
-            {"tid": tid, "fileName": fileName, "parent": parent, "menu": menu},
-            {"bytes": bStr}
+            {"tid":  tid, "fileName":  fileName,
+             "parent":  parent, "menu":  menu},
+            {"bytes":  bStr}
         )
 
     @staticmethod
@@ -635,12 +685,12 @@ class BinaryLetter(Letter):
             raise BinaryLetter.FIELD_LENGTH_EXCEPTION
 
     @staticmethod
-    def parse(s: bytes) -> Optional['BinaryLetter']:
-        fileName = s[6: 38].decode().replace(" ", "")
-        tid = s[38: 166].decode().replace(" ", "")
-        parent = s[166: 230].decode().replace(" ", "")
-        menu = s[230 : 260].decode().replace(" ", "")
-        content = s[260: ]
+    def parse(s:  bytes) -> Optional['BinaryLetter']:
+        fileName = s[6:38].decode().replace(" ", "")
+        tid = s[38:166].decode().replace(" ", "")
+        parent = s[166:230].decode().replace(" ", "")
+        menu = s[230:260].decode().replace(" ", "")
+        content = s[260:]
 
         return BinaryLetter(tid, content, menu, fileName, parent = parent)
 
@@ -664,11 +714,13 @@ class BinaryLetter(Letter):
         if type(content) is str:
             return None
 
-        extend_bytes = lambda n, bs: b' ' * n + bs
+        def extend_bytes(n: int, bs: bytes):
+            return b' ' * n + bs
 
         type_field = (1).to_bytes(BinaryLetter.TYPE_FIELD_LEN, "big")
         len_field = len(content).to_bytes(BinaryLetter.LENGTH_FIELD_LEN, "big")
-        tid_field = extend_bytes(BinaryLetter.TASK_ID_FIELD_LEN - len(tid), tid.encode())
+        tid_field = extend_bytes(BinaryLetter.TASK_ID_FIELD_LEN - len(tid),
+                                 tid.encode())
         parent_field = extend_bytes(BinaryLetter.PARENT_FIELD_LEN -
                                     len(parent), parent.encode())
         name_field = extend_bytes(BinaryLetter.FILE_NAME_FIELD_LEN -
@@ -676,8 +728,10 @@ class BinaryLetter(Letter):
         menu_field = extend_bytes(BinaryLetter.MENU_FIELD_LEN - len(menu), menu.encode())
 
         # Safe here content must not str and must a bytes
-        # | Type (2Bytes) 00001 : :  Int | Length (4Bytes) : :  Int | Ext (32 Bytes) | TaskId (64Bytes) : :  String
-        # | Parent(64 Bytes) : :  String | Menu (30 Bytes) : :  String | Content : :  Bytes |
+        # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int
+        # | Ext (32 Bytes) | TaskId (64Bytes) :: String
+        # | Parent(64 Bytes) :: String | Menu (30 Bytes) :: String
+        # | Content :: Bytes |
         packet = type_field + len_field + name_field + tid_field + \
             parent_field + menu_field + content
 
@@ -698,30 +752,31 @@ class BinaryLetter(Letter):
     def getBytes(self) -> str:
         return self.getContent('bytes')
 
-    def setBytes(self, b:bytes) -> None:
+    def setBytes(self, b: bytes) -> None:
         self.setContent('bytes', b)
+
 
 class LogLetter(Letter):
 
-    def __init__(self, ident: str, logId: str, logMsg: str) -> None:
+    def __init__(self, ident:  str, logId:  str, logMsg:  str) -> None:
         Letter.__init__(
             self,
             Letter.Log,
-            {"ident": ident, "logId": logId},
-            {"logMsg": logMsg}
+            {"ident":  ident, "logId":  logId},
+            {"logMsg":  logMsg}
         )
 
     @staticmethod
-    def parse(s: bytes) -> Optional['LogLetter']:
+    def parse(s:  bytes) -> Optional['LogLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Log:
             return None
 
         return LogLetter(
-            ident = header['ident'],
-            logId = header['logId'],
-            logMsg = content['logMsg']
+            ident=header['ident'],
+            logId=header['logId'],
+            logMsg=content['logMsg']
         )
 
     def getIdent(self) -> str:
@@ -733,26 +788,27 @@ class LogLetter(Letter):
     def getLogMsg(self) -> str:
         return self.getContent('logMsg')
 
+
 class LogRegLetter(Letter):
 
-    def __init__(self, ident: str, logId: str) -> None:
+    def __init__(self, ident:  str, logId:  str) -> None:
         Letter.__init__(
             self,
             Letter.LogRegister,
-            {"ident": ident, "logId": logId},
+            {"ident":  ident, "logId":  logId},
             {}
         )
 
     @staticmethod
-    def parse(s: bytes) -> Optional['LogRegLetter']:
+    def parse(s:  bytes) -> Optional['LogRegLetter']:
         (type_, header, content) = bytesDivide(s)
 
-        if  type_ != Letter.LogRegister:
+        if type_ != Letter.LogRegister:
             return None
 
         return LogRegLetter(
-            ident = header['ident'],
-            logId = header['logId']
+            ident=header['ident'],
+            logId=header['logId']
         )
 
     def getIdent(self) -> str:
@@ -761,16 +817,17 @@ class LogRegLetter(Letter):
     def getLogId(self) -> str:
         return self.getHeader('logId')
 
+
 class ReqLetter(Letter):
     """
     Letter that send from workers to master to
     request something.
     """
 
-    def __init__(self, ident:str, type:str, reqMsg:str) -> None:
+    def __init__(self, ident: str, type: str, reqMsg: str) -> None:
         Letter.__init__(self, Letter.Req,
-                        {"ident":ident, "type":type},
-                        {"reqMsg":reqMsg})
+                        {"ident": ident, "type": type},
+                        {"reqMsg": reqMsg})
 
     def getIdent(self) -> str:
         return self.getHeader('ident')
@@ -778,17 +835,17 @@ class ReqLetter(Letter):
     def getType(self) -> str:
         return self.getHeader('type')
 
-    def setType(self, type:str) -> None:
+    def setType(self, type: str) -> None:
         self.setHeader('type', type)
 
     def getMsg(self) -> str:
         return self.getContent('reqMsg')
 
-    def setMsg(self, msg:str) -> None:
+    def setMsg(self, msg: str) -> None:
         self.setContent('reqMsg', msg)
 
     @staticmethod
-    def parse(s:bytes) -> Optional['ReqLetter']:
+    def parse(s: bytes) -> Optional['ReqLetter']:
         (type_, header, content) = bytesDivide(s)
 
         if type_ != Letter.Req:
@@ -798,39 +855,38 @@ class ReqLetter(Letter):
 
 
 validityMethods = {
-    Letter.NewTask        : newTaskLetterValidity,
-    Letter.Response       : responseLetterValidity,
-    Letter.PropertyNotify : propertyLetterValidity,
-    Letter.BinaryFile     : binaryLetterValidity,
-    Letter.Log            : logLetterValidity,
-    Letter.LogRegister    : logRegisterLetterValidity,
-    Letter.NewMenu        : lambda letter:  True,
-    Letter.Command        : lambda letter:  True,
-    Letter.CmdResponse    : lambda letter:  True,
-    Letter.Post           : lambda letter:  True,
-    Letter.TaskCancel     : lambda letter:  True,
-    Letter.Req            : lambda letter:  True
-} # type:  Dict[str, Callable]
+    Letter.NewTask        :  newTaskLetterValidity,
+    Letter.Response       :  responseLetterValidity,
+    Letter.PropertyNotify :  propertyLetterValidity,
+    Letter.BinaryFile     :  binaryLetterValidity,
+    Letter.Log            :  logLetterValidity,
+    Letter.LogRegister    :  logRegisterLetterValidity,
+    Letter.NewMenu        :  lambda letter:   True,
+    Letter.Command        :  lambda letter:   True,
+    Letter.CmdResponse    :  lambda letter:   True,
+    Letter.Post           :  lambda letter:   True,
+    Letter.TaskCancel     :  lambda letter:   True,
+    Letter.Req            :  lambda letter:   True
+} # type:   Dict[str, Callable]
 
 parseMethods = {
-    Letter.NewTask        : NewLetter,
-    Letter.Response       : ResponseLetter,
-    Letter.PropertyNotify : PropLetter,
-    Letter.BinaryFile     : BinaryLetter,
-    Letter.Log            : LogLetter,
-    Letter.LogRegister    : LogRegLetter,
-    Letter.NewMenu        : MenuLetter,
-    Letter.Command        : CommandLetter,
-    Letter.CmdResponse    : CmdResponseLetter,
-    Letter.Post           : PostTaskLetter,
-    Letter.TaskCancel     : CancelLetter,
-    Letter.Req            : ReqLetter
-} # type:  Any
+    Letter.NewTask        :  NewLetter,
+    Letter.Response       :  ResponseLetter,
+    Letter.PropertyNotify :  PropLetter,
+    Letter.BinaryFile     :  BinaryLetter,
+    Letter.Log            :  LogLetter,
+    Letter.LogRegister    :  LogRegLetter,
+    Letter.NewMenu        :  MenuLetter,
+    Letter.Command        :  CommandLetter,
+    Letter.CmdResponse    :  CmdResponseLetter,
+    Letter.Post           :  PostTaskLetter,
+    Letter.TaskCancel     :  CancelLetter,
+    Letter.Req            :  ReqLetter
+} # type:   Any
 
-import socket
 
 # Function to receive a letter from a socket
-def receving(sock: socket.socket) -> Optional[Letter]:
+def receving(sock:  socket.socket) -> Optional[Letter]:
     content = b''
     remain = 2
 
@@ -856,7 +912,8 @@ def receving(sock: socket.socket) -> Optional[Letter]:
 
     return Letter.parse(content)
 
-def sending(sock: socket.socket, l:Letter) -> None:
+
+def sending(sock:  socket.socket, l: Letter) -> None:
     jBytes = l.toBytesWithLength()
     totalSent = 0
     length = len(jBytes)

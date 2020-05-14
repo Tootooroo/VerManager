@@ -9,31 +9,29 @@ from datetime import datetime
 from threading import Lock
 
 from manager.basic.observer import Subject, Observer
-from manager.basic.type import *
+from manager.basic.type import State, Error, Ok
 from manager.master.worker import Worker, WorkerInitFailed
 
 from manager.basic.mmanager import ModuleDaemon
 
 from queue import Queue, Empty
 
-from manager.basic.util import spawnThread, map_strict
+from manager.basic.util import spawnThread
 
-from manager.basic.letter import Letter
 from manager.basic.commands import Command, LisAddrUpdateCmd
 from manager.master.task import Task
 
 from manager.master.postElectProtos import RandomElectProtocol
-from manager.master.postElection import PostManager, PostElectProtocol, Role_Listener, Role_Provider
+from manager.master.postElection import PostManager
 
 from manager.basic.letter import CmdResponseLetter
 
-from typing import *
+from typing import Tuple, Callable, Any, List, Dict, Optional
 
 from manager.basic.info import M_NAME as INFO_M_NAME
-from manager.master.logger import M_NAME as LOGGER_M_NAME
 
 from manager.basic.commands import AcceptCommand, AcceptRstCommand, \
-    LisAddrUpdateCmd, LisLostCommand
+    LisLostCommand
 
 M_NAME = "WorkerRoom"
 
@@ -44,6 +42,7 @@ filterFunc = Callable[[List[Worker]], List[Worker]]
 
 # Constant
 wrLog = "wrLog"
+
 
 class WorkerRoom(ModuleDaemon, Subject, Observer):
 
@@ -58,7 +57,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     EVENT_DISCONNECTED = 1
     EVENT_WAITING = 2
 
-    def __init__(self, host:str, port:int, sInst:Any) -> None:
+    def __init__(self, host: str, port: int, sInst: Any) -> None:
         global M_NAME
 
         # Module init
@@ -95,7 +94,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         self._workers_waiting = {}  # type: Dict[str, Worker]
         self.numOfWorkers = 0
 
-        self._eventQueue = Queue(256) # type: Queue
+        self._eventQueue = Queue(256)  # type: Queue
 
         self._lisAddr = ("", 0)
 
@@ -113,7 +112,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self._lastChangedPoint = datetime.utcnow()
 
-        self._lastCandidates = [] # type: List[str]
+        self._lastCandidates = []  # type: List[str]
 
     def begin(self) -> None:
         return None
@@ -121,13 +120,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def cleanup(self) -> None:
         return None
 
-    def sockSetup(self, sock:socket.socket) -> None:
+    def sockSetup(self, sock: socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
 
-    def _WR_LOG(self, msg:str) -> None:
+    def _WR_LOG(self, msg: str) -> None:
         self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
     def run(self) -> None:
@@ -136,11 +135,12 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         self.sock.listen(5)
 
         # Spawn a thread which respond to worker maintain
-        maintainer = spawnThread(lambda wr: wr.maintain(), self)
+        spawnThread(lambda wr: wr.maintain(), self)
 
         while True:
             (workersocket, address) = self.sock.accept()
-            self._WR_LOG("A new connection(" + str(address) + ") has been accepted")
+            self._WR_LOG("A new connection(" + str(address)
+                         + ") has been accepted")
 
             self.sockSetup(workersocket)
             self._WR_LOG("Socket options set up")
@@ -160,7 +160,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             if self.isExists(ident):
                 workersocket.close()
-                self._WR_LOG("Worker " + ident + " is already exist in WorkerRoom")
+                self._WR_LOG("Worker " + ident +
+                             " is already exist in WorkerRoom")
                 continue
 
             with self.syncLock:
@@ -173,17 +174,18 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     workerInWait.sockSet(acceptedWorker.sockGet())
 
                     arrived_addr, arrived_port = acceptedWorker.getAddress()
-                    old_addr, old_port         = workerInWait.getAddress()
+                    old_addr, old_port = workerInWait.getAddress()
 
                     # Note: Need to setup worker's status before listener
-                    #       address update otherwise listener itself will unable
+                    #       address update otherwise
+                    #       listener itself will unable
                     #       to know address changed.
                     workerInWait.setAddress((arrived_addr, arrived_port))
                     workerInWait.setState(Worker.STATE_ONLINE)
 
                     # Move worker from waiting to online list.
                     self.addWorker(workerInWait)
-                    del self._workers_waiting [ident]
+                    del self._workers_waiting[ident]
 
                     if self._pManager.isListener(workerInWait.getIdent()):
                         if arrived_addr != old_addr:
@@ -202,13 +204,14 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     # so it able to transfer message.
                     workerInWait.control(AcceptCommand())
 
-                    if workerInWait.role == None:
+                    if workerInWait.role is None:
                         self._pManager.addCandidate(workerInWait)
 
                     self._WR_LOG("Worker " + ident + " is reconnect")
                     continue
 
-                # Need to reset the accepted worker before it transfer any messages.
+                # Need to reset the accepted worker
+                # before it transfer any messages.
                 acceptedWorker.control(AcceptRstCommand())
 
                 self.addWorker(acceptedWorker)
@@ -220,13 +223,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         diff = (datetime.utcnow() - self._lastChangedPoint).seconds
         return diff >= self._stableThres
 
-    def setStableThres(self, thres:int) -> None:
+    def setStableThres(self, thres: int) -> None:
         self._stableThres = thres
 
     def _changePoint(self) -> None:
         self._lastChangedPoint = datetime.utcnow()
 
-    def msgToPostManager(self, l:CmdResponseLetter) -> None:
+    def msgToPostManager(self, l: CmdResponseLetter) -> None:
         self._pManager.proto_msg_transfer(l)
 
     def postRelations(self) -> Tuple[str, List[str]]:
@@ -235,7 +238,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def postListener(self) -> Optional[Worker]:
         return self._pManager.getListener()
 
-    def getTaskOfWorker(self, wId:str, tid:str) -> Optional[Task]:
+    def getTaskOfWorker(self, wId: str, tid: str) -> Optional[Task]:
         worker = self.getWorker(wId)
         if worker is None:
             return None
@@ -244,13 +247,12 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         return task
 
-    def removeTaskFromWorker(self, wId:str, tid:str) -> None:
+    def removeTaskFromWorker(self, wId: str, tid: str) -> None:
         worker = self.getWorker(wId)
         if worker is None:
             return None
         else:
             worker.removeTask(tid)
-
 
     # while eventlistener notify that a worker is disconnected
     # just change it's state into waiting wait <waiting_interval>
@@ -280,7 +282,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             return None
 
         # Init postManager
-        if self._isPManager_init == False:
+        if self._isPManager_init is False:
             self._pManager.proto_init()
             self._isPManager_init = True
         else:
@@ -314,7 +316,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 worker.setState(Worker.STATE_WAITING)
                 self.removeWorker(ident)
 
-                if worker.role == None:
+                if worker.role is None:
                     # Worker is a candidate
                     self._pManager.removeCandidate(ident)
 
@@ -328,16 +330,22 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         if len(workers) == 0:
             return None
 
-        outOfTime = list(filter(lambda w: w.waitCounter() > self._WAITING_INTERVAL, workers_list))
+        outOfTime = list(
+            filter(
+                lambda w: w.waitCounter() > self._WAITING_INTERVAL,
+                workers_list
+            )
+        )
 
         with self.syncLock:
             for worker in outOfTime:
                 ident = worker.getIdent()
                 self._WR_LOG("Worker " + ident +
-                            " is dissconnected for a long time will be removed")
+                             " is dissconnected for a \
+                             long time will be removed")
                 worker.setState(Worker.STATE_OFFLINE)
 
-                if worker.role == None:
+                if worker.role is None:
                     # Worker is a candidate
                     self._pManager.removeCandidate(ident)
                 else:
@@ -355,7 +363,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     self._pManager.removeProvider(ident)
 
                 self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
-                del self._workers_waiting [ident]
+                del self._workers_waiting[ident]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
@@ -374,7 +382,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def getWorker(self, ident: str) -> Optional[Worker]:
         with self.lock:
-            if not ident in self._workers:
+            if ident not in self._workers:
                 return None
 
             return self._workers[ident]
@@ -411,11 +419,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def getNumOfWorkersInWait(self) -> int:
         return len(self._workers_waiting)
 
-    def broadcast(self, command:Command) -> None:
+    def broadcast(self, command: Command) -> None:
         for w in self._workers.values():
             w.control(command)
 
-    def control(self, ident:str, command:Command) -> State:
+    def control(self, ident: str, command: Command) -> State:
         try:
             self._workers[ident].control(command)
         except KeyError:
@@ -425,7 +433,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         return Ok
 
-    def do(self, ident:str, t:Task) -> State:
+    def do(self, ident: str, t: Task) -> State:
         try:
             self._workers[ident].do(t)
         except KeyError:
@@ -437,10 +445,10 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def removeWorker(self, ident: str) -> State:
         with self.lock:
-            if not ident in self._workers:
+            if ident not in self._workers:
                 return Error
 
-            del self._workers [ident]
+            del self._workers[ident]
             self.numOfWorkers -= 1
             self._changePoint()
 
@@ -453,8 +461,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     # Content of dictionary:
     # { PropertyName:PropertyValue }
-    # e.g { "max":0, "sock":ref, "processing":0, "inProcTask":ref, "ident":name }
-    def statusOfWorker(self, ident:str) -> Dict:
+    # e.g { "max":0, "sock":ref, "processing":0,
+    #       "inProcTask":ref, "ident":name }
+    def statusOfWorker(self, ident: str) -> Dict:
         worker = self.getWorker(ident)
 
         if worker is None:

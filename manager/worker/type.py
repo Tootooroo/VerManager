@@ -1,7 +1,8 @@
 # type.py
 
-
 SEND_STATE = int
+
+
 class SEND_STATES:
 
     NO_DATA = 0

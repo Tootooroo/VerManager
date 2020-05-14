@@ -6,7 +6,7 @@
 import time
 import traceback
 
-from typing import *
+from typing import Any, List, Optional, Callable, Dict
 from functools import reduce
 from datetime import datetime
 
@@ -15,23 +15,23 @@ from manager.basic.observer import Subject, Observer
 from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.master.postElection import Role_Listener, Role_Provider
+from manager.master.postElection import Role_Listener
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
-from manager.basic.type import *
-from manager.master.task import TaskState, Task, SuperTask, SingleTask, \
-    PostTask, TaskType, TASK_FORMAT_ERROR
-from manager.basic.type import *
+from manager.basic.type import Error
+from manager.master.task import Task, SuperTask, SingleTask, \
+    PostTask, TASK_FORMAT_ERROR
 from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.commands import ReWorkCommand
 
 M_NAME = "Dispatcher"
 
+
 class Dispatcher(ModuleDaemon, Subject, Observer):
 
     NOTIFY_LOG = "log"
 
-    def __init__(self, workerRoom:WorkerRoom, inst:Any) -> None:
+    def __init__(self, workerRoom: WorkerRoom, inst: Any) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
@@ -44,14 +44,16 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         self._sInst = inst
 
         # A queue contain a collection of tasks
-        self.taskWait = [] # type: List[Task]
+        self.taskWait = []  # type: List[Task]
 
         # An Event to indicate that there is some task in taskWait queue
         self.taskEvent = Event()
 
         self.dispatchLock = Lock()
 
-        taskTracker = inst.getModule(TRACKER_M_NAME) # type: Optional[TaskTracker]
+        taskTracker = inst.getModule(TRACKER_M_NAME) \
+            # type: Optional[TaskTracker]
+
         assert(taskTracker is not None)
         self._taskTracker = taskTracker
 
@@ -68,7 +70,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def cleanup(self) -> None:
         return None
 
-    def _dispatch_logging(self, msg:str) -> None:
+    def _dispatch_logging(self, msg: str) -> None:
         self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
 
     # Dispatch a task to a worker of
@@ -91,7 +93,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         # if found then assign task to the worker
         # and _tasks otherwise append to taskWait
         cond = viaOverhead
-        workers = [] # type: List[Worker]
+        workers = []  # type: List[Worker]
 
         if isinstance(task, PostTask):
             cond = theListener
@@ -101,17 +103,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         # No workers satisfiy the condition.
         if workers == []:
             self._dispatch_logging("Task " + task.id() +
-                                    " dispatch failed: No available worker")
+                                   " dispatch failed: No available worker")
             return False
 
         try:
             worker = workers[0]
             worker.do(task)
             self._taskTracker.onWorker(task.id(), worker)
-        except:
+        except Exception:
             self._dispatch_logging("Task " + task.id() +
-                                    " dispatch failed: Worker is\
-                                      unable to do the task.")
+                                   " dispatch failed: Worker is\
+                                   unable to do the task.")
             return False
 
         return True
@@ -156,7 +158,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         self._taskTracker.track(task)
 
         with self.dispatchLock:
-            if self._dispatch(task) == False:
+            if self._dispatch(task) is False:
                 # fixme: Queue may full while inserting
                 self.taskWait.insert(0, task)
                 self.taskEvent.set()
@@ -184,7 +186,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return True
 
-    def _bind(self, task:Task) -> Task:
+    def _bind(self, task: Task) -> Task:
         if not task.isBindWithBuild():
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
@@ -194,30 +196,27 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 build = Build(task.vsn ,info.getConfig("Build"))
                 if isinstance(build, Build):
                     task.setBuild(build)
-            except:
+            except Exception:
                 pass
 
             try:
                 buildSet = BuildSet(info.getConfig("BuildSet"))
                 if isinstance(buildSet, BuildSet):
                     task.setBuild(buildSet)
-            except:
+            except Exception:
                 pass
 
             try:
                 task = task.transform()
             except TASK_FORMAT_ERROR:
                 raise TASK_FORMAT_ERROR
-            except:
+            except Exception:
                 traceback.print_exc()
 
         return task
 
-
     # Dispatcher thread is response to assign task in queue which name is taskWait
     def run(self) -> None:
-        counter = 0
-
         last_aging = datetime.utcnow()
         needAging = lambda now, last: (now - last).seconds > 1
 
@@ -233,9 +232,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             # Is there any task in taskWait queue
             # fixme: need to setup a timeout value
-            isArrived = self.taskEvent.wait(2)
+            self.taskEvent.wait(2)
 
-            self._dispatch_logging("InQueue:" + str([t.id() for t in self.taskWait]))
+            self._dispatch_logging("InQueue:" +
+                                   str([t.id() for t in self.taskWait]))
 
             if len(self.taskWait) == 0:
                 self._dispatch_logging("TaskWait Queue is empty.")
@@ -273,11 +273,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 with self.dispatchLock:
                     if self._dispatch(task) is False:
                         self._dispatch_logging("Dispatch task " + task.id() +
-                                                " failed. append to tail of queue")
+                                               " failed. append to tail of queue")
                         self.taskWait.insert(0, task)
 
                         time.sleep(1)
-
 
     def _taskAging(self) -> None:
         tasks = self._taskTracker.tasks()
@@ -285,8 +284,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         current = datetime.utcnow()
         cond_is_timeout = lambda t: (current - t.last()).seconds > 10
 
-        # For a task that refs reduce to 0 do aging instance otherwise wait 1 min
-        tasks_outdated = [t for t in tasks if t.refs == 0 or cond_is_timeout(t)]
+        # For a task that refs reduce
+        # to 0 do aging instance otherwise wait 1 min
+        tasks_outdated = [t for t in tasks
+                          if t.refs == 0 or cond_is_timeout(t)]
 
         idents_outdated = [t.id() for t in tasks_outdated]
         self._dispatch_logging("Outdate tasks:" + str(idents_outdated))
@@ -305,7 +306,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 # their counter is out of date.
                 if t.isProc() or t.isPrepare():
                     self._dispatch_logging(
-                        "Task " + ident + " is in processing/Prepare. Abort to remove")
+                        "Task " + ident +
+                        " is in processing/Prepare. Abort to remove")
                     continue
                 else:
                     # Need to check that is this task dependen on another task
@@ -314,11 +316,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     for dep in deps:
 
                         isPrepare = dep.taskState() == Task.STATE_PREPARE
-                        isInProc  = dep.taskState == Task.STATE_IN_PROC
+                        isInProc = dep.taskState == Task.STATE_IN_PROC
 
                         if isPrepare or isInProc:
                             self._dispatch_logging(
-                                "Task " + ident + " is remain cause it depend on another tasks"
+                                "Task " + ident +
+                                " is remain cause it depend on another tasks"
                             )
                             continue
 
@@ -369,7 +372,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def removeTask(self, taskId: str) -> None:
         self._taskTracker.untrack(taskId)
 
-    def getTask(self, taskId:str) -> Optional[Task]:
+    def getTask(self, taskId: str) -> Optional[Task]:
         return self._taskTracker.getTask(taskId)
 
     def getTaskInWaits(self) -> List[Task]:
@@ -418,16 +421,20 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return state(task)
 
     def isTaskPrepare(self, taskId: str) -> bool:
-        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_PREPARE)
+        return self._isTask(taskId, lambda t: t.taskState()
+                            == Task.STATE_PREPARE)
 
     def isTaskInProc(self, taskId: str) -> bool:
-        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_IN_PROC)
+        return self._isTask(taskId, lambda t: t.taskState()
+                            == Task.STATE_IN_PROC)
 
     def isTaskFailure(self, taskId: str) -> bool:
-        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_FAILURE)
+        return self._isTask(taskId, lambda t: t.taskState()
+                            == Task.STATE_FAILURE)
 
     def isTaskFinished(self, taskId: str) -> bool:
-        return self._isTask(taskId, lambda t: t.taskState() == Task.STATE_FINISHED)
+        return self._isTask(taskId, lambda t: t.taskState()
+                            == Task.STATE_FINISHED)
 
     def taskLastUpdate(self, taskId: str) -> None:
         if not self._taskTracker.isInTrack(taskId):
@@ -445,7 +452,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             for child in children:
                 child.lastUpdate()
 
-    def workerLost_redispatch(self, worker:Worker) -> None:
+    def workerLost_redispatch(self, worker: Worker) -> None:
 
         tasks = worker.inProcTasks()
 
@@ -476,7 +483,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 Second: Redispatch tasks that is
                         already done by listener
                 """
-                tasksOnLost = self._taskTracker.tasksOfWorker(worker.getIdent())
+                tasksOnLost = self._taskTracker.\
+                    tasksOfWorker(worker.getIdent())
 
                 # Find tasks that is done and depended by this task.
                 doneTasks = [task for task in tasksOnLost
@@ -489,14 +497,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 Third: Send RE_WORK command to workers that dealing
                        dependence of this task.
                 """
-                pairs = [(self._taskTracker.whichWorker(dep.id()), dep.id()) for dep in deps]
+                pairs = [(self._taskTracker.whichWorker(dep.id()), dep.id())
+                         for dep in deps]
 
-                workers = {w.getIdent():w for w, t_id in pairs if w is not None}
+                workers = {w.getIdent(): w for w, t_id in pairs
+                           if w is not None}
 
                 d = {} # type: Dict[str, List[str]]
 
                 for p in pairs:
-                    if p[0] is None: continue
+                    if p[0] is None:
+                        continue
 
                     w_id = p[0].getIdent()
 
@@ -526,17 +537,20 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
     if onlineWorkers == []:
         return []
 
-    # Find out the worker with lowest overhead on a collection of online acceptable workers
+    # Find out the worker with lowest overhead on a
+    # collection of online acceptable workers
     f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
     theWorker = reduce(f, onlineWorkers)
 
     return [theWorker]
+
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     f_online_acceptable = lambda w: w.isOnline() and \
         w.isAbleToAccept() and w.role is not None
 
     return list(filter(lambda w: f_online_acceptable(w), workers))
+
 
 def theListener(workers: List[Worker]) -> List[Worker]:
     return list(filter(lambda w: w.role == Role_Listener, workers))

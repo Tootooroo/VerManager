@@ -8,6 +8,7 @@ from manager.basic.mmanager import Module
 
 M_NAME = "TrackUnit"
 
+
 class TrackUnit:
     """
     TrackUnit is a box to hold reference to Object of Task and
@@ -18,9 +19,9 @@ class TrackUnit:
 
     """
 
-    def __init__(self, t:Task, w:Optional[Worker] = None) -> None:
+    def __init__(self, t: Task, w: Optional[Worker] = None) -> None:
         self._task = t
-        self._worker = w # type: Optional[Worker]
+        self._worker = w  # type: Optional[Worker]
 
     def onWhichWorker(self) -> Optional[Worker]:
         return self._worker
@@ -28,7 +29,7 @@ class TrackUnit:
     def taskStatus(self) -> TaskType:
         return self._task.taskState()
 
-    def setWorker(self, w:Optional[Worker]) -> None:
+    def setWorker(self, w: Optional[Worker]) -> None:
         self._worker = w
 
     def getTask(self) -> Task:
@@ -51,7 +52,7 @@ class TaskTracker(Module):
         global M_NAME
 
         Module.__init__(self, M_NAME)
-        self._tasks = {} # type: Dict[str, TrackUnit]
+        self._tasks = {}  # type: Dict[str, TrackUnit]
 
     def begin(self) -> None:
         return None
@@ -59,29 +60,29 @@ class TaskTracker(Module):
     def cleanup(self) -> None:
         return None
 
-    def track(self, t:Task) -> None:
+    def track(self, t: Task) -> None:
         self._tasks[t.id()] = TrackUnit(t)
 
     def isInTrack(self, t_name) -> bool:
         return t_name in self._tasks
 
-    def untrack(self, t_name:str) -> None:
+    def untrack(self, t_name: str) -> None:
         if t_name not in self._tasks:
             return None
-        del self._tasks [t_name]
+        del self._tasks[t_name]
 
-    def getTask(self, t_name:str) -> Optional[Task]:
+    def getTask(self, t_name: str) -> Optional[Task]:
         if t_name not in self._tasks:
             return None
         return self._tasks[t_name].getTask()
 
-    def onWorker(self, t_name:str, worker:Optional[Worker]) -> None:
+    def onWorker(self, t_name: str, worker: Optional[Worker]) -> None:
         if t_name not in self._tasks:
             return None
 
         self._tasks[t_name].setWorker(worker)
 
-    def tasksOfWorker(self, w_name:str) -> List[Task]:
+    def tasksOfWorker(self, w_name: str) -> List[Task]:
         def p(unit):
             w = unit.onWhichWorker()
             if w is not None:
@@ -91,7 +92,7 @@ class TaskTracker(Module):
 
         return [unit.getTask() for unit in self._tasks.values() if p(unit)]
 
-    def whichWorker(self, t_name:str) -> Optional[Worker]:
+    def whichWorker(self, t_name: str) -> Optional[Worker]:
         if t_name not in self._tasks:
             return None
         return self._tasks[t_name].onWhichWorker()

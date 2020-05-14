@@ -6,6 +6,7 @@ from ..basic.util import pathSeperator
 from typing import Optional, Any, BinaryIO
 from multiprocessing.pool import AsyncResult
 
+
 class Task:
 
     """
@@ -19,18 +20,20 @@ class Task:
     STATE_TRANSFER = 2
     STATE_DONE = 3
 
-    def __init__(self, tid:str, ver:str, result:AsyncResult, filePath:str) -> None:
+    def __init__(self, tid: str, ver: str,
+                 result: AsyncResult, filePath: str) -> None:
+
         self._tid = tid
         self._asyncResult = result
         self._ver = ver
 
         self.outputFileName = filePath.split(pathSeperator())[-1]
         self.path = filePath
-        self.res = None # type: Optional[Any]
+        self.res = None  # type: Optional[Any]
 
         self._state = Task.STATE_PENDING
 
-        self._fileDesc = None # type: Optional[BinaryIO]
+        self._fileDesc = None  # type: Optional[BinaryIO]
 
     def file(self) -> Optional[BinaryIO]:
         if not os.path.exists(self.path):

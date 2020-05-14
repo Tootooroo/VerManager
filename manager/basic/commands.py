@@ -1,14 +1,17 @@
 # commands.py
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from .letter import Letter, CommandLetter, Optional
 from typing import Dict, Tuple, List
+
 
 class toLetter_need_implemented(Exception):
     pass
 
+
 class fromLetter_need_implemented(Exception):
     pass
+
 
 # Command subType definitions
 CMD_POST_TYPE = "post"
@@ -19,9 +22,11 @@ CMD_REWORK_TASK = "REWORK"
 CMD_CLEAN = "CLEAN"
 CMD_LIS_LOST = "LISLOST"
 
+
 class Command:
 
-    def __init__(self, type:str, target:str = "", content:Dict = {}) -> None:
+    def __init__(self, type: str, target: str = "",
+                 content: Dict = {}) -> None:
         self.type = type
         self.content = content
         self.target = target
@@ -31,7 +36,7 @@ class Command:
         """ Transfer Command to Letter """
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['Command']:
+    def fromLetter(l: CommandLetter) -> Optional['Command']:
         """ Transfer from CommandLetter to Command """
 
 
@@ -40,11 +45,11 @@ class PostConfigCmd(Command):
     ROLE_LISTENER = "L"
     ROLE_PROVIDER = "P"
 
-    def __init__(self, address:str, port:int, role:str) -> None:
+    def __init__(self, address: str, port: int, role: str) -> None:
         global CMD_CONFIG_TYPE, CMD_POST_SUBTYPE
 
-        content = {'address':address, 'port':str(port), 'role':role}
-        Command.__init__(self, CMD_POST_TYPE, content = content)
+        content = {'address': address, 'port': str(port), 'role': role}
+        Command.__init__(self, CMD_POST_TYPE, content=content)
 
     def address(self) -> Tuple[str, int]:
         address = self.content['address']
@@ -56,12 +61,12 @@ class PostConfigCmd(Command):
         return self.content['role']
 
     def toLetter(self) -> CommandLetter:
-        cmdLetter = CommandLetter(self.type, content = self.content)
+        cmdLetter = CommandLetter(self.type, content=self.content)
 
         return cmdLetter
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['PostConfigCmd']:
+    def fromLetter(l: CommandLetter) -> Optional['PostConfigCmd']:
 
         if not isinstance(l, CommandLetter):
             return None
@@ -70,48 +75,50 @@ class PostConfigCmd(Command):
         port = int(l.getContent('port'))
         role = l.getContent('role')
 
-
         return PostConfigCmd(address, port, role)
+
 
 class AcceptCommand(Command):
 
     def __init__(self) -> None:
-        Command.__init__(self, CMD_ACCEPT, content = {})
+        Command.__init__(self, CMD_ACCEPT, content={})
 
     def toLetter(self) -> CommandLetter:
-        cmdLetter = CommandLetter(self.type, content = self.content)
+        cmdLetter = CommandLetter(self.type, content=self.content)
         return cmdLetter
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['AcceptCommand']:
+    def fromLetter(l: CommandLetter) -> Optional['AcceptCommand']:
 
         if not isinstance(l, CommandLetter):
             return None
 
         return AcceptCommand()
 
+
 class AcceptRstCommand(Command):
 
     def __init__(self) -> None:
-        Command.__init__(self, CMD_ACCEPT_RST, content= {})
+        Command.__init__(self, CMD_ACCEPT_RST, content={})
 
     def toLetter(self) -> CommandLetter:
-        cmdLetter = CommandLetter(self.type, content = self.content)
+        cmdLetter = CommandLetter(self.type, content=self.content)
         return cmdLetter
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['AcceptRstCommand']:
+    def fromLetter(l: CommandLetter) -> Optional['AcceptRstCommand']:
 
         if not isinstance(l, CommandLetter):
             return None
 
         return AcceptRstCommand()
 
+
 class LisAddrUpdateCmd(Command):
 
-    def __init__(self, address:str, port:int) -> None:
-        content = {"address":address, "port":port}
-        Command.__init__(self, CMD_LIS_ADDR_UPDATE, content = content)
+    def __init__(self, address: str, port: int) -> None:
+        content = {"address": address, "port": port}
+        Command.__init__(self, CMD_LIS_ADDR_UPDATE, content=content)
 
         self._address = address
         self._port = port
@@ -123,24 +130,26 @@ class LisAddrUpdateCmd(Command):
         return self._port
 
     def toLetter(self) -> CommandLetter:
-        cmdLetter = CommandLetter(self.type, content = self.content)
+        cmdLetter = CommandLetter(self.type, content=self.content)
         return cmdLetter
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['LisAddrUpdateCmd']:
+    def fromLetter(l: CommandLetter) -> Optional['LisAddrUpdateCmd']:
         if not isinstance(l, CommandLetter):
             return None
 
-        return LisAddrUpdateCmd(l.getContent('address'), int(l.getContent('port')))
+        return LisAddrUpdateCmd(l.getContent('address'),
+                                int(l.getContent('port')))
+
 
 class ReWorkCommand(Command):
     """
     Command to tell to worker that a task need to redo.
     """
 
-    def __init__(self, tids:List[str]) -> None:
-        content = {"tids":tids}
-        Command.__init__(self, CMD_REWORK_TASK, content = content)
+    def __init__(self, tids: List[str]) -> None:
+        content = {"tids": tids}
+        Command.__init__(self, CMD_REWORK_TASK, content=content)
 
         self._tids = tids
 
@@ -148,10 +157,10 @@ class ReWorkCommand(Command):
         return self._tids
 
     def toLetter(self) -> CommandLetter:
-        return CommandLetter(self.type, content = self.content)
+        return CommandLetter(self.type, content=self.content)
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['ReWorkCommand']:
+    def fromLetter(l: CommandLetter) -> Optional['ReWorkCommand']:
 
         if not isinstance(l, CommandLetter):
             return None
@@ -169,9 +178,9 @@ class CleanCommand(Command):
     process of task on worker.
     """
 
-    def __init__(self, tid: str) -> None:
-        content = {"tid":tid}
-        Command.__init__(self, CMD_CLEAN, content = content)
+    def __init__(self, tid:  str) -> None:
+        content = {"tid": tid}
+        Command.__init__(self, CMD_CLEAN, content=content)
 
         self._tid = tid
 
@@ -179,10 +188,10 @@ class CleanCommand(Command):
         return self._tid
 
     def toLetter(self) -> CommandLetter:
-        return CommandLetter(self.type, content = self.content)
+        return CommandLetter(self.type, content=self.content)
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['CleanCommand']:
+    def fromLetter(l: CommandLetter) -> Optional['CleanCommand']:
 
         if not isinstance(l, CommandLetter):
             return None
@@ -193,6 +202,7 @@ class CleanCommand(Command):
 
         return CleanCommand(tid)
 
+
 class LisLostCommand(Command):
     """
     Command to notify to worker the listener is lost.
@@ -201,13 +211,13 @@ class LisLostCommand(Command):
     """
 
     def __init__(self) -> None:
-        Command.__init__(self, CMD_LIS_LOST, content = {})
+        Command.__init__(self, CMD_LIS_LOST, content={})
 
     def toLetter(self) -> CommandLetter:
-        return CommandLetter(self.type, content = {})
+        return CommandLetter(self.type, content={})
 
     @staticmethod
-    def fromLetter(l:CommandLetter) -> Optional['LisLostCommand']:
+    def fromLetter(l: CommandLetter) -> Optional['LisLostCommand']:
 
         if not isinstance(l, CommandLetter):
             return None

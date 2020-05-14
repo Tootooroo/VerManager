@@ -1,12 +1,10 @@
 # postelection.py
 
-from functools import reduce
 from queue import Queue, Empty as QUEUE_EMPTY
 
 from threading import Lock
 from manager.basic.util import partition
 from manager.basic.letter import CmdResponseLetter
-from manager.basic.commands import PostConfigCmd
 from manager.basic.type import Ok, Error, State
 from manager.master.worker import Worker
 from typing import List, Dict, Optional, Callable, \
@@ -18,9 +16,10 @@ ElectProtocolRtn = Callable[['ElectGroup', Any], None]
 Role_Listener = 0  # type: PostRole
 Role_Provider = 1  # type: PostRole
 
+
 class ElectGroup_iter(Iterator):
 
-    def __init__(self, iter:Iterator, dict:Dict) -> None:
+    def __init__(self, iter: Iterator, dict: Dict) -> None:
         self._iter = iter
         self._dict = dict
 
@@ -28,9 +27,10 @@ class ElectGroup_iter(Iterator):
         ident = self._iter.__next__()
         return self._dict[ident]
 
+
 class ElectGroup:
 
-    def __init__(self, workers:List[Worker] = []) -> None:
+    def __init__(self, workers: List[Worker] = []) -> None:
         self._listener = None  # type: Optional[Worker]
         self._providers = {}  # type: Dict[str, Worker]
 
@@ -54,7 +54,7 @@ class ElectGroup:
     def numOfCandidates(self) -> int:
         return len(self._candidate)
 
-    def setListener(self, lis:Optional[Worker]) -> None:
+    def setListener(self, lis: Optional[Worker]) -> None:
         if lis is not None:
             lis.role = Role_Listener
         self._listener = lis
@@ -67,19 +67,19 @@ class ElectGroup:
             return False
         return ident == self._listener.getIdent()
 
-    def removeProvider(self, ident:str) -> State:
+    def removeProvider(self, ident: str) -> State:
         if ident not in self._providers:
             return Error
-        del self._providers [ident]
+        del self._providers[ident]
         return Ok
 
-    def addProvider(self, w:Worker) -> State:
+    def addProvider(self, w: Worker) -> State:
         ident = w.getIdent()
 
         if ident in self._providers:
             return Error
 
-        if w.role == None:
+        if w.role is None:
             w.role = Role_Provider
 
         self._providers[ident] = w
@@ -88,13 +88,13 @@ class ElectGroup:
     def getProviders(self) -> List[Worker]:
         return list(self._providers.values())
 
-    def getProvider(self, ident:str) -> Optional[Worker]:
+    def getProvider(self, ident: str) -> Optional[Worker]:
         if ident not in self._providers:
             return None
 
         return self._providers[ident]
 
-    def addCandidate(self, w:Worker) -> State:
+    def addCandidate(self, w: Worker) -> State:
         with self._lock_c:
             if w in self._candidate:
                 return Error
@@ -104,9 +104,10 @@ class ElectGroup:
 
         return Ok
 
-    def removeCandidate(self, ident:str) -> Optional[Worker]:
+    def removeCandidate(self, ident: str) -> Optional[Worker]:
         with self._lock_c:
-            beRemoved, remain = partition(self._candidate, lambda c: c.getIdent() == ident)
+            beRemoved, remain = partition(self._candidate,
+                                          lambda c: c.getIdent() == ident)
 
             if beRemoved == []:
                 return None
@@ -114,7 +115,7 @@ class ElectGroup:
                 self._candidate = remain
                 return beRemoved[0]
 
-    def removeCandidate_(self, w:Worker) -> State:
+    def removeCandidate_(self, w: Worker) -> State:
         with self._lock_c:
             if w not in self._candidate:
                 return Error
@@ -131,7 +132,7 @@ class ElectGroup:
             for c in self._candidate:
                 self._candidate.remove(c)
 
-    def getCandidate(self, ident:str) -> Optional[Worker]:
+    def getCandidate(self, ident: str) -> Optional[Worker]:
         with self._lock_c:
             for candidate in self._candidate:
                 if candidate.getIdent() == ident:
@@ -142,17 +143,18 @@ class ElectGroup:
     def candidates(self) -> List[Worker]:
         return self._candidate
 
-    def isExists(self, ident:str) -> bool:
+    def isExists(self, ident: str) -> bool:
         return ident in self._providers
+
 
 class PostElectProtocol:
 
     def __init__(self) -> None:
         self.isInit = False
-        self.group = None # type: Optional[ElectGroup]
-        self.msgQueue = Queue(256) # type: Queue[CmdResponseLetter]
+        self.group = None  # type: Optional[ElectGroup]
+        self.msgQueue = Queue(256)  # type: Queue[CmdResponseLetter]
 
-    def setGroup(self, group:ElectGroup) -> None:
+    def setGroup(self, group: ElectGroup) -> None:
         self.group = group
 
     def step(self) -> State:
@@ -164,7 +166,7 @@ class PostElectProtocol:
     def terminate(self) -> State:
         raise Exception
 
-    def msgTransfer(self, l:CmdResponseLetter) -> None:
+    def msgTransfer(self, l: CmdResponseLetter) -> None:
         self.msgQueue.put(l)
 
     def waitMsg(self, timeout=None) -> Optional[CmdResponseLetter]:
@@ -195,7 +197,8 @@ class PostElectProtocol:
 
 class PostManager:
 
-    def __init__(self, workers:List[Worker], proto:PostElectProtocol) -> None:
+    def __init__(self, workers: List[Worker],
+                 proto: PostElectProtocol) -> None:
 
         self._eGroup = ElectGroup(workers)
         self._eProtocol = proto
@@ -205,25 +208,25 @@ class PostManager:
     def getListener(self) -> Optional[Worker]:
         return self._eGroup.getListener()
 
-    def setListener(self, lis:Optional[Worker]) -> None:
+    def setListener(self, lis: Optional[Worker]) -> None:
         self._eGroup.setListener(lis)
 
-    def isListener(self, ident:str) -> bool:
+    def isListener(self, ident: str) -> bool:
         return self._eGroup.isListener(ident)
 
-    def removeProvider(self, ident:str) -> State:
+    def removeProvider(self, ident: str) -> State:
         return self._eGroup.removeProvider(ident)
 
-    def addProvider(self, w:Worker) -> State:
+    def addProvider(self, w: Worker) -> State:
         return self._eGroup.addProvider(w)
 
-    def addCandidate(self, w:Worker) -> State:
+    def addCandidate(self, w: Worker) -> State:
         return self._eGroup.addCandidate(w)
 
-    def removeCandidate(self, ident:str) -> Optional[Worker]:
+    def removeCandidate(self, ident: str) -> Optional[Worker]:
         return self._eGroup.removeCandidate(ident)
 
-    def getCandidate(self, ident:str) -> Optional[Worker]:
+    def getCandidate(self, ident: str) -> Optional[Worker]:
         return self._eGroup.getCandidate(ident)
 
     def candidates(self) -> List[Worker]:
@@ -235,7 +238,7 @@ class PostManager:
     def proto_step(self) -> State:
         return self._eProtocol.step()
 
-    def proto_msg_transfer(self, l:CmdResponseLetter) -> None:
+    def proto_msg_transfer(self, l: CmdResponseLetter) -> None:
         self._eProtocol.msgTransfer(l)
 
     def proto_terminate(self) -> State:

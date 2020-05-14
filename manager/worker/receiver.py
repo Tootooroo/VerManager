@@ -16,18 +16,19 @@ import traceback
 
 M_NAME = "Recevier"
 
+
 class Receiver(ModuleDaemon):
 
-    def __init__(self, server:Server, info:Info, cInst:Any) -> None:
+    def __init__(self, server: Server, info: Info, cInst: Any) -> None:
         global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
 
         self.server = server
         self.max = int(info.getConfig('MAX_TASK_CAN_PROC'))
         self.numOfTasksInProc = 0
-        self.pool = Pool( int(info.getConfig('PROCESS_POOL_SIZE')) )
+        self.pool = Pool(int(info.getConfig('PROCESS_POOL_SIZE')))
         self.info = info
-        self.inProcTasks = {} # type: Dict[str, Any]
+        self.inProcTasks = {}  # type: Dict[str, Any]
         self._status = 0
         self._cInst = cInst
 
@@ -50,10 +51,10 @@ class Receiver(ModuleDaemon):
         return self._status
 
     def listOfTasks(self) -> List[Any]:
-        return list( self.inProcTasks.values())
+        return list(self.inProcTasks.values())
 
     def listOfTasks_ident(self) -> List[str]:
-        return list( self.inProcTasks.keys())
+        return list(self.inProcTasks.keys())
 
     def run(self) -> None:
 
@@ -87,5 +88,5 @@ class Receiver(ModuleDaemon):
                     print(reqLetter.toString())
                     processor.proc(reqLetter)
 
-            except:
+            except Exception:
                 traceback.print_exc()
