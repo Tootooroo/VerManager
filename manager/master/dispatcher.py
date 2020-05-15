@@ -191,9 +191,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
             # bind one with it.
-            info = self._sInst.getModule(INFO_M_NAME) # type: Info
+            info = self._sInst.getModule(INFO_M_NAME)  # type: Info
             try:
-                build = Build(task.vsn ,info.getConfig("Build"))
+                build = Build(task.vsn, info.getConfig("Build"))
                 if isinstance(build, Build):
                     task.setBuild(build)
             except Exception:
@@ -215,10 +215,13 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return task
 
-    # Dispatcher thread is response to assign task in queue which name is taskWait
+    # Dispatcher thread is response to assign task
+    # in queue which name is taskWait
     def run(self) -> None:
         last_aging = datetime.utcnow()
-        needAging = lambda now, last: (now - last).seconds > 1
+
+        def needAging(now, last):
+            return (now - last).seconds > 1
 
         while True:
 
@@ -273,7 +276,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 with self.dispatchLock:
                     if self._dispatch(task) is False:
                         self._dispatch_logging("Dispatch task " + task.id() +
-                                               " failed. append to tail of queue")
+                                               " failed. append to \
+                                               tail of queue")
                         self.taskWait.insert(0, task)
 
                         time.sleep(1)
@@ -282,7 +286,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         tasks = self._taskTracker.tasks()
 
         current = datetime.utcnow()
-        cond_is_timeout = lambda t: (current - t.last()).seconds > 10
+
+        def cond_is_timeout(t):
+            return (current - t.last()).seconds > 10
 
         # For a task that refs reduce
         # to 0 do aging instance otherwise wait 1 min
@@ -503,7 +509,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 workers = {w.getIdent(): w for w, t_id in pairs
                            if w is not None}
 
-                d = {} # type: Dict[str, List[str]]
+                d = {}  # type: Dict[str, List[str]]
 
                 for p in pairs:
                     if p[0] is None:
@@ -539,15 +545,16 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
 
     # Find out the worker with lowest overhead on a
     # collection of online acceptable workers
-    f = lambda acc, w: acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
+    def f(acc, w):
+        return acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
     theWorker = reduce(f, onlineWorkers)
 
     return [theWorker]
 
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
-    f_online_acceptable = lambda w: w.isOnline() and \
-        w.isAbleToAccept() and w.role is not None
+    def f_online_acceptable(w):
+        return w.isOnline() and w.isAbleToAccept() and w.role is not None
 
     return list(filter(lambda w: f_online_acceptable(w), workers))
 

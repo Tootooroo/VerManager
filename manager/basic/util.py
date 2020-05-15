@@ -115,8 +115,8 @@ def isLinux() -> bool:
 def sockKeepalive(sock: socket.socket, timeout: int, intvl: int) -> None:
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
     if isWindows():
-        sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, timeout*1000, intvl*1000)) \
-            # type: ignore
+        args = (1, timeout*1000, intvl*1000)
+        sock.ioctl(socket.SIO_KEEPALIVE_VALS, args)  # type: ignore
     else:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, timeout)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, intvl)
