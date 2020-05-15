@@ -2,7 +2,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
 import { HttpClientModule } from '@angular/common/http';
 
-import { AppComponent } from './app.component';
+import { AppComponent, NavrowComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { VerGenComponent } from './ver-gen/ver-gen.component';
 import { VerRegisterComponent, RegisterDialog } from './ver-register/ver-register.component';
@@ -13,6 +13,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatGridListModule } from '@angular/material/grid-list';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { FormsModule } from '@angular/forms';
 
 @NgModule({
@@ -20,6 +21,7 @@ import { FormsModule } from '@angular/forms';
         AppComponent,
         VerGenComponent,
         RegisterDialog,
+        NavrowComponent,
         VerRegisterComponent
     ],
     imports: [
@@ -33,7 +35,8 @@ import { FormsModule } from '@angular/forms';
         MatButtonModule,
         MatInputModule,
         MatSelectModule,
-        MatGridListModule
+        MatGridListModule,
+        MatToolbarModule
     ],
     providers: [],
     bootstrap: [AppComponent]

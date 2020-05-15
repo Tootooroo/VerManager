@@ -8,3 +8,10 @@ import { Component } from '@angular/core';
 export class AppComponent {
     title = 'Version Manager';
 }
+
+@Component({
+    selector: 'navbar-row',
+    templateUrl: './navbar-row.html',
+    styleUrls: ['./navbar-row.css']
+})
+export class NavrowComponent { }
