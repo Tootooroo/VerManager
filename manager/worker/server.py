@@ -266,8 +266,10 @@ class Server(Module):
         while True:
             try:
                 if isinstance(l, BinaryLetter):
-                    Server._sending_bytes(self.sock, l.binaryPack())\
-                        # type: ignore
+                    letter_bytes = l.binaryPack()
+                    assert(letter_bytes is not None)
+
+                    Server._sending_bytes(self.sock, letter_bytes)
                 else:
                     Server._sending(self.sock, l)
                 return Server.SOCK_OK
