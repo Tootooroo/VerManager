@@ -2,37 +2,25 @@
 #
 # Maintain connection with workers
 
-from django.test import TestCase # type: ignore
-
 import time
 import socket
 
+from collections import namedtuple
 from datetime import datetime
-
 from threading import Lock, Condition
-
 from manager.basic.observer import Subject, Observer
 from manager.basic.type import State, Error, Ok
 from manager.master.worker import Worker, WorkerInitFailed
-
 from manager.basic.mmanager import ModuleDaemon
-
 from queue import Queue, Empty, Full
-
 from manager.basic.util import spawnThread
-
 from manager.basic.commands import Command, LisAddrUpdateCmd
 from manager.master.task import Task
-
 from manager.master.postElectProtos import RandomElectProtocol
 from manager.master.postElection import PostManager
-
 from manager.basic.letter import CmdResponseLetter
-
 from typing import Tuple, Callable, Any, List, Dict, Optional
-
 from manager.basic.info import M_NAME as INFO_M_NAME
-
 from manager.basic.commands import AcceptCommand, AcceptRstCommand, \
     LisLostCommand
 
@@ -46,76 +34,6 @@ filterFunc = Callable[[List[Worker]], List[Worker]]
 # Constant
 wrLog = "wrLog"
 
-
-class WaitArea:
-
-    class Area_unknown_task(Exception):
-        pass
-
-    class Area_Full(Exception):
-        pass
-
-    class Area_Empty(Exception):
-        pass
-
-
-    def __init__(self, ident: str, specifics:  List[Tuple[str, int, int]]) -> None:
-        self.ident = ident
-
-        self._space = [(t, Queue(num), pri) for t, pri, num in specifics] \
-            # type: List[Tuple[str, Queue, int]]
-
-        # Sort Queues by priority
-        self._space.sort(key = lambda t: t[2])
-
-        # For task append puerpose only.
-        self._space_map = {t: queue for t, queue, _ in self._space}
-
-        self._num_of_tasks = 0
-        self._cond = Condition()
-
-    def enqueue(self, t: Any, timeout=None) -> None:
-        try:
-            q = self._space_map[type(t).__name__]
-            q.put(t, timeout = timeout)
-
-            self._num_of_tasks += 1
-
-        except KeyError:
-            raise WaitArea.Area_unknown_task
-        except Full:
-            raise WaitArea.Area_Full
-
-    def dequeue(self, timeout=None) -> Any:
-        with self._cond:
-            cond = self._cond.wait_for(
-                lambda :self._num_of_tasks > 0,
-                timeout = timeout
-            )
-
-            if cond is False:
-                raise WaitArea.Area_Empty
-
-        for _, q, _ in self._space:
-
-            try:
-                task = q.get(timeout=0)
-                self._num_of_tasks -= 1
-                return task
-
-            except Empty:
-                pass
-
-    def peek(self) -> Any:
-        if self._num_of_tasks == 0:
-            return None
-
-        for _, q, _ in self._space:
-
-            if len(q.queue) > 0:
-                return q.queue[0]
-            else:
-                continue
 
 class WorkerRoom(ModuleDaemon, Subject, Observer):
 
@@ -543,85 +461,3 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             return {}
 
         return worker.status()
-
-
-class WorkerRoomUnitTest(TestCase):
-
-    def test_waitarea(self):
-
-        type_of_tasks = [("Single", 1, 10), ("Post", 0, 10)]
-        area = WaitArea("Area", type_of_tasks)
-
-        class Single:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        class Post:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        class Broken:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        area.enqueue(Single("S1"))
-        area.enqueue(Post("P1"))
-
-        try:
-            area.enqueue(Broken("B1"))
-
-            # Exception should throw before this
-            # expression.
-            self.assertTrue(False)
-
-        except WaitArea.Area_unknown_task:
-            pass
-
-        # Higher priority of tasks should
-        # dequeue before lower tasks.
-        p1 = area.peek()
-        self.assertEqual("P1", p1.ident)
-        t1 = area.dequeue()
-        self.assertTrue(t1 is p1)
-
-        s1 = area.peek()
-        self.assertEqual("S1", s1.ident)
-        t2 = area.dequeue()
-        self.assertTrue(t2 is s1)
-
-        i = 0
-        while i < 10:
-            area.enqueue(Single("S"+str(i)))
-            area.enqueue(Post("P"+str(i)))
-            i += 1
-
-        # Now Single queue of area is full
-        try:
-            area.enqueue(Single("Full"), timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Full:
-            pass
-
-        # Now Post queue of area is full
-        try:
-            area.enqueue(Post("Full"), timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Full:
-            pass
-
-        i = 0
-        while i < 20:
-            t = area.dequeue()
-
-            if i < 10:
-                self.assertTrue(type(t) is Post)
-            else:
-                self.assertTrue(type(t) is Single)
-
-            i += 1
-
-        try:
-            broken = area.dequeue(timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Empty:
-            pass

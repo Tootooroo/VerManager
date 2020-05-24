@@ -17,7 +17,6 @@ from manager.basic.util import spawnThread
 from manager.master.master import ServerInst
 from manager.worker.client import Client
 
-from manager.master.workerRoom import WorkerRoomUnitTest
 
 import time
 import unittest
@@ -33,8 +32,8 @@ class FunctionalTest(TestCase):
 class UnitTest(TestCase):
 
     def test_waitarea(self):
-        from manager.master.workerRoom import WorkerRoomUnitTest
-        WorkerRoomUnitTest.test_waitarea(self)
+        from manager.master.dispatcher import DispatcherUnitTest
+        DispatcherUnitTest.test_waitarea(self)
 
     def tes_new_rev(self):
         import manager.master.components as Components
