@@ -17,96 +17,24 @@ from manager.basic.util import spawnThread
 from manager.master.master import ServerInst
 from manager.worker.client import Client
 
+from manager.master.workerRoom import WorkerRoomUnitTest
+
 import time
 import unittest
 import socket
 
 # Create your tests here.
-
 class FunctionalTest(TestCase):
 
     def test_dispatcher(self):
-
-        import os
-        from multiprocessing import Process
-
-        def clientStart(name:str) -> None:
-            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
-                       name = name)
-            c.start()
-            c.join()
-
-        def clientInterrupt(name:str) -> None:
-            c = Client("127.0.0.1", 8013, "./manager/worker/config.yaml",
-                       name = name)
-            c.start()
-
-            time.sleep(15)
-            c.stop()
-
-            c.join()
-
-        # Create a server
-        sInst = ServerInst("127.0.0.1", 8013, "./config_test.yaml")
-        sInst.start()
-
-        time.sleep(1)
-
-        # Create workers
-        client1 = Process(target=clientStart, args = ("W1", ))
-        time.sleep(3)
-        client2 = Process(target=clientStart, args = ("W2", ))
-        client3 = Process(target=clientStart, args = ("W3", ))
-        client4 = Process(target=clientStart, args = ("W4", ))
-
-        workers = [client1, client2, client3, client4]
-
-        # Activate workers
-        list( map(lambda c: c.start(), workers) )
-
-        # Then wait a while so workers have enough time to connect to master
-        time.sleep(25)
-
-        # Get 'Dispatcher' Module on server so we can dispatch task to workers
-        dispatcher = sInst.getModule("Dispatcher")
-        if not isinstance(dispatcher, Dispatcher):
-            self.assertTrue(False)
-
-        # Dispatch task
-        task1 = Task("122", "123", "122")
-        dispatcher.dispatch(task1)
-
-        workerRoom = sInst.getModule("WorkerRoom")
-        self.assertTrue(isinstance(workerRoom, WorkerRoom))
-
-        # Now let us dispatch three more task to workers
-        # if nothing wrong each of these workers should
-        # in work.
-        task2 = Task("124", "123", "124")
-        dispatcher.dispatch(task2)
-
-        task3 = Task("125", "123", "125")
-        dispatcher.dispatch(task3)
-
-        task4 = Task("126", "123", "126")
-        dispatcher.dispatch(task4)
-
-        time.sleep(30)
-
-        self.assertTrue(os.path.exists("./Storage/122/122total"))
-        self.assertTrue(os.path.exists("./Storage/124/124total"))
-        self.assertTrue(os.path.exists("./Storage/125/125total"))
-        self.assertTrue(os.path.exists("./Storage/126/126total"))
-
-        for path in ["./Storage/" + sub for sub in ["122", "124", "125", "126"]]:
-            fileName = path.split("/")[-1] + "total"
-            os.remove(path+"/"+fileName)
-            os.rmdir(path)
-
-        time.sleep(10)
-
+        from .functionalTest import Tests
+        Tests.test_dispatcher(self)
 
 class UnitTest(TestCase):
+
+    def test_waitarea(self):
+        from manager.master.workerRoom import WorkerRoomUnitTest
+        WorkerRoomUnitTest.test_waitarea(self)
 
     def tes_new_rev(self):
         import manager.master.components as Components
@@ -172,109 +100,8 @@ class UnitTest(TestCase):
         self.assertTrue(cfgs.validityChecking(predicates))
 
     def test_letter(self):
-
-        from manager.basic.letter import NewLetter, \
-            ResponseLetter, BinaryLetter
-
-        from datetime import datetime
-
-        # NewLetter Test
-        dateStr = str(datetime.utcnow())
-        newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
-                              datetime=dateStr, menu="Menu",
-                              parent="123456", needPost="true",
-                              extra = {})
-        self.assertEqual("sn_1", newLetter.getSN())
-        self.assertEqual("vsn_1", newLetter.getVSN())
-        self.assertEqual(dateStr, newLetter.getDatetime())
-        self.assertEqual('true', newLetter.needPost())
-        self.assertEqual('Menu', newLetter.getMenu())
-        self.assertEqual('123456', newLetter.getParent())
-
-        newLetter = Letter.parse(newLetter.toBytesWithLength())
-        self.assertEqual("sn_1", newLetter.getSN())
-        self.assertEqual("vsn_1", newLetter.getVSN())
-        self.assertEqual(dateStr, newLetter.getDatetime())
-        self.assertEqual('true', newLetter.needPost())
-        self.assertEqual('Menu', newLetter.getMenu())
-        self.assertEqual('123456', newLetter.getParent())
-
-        # ResponseLetter Test
-        response = ResponseLetter("ident", "tid_1", Letter.RESPONSE_STATE_IN_PROC, parent = "123456")
-        self.assertEqual("ident", response.getIdent())
-        self.assertEqual("tid_1", response.getTid())
-        self.assertEqual(Letter.RESPONSE_STATE_IN_PROC, response.getState())
-        self.assertEqual("123456", response.getParent())
-
-        # BinaryLetter Test
-        binary = BinaryLetter("tid_1", b"123456", menu = "menu", fileName = "rar", parent = "123456")
-        self.assertEqual("tid_1", binary.getTid())
-        self.assertEqual(b"123456", binary.getBytes())
-        self.assertEqual("menu", binary.getMenu())
-        self.assertEqual("123456", binary.getParent())
-        self.assertEqual("rar", binary.getFileName())
-
-        binBytes = binary.binaryPack()
-        binary_parsed = Letter.parse(binBytes)
-        self.assertEqual("tid_1", binary_parsed.getTid())
-        self.assertEqual(b"123456", binary_parsed.getBytes())
-        self.assertEqual("menu", binary_parsed.getMenu())
-        self.assertEqual("123456", binary_parsed.getParent())
-        self.assertEqual("rar", binary_parsed.getFileName())
-
-        # MenuLetter Test
-        menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
-                                ["file1", "file2"], "/home/test/test.py")
-        self.assertEqual("version", menuLetter.getVersion())
-        self.assertEqual("mid_1", menuLetter.getMenuId())
-        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter.getCmds())
-        self.assertEqual(["file1", "file2"], menuLetter.getDepends())
-        self.assertEqual("/home/test/test.py", menuLetter.getOutput())
-
-        menuBytes = menuLetter.toBytesWithLength()
-        menuLetter_parsed = Letter.parse(menuBytes)
-
-        self.assertEqual("version", menuLetter_parsed.getVersion())
-        self.assertEqual("mid_1", menuLetter_parsed.getMenuId())
-        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getCmds())
-        self.assertEqual(["file1", "file2"], menuLetter_parsed.getDepends())
-        self.assertEqual("/home/test/test.py", menuLetter_parsed.getOutput())
-
-        # commandLetter Test
-        commandLetter = CommandLetter("cmd_type", {"1":"1"}, "T", "extra_information")
-
-        self.assertEqual("cmd_type", commandLetter.getType())
-        self.assertEqual("T", commandLetter.getTarget())
-        self.assertEqual("extra_information", commandLetter.getExtra())
-        self.assertEqual("1", commandLetter.content_("1"))
-
-        commandLetter_bytes = commandLetter.toBytesWithLength()
-        commandLetter_parsed = Letter.parse(commandLetter_bytes)
-
-        self.assertEqual("cmd_type", commandLetter_parsed.getType())
-        self.assertEqual("T", commandLetter_parsed.getTarget())
-        self.assertEqual("extra_information", commandLetter_parsed.getExtra())
-        self.assertEqual("1", commandLetter_parsed.content_("1"))
-
-        # CmdResponseLetter Test
-        cmdResponseLetter = CmdResponseLetter("wIdent", "post",
-                                              CmdResponseLetter.STATE_SUCCESS, reason = "NN",
-                                              target = "tt", extra = {})
-
-        self.assertEqual("wIdent", cmdResponseLetter.getIdent())
-        self.assertEqual("post", cmdResponseLetter.getType())
-        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdResponseLetter.getState())
-        self.assertEqual("NN", cmdResponseLetter.getReason())
-        self.assertEqual("tt", cmdResponseLetter.getTarget())
-
-        cmdRBytes = cmdResponseLetter.toBytesWithLength()
-        cmdRLetter_parsed = Letter.parse(cmdRBytes)
-
-        self.assertEqual("wIdent", cmdRLetter_parsed.getIdent())
-        self.assertEqual("post", cmdRLetter_parsed.getType())
-        self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdRLetter_parsed.getState())
-        self.assertEqual("NN", cmdRLetter_parsed.getReason())
-        self.assertEqual("tt", cmdRLetter_parsed.getTarget())
+        from manager.basic.letter import letterTest
+        letterTest(self)
 
     def test_worker(self):
         from manager.master.build import Build, Merge
@@ -728,6 +555,3 @@ class UnitTest(TestCase):
 
         self.assertEqual(event_msg, event)
         self.assertEqual(log_msg, log)
-
-if __name__ == '__main__':
-    unittest.main(warnings='ignore')
