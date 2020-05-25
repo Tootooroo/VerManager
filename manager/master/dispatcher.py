@@ -3,7 +3,7 @@
 # Responsbility to task dispatch
 # Support for load-balance, queue supported, aging.
 
-from django.test import TestCase # type: ignore
+from django.test import TestCase
 
 import time
 import traceback
@@ -101,6 +101,14 @@ class WaitArea:
             else:
                 continue
 
+    def all(self) -> List[Any]:
+        all_content = []
+
+        for _, q, _ in self._space:
+            all_content += list(q.queue)
+
+        return all_content
+
 
 class Dispatcher(ModuleDaemon, Subject, Observer):
 
@@ -119,8 +127,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         self._sInst = inst
 
         # A queue contain a collection of tasks
-        self.taskWait = []  # type: List[Task]
-
         self._waitArea = WaitArea("Area", [
             WaitAreaSpec("PostTask", 0, 128),
             WaitAreaSpec("SingleTask", 1, 128)
@@ -207,7 +213,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             ret = self._do_dispatch(sub)
 
             if ret is False:
-                self.taskWait.insert(0, sub)
+                self._waitArea.enqueue(sub)
                 self.taskEvent.set()
 
             else:
@@ -240,7 +246,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         with self.dispatchLock:
             if self._dispatch(task) is False:
                 # fixme: Queue may full while inserting
-                self.taskWait.insert(0, task)
+                self._waitArea.enqueue(task)
                 self.taskEvent.set()
 
             return True
@@ -261,7 +267,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         with self.dispatchLock:
             if self._do_dispatch(task) is False:
-                self.taskWait.insert(0, task)
+                self._waitArea.enqueue(task)
                 self.taskEvent.set()
 
         return True
@@ -305,62 +311,32 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         while True:
 
+            time.sleep(1)
+
             # Aging
             now = datetime.utcnow()
             if needAging(now, last_aging):
                 # Remove oudated tasks
                 self._taskAging()
-
                 last_aging = now
 
             # Is there any task in taskWait queue
             # fixme: need to setup a timeout value
-            self.taskEvent.wait(2)
+            if self.taskEvent.wait(2):
+                task_peek = self._waitArea.peek()
 
-            self._dispatch_logging("InQueue:" +
-                                   str([t.id() for t in self.taskWait]))
+                # To check that is a worker available.
+                cond = condChooser[type(task_peek).__name__]
+                if self._workers.getWorkerWithCond(cond) == []:
+                    continue
 
-            if len(self.taskWait) == 0:
-                self._dispatch_logging("TaskWait Queue is empty.")
-                self.taskEvent.clear()
-
-                continue
-
-            task = self.taskWait.pop()
-
-            if not self._taskTracker.isInTrack(task.id()):
-                self._dispatch_logging("Task " + task.id() + " is out of date")
-                continue
-
-            self._dispatch_logging("Task " + task.id() + " arrived")
-
-            if task.state == Task.STATE_FAILURE:
-                continue
-
-            # Is there any workers acceptable
-            if isinstance(task, PostTask):
-                cond = theListener
-            else:
-                cond = acceptableWorkers
-
-            workers = self._workers.getWorkerWithCond(cond)
-
-            if workers == []:
-                self._dispatch_logging("No acceptable worker")
-                self.taskWait.insert(0, task)
-                time.sleep(1)
-            else:
-                # Task can be drop via setting its state to STATE_FAILURE
-                self._dispatch_logging("Dispatch task: " + task.id())
-
+                # Dispatch task to worker
                 with self.dispatchLock:
-                    if self._dispatch(task) is False:
-                        self._dispatch_logging("Dispatch task " + task.id() +
-                                               " failed. append to \
-                                               tail of queue")
-                        self.taskWait.insert(0, task)
-
-                        time.sleep(1)
+                    current = self._waitArea.dequeue()
+                    if self._dispatch(current) is False:
+                        self._waitArea.enqueue(current)
+            else:
+                continue
 
     def _taskAging(self) -> None:
         tasks = self._taskTracker.tasks()
@@ -462,7 +438,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return self._taskTracker.getTask(taskId)
 
     def getTaskInWaits(self) -> List[Task]:
-        return self.taskWait
+        return self._waitArea.all()
 
     # Use to get result of task
     # after the call of this method task will be
@@ -642,6 +618,11 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
 def theListener(workers: List[Worker]) -> List[Worker]:
     return list(filter(lambda w: w.role == Role_Listener, workers))
 
+condChooser = {
+    'SingleTask': viaOverhead,
+    'PostTask': theListener
+}
+
 
 # UnitTest
 class DispatcherUnitTest(TestCase):
@@ -724,3 +705,20 @@ class DispatcherUnitTest(TestCase):
             self.assertTrue(False)
         except WaitArea.Area_Empty:
             pass
+
+        area.enqueue(Single("S1"))
+        area.enqueue(Single("S2"))
+        area.enqueue(Single("S3"))
+        area.enqueue(Single("S4"))
+        area.enqueue(Post("P1"))
+        area.enqueue(Post("P2"))
+        area.enqueue(Post("P3"))
+
+        allT = [t.ident for t in area.all()]
+        self.assertTrue("S1" in allT)
+        self.assertTrue("S2" in allT)
+        self.assertTrue("S3" in allT)
+        self.assertTrue("S4" in allT)
+        self.assertTrue("P1" in allT)
+        self.assertTrue("P2" in allT)
+        self.assertTrue("P3" in allT)
