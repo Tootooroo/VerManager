@@ -49,7 +49,7 @@ class VersionViewSet(viewsets.ModelViewSet):
             if not serializer.is_valid():
                 return HttpResponseBadRequest()
 
-            vers = Versions.objects.filter(vsn=serilizer.data['vsn'])
+            vers = Versions.objects.filter(vsn=serializer.data['vsn'])
             if list(vers) == []:
                 newVer = Versions(vsn=serializer.data['vsn'],
                                   sn=serializer.data['sn'])
@@ -71,7 +71,7 @@ class VersionViewSet(viewsets.ModelViewSet):
             if not serializer_data.is_valid():
                 return HttpResponseBadRequest()
 
-            ver = Versions.objects.get(vsn__exact=serilizer_data.data['vsn'])
+            ver = Versions.objects.get(vsn__exact=serializer_data.data['vsn'])
             ver.sn = serializer_data.data['sn']
             ver.save()
 
