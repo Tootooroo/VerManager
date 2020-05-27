@@ -88,7 +88,7 @@ class Client(Thread):
     def isModuleExists(self, ident: str) -> bool:
         return self._manager.isModuleExists(ident)
 
-    def workerNameRequire(self) -> str:
+    def workerNameRequire(self, info: Info) -> str:
         # First, try to set name via config file.
         if self._name == "":
             self._name = info.getConfig('WORKER_NAME')
@@ -115,7 +115,7 @@ class Client(Thread):
         address = self._mAddress
         port = self._mPort
 
-        workerName = self.workerNameRequire()
+        workerName = self.workerNameRequire(info)
 
         s = Server(address, port, info, self)
         s.setWorkerName(workerName)
