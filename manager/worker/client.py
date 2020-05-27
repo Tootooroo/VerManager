@@ -1,6 +1,8 @@
 # server.py
 # Usage: python server.py <configPath>
 
+import os
+import platform
 import sys
 
 from threading import Thread
@@ -86,6 +88,24 @@ class Client(Thread):
     def isModuleExists(self, ident: str) -> bool:
         return self._manager.isModuleExists(ident)
 
+    def workerNameRequire(self) -> str:
+        # First, try to set name via config file.
+        if self._name == "":
+            self._name = info.getConfig('WORKER_NAME')
+
+        # Then, from envvar HOSTNAME
+        if self._name == "":
+            name = os.environ.get('HOSTNAME')
+            if name is not None:
+                self._name = name
+
+        # If both config file and envvar is not available
+        # set workerName by name of computer.
+        if self._name == "":
+            self._name = platform.node()
+
+        return self._name
+
     def run(self) -> None:
         self._isStop = False
 
@@ -95,10 +115,7 @@ class Client(Thread):
         address = self._mAddress
         port = self._mPort
 
-        if self._name == "":
-            self._name = workerName = info.getConfig('WORKER_NAME')
-        else:
-            workerName = self._name
+        workerName = self.workerNameRequire()
 
         s = Server(address, port, info, self)
         s.setWorkerName(workerName)
