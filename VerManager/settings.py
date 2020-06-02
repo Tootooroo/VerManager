@@ -75,14 +75,27 @@ WSGI_APPLICATION = 'VerManager.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
+vermng_mysql_db = os.environ.get('VERMNG_MYSQL_NAME')
+vermng_mysql_user = os.environ.get('VERMNG_MYSQL_USER')
+vermng_mysql_passwd = os.environ.get('VERMNG_MYSQL_PASSWD')
+vermng_mysql_host = os.environ.get('VERMNG_MYSQL_HOST')
+vermng_mysql_port = os.environ.get('VERMNG_MYSQL_PORT')
+
+def mysql_param_from_env(varName, defVal):
+    val = os.environ.get(varName)
+    if val is None:
+        return defVal
+    else:
+        return val
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'vermanager',
-        'USER': 'verM',
-        'PASSWORD': '123456',
-        'HOST': 'localhost',
-        'PORT': '5432'
+        'NAME': mysql_param_from_env('VERMNG_MYSQL_NAME','vermanager'),
+        'USER': mysql_param_from_env('VERMNG_MYSQL_USER', 'verM'),
+        'PASSWORD': mysql_param_from_env('VERMNG_MYSQL_PASSWD', '123456'),
+        'HOST': mysql_param_from_env('VERMNG_MYSQL_HOST', 'localhost'),
+        'PORT': mysql_param_from_env('VERMNG_MYSQL_PORT', '5432')
     }
 }
 
