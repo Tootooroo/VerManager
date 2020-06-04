@@ -5,7 +5,7 @@ LogDir: ./log
 ResultDir: ./data
 Storage: ./Storage
 
-GitlabUrl: http://gpon.git.com:8011
+GitlabUrl: http://10.5.4.211:8011
 Project_ID: 34
 
 PrivateToken: 4mU2joxotSkzTqLPhvgu
