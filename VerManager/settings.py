@@ -98,7 +98,7 @@ DATABASES = {
         'USER': mysql_param_from_env('VERMNG_MYSQL_USER', 'verM'),
         'PASSWORD': mysql_param_from_env('VERMNG_MYSQL_PASSWD', '123456'),
         'HOST': mysql_param_from_env('VERMNG_MYSQL_HOST', 'localhost'),
-        'PORT': mysql_param_from_env('VERMNG_MYSQL_PORT', '5432')
+        'PORT': mysql_param_from_env('VERMNG_MYSQL_PORT', '3306')
     }
 }
 
