@@ -2,6 +2,7 @@
 #
 # This module define a object that deal with Revisions
 
+import unittest
 import django.db.utils
 import manager.master.components as Components
 from typing import *
@@ -152,6 +153,32 @@ class RevSync(ModuleDaemon):
 
         return None
 
+    def _requestHandle(self, request:HttpRequest) -> bool:
+        # Premise of these code work correct is a merge request
+        # contain only a commit if it can't be satisfied
+        # should read gitlab when merge event arrived and
+        # compare with database then append theses new into
+        # database
+        body = body = self.gitlabWebHooksChecking(request)
+
+        if body is None:
+            return False
+
+        last_commit = body['object_attributes']['last_commit']
+        sn_ = last_commit['id']
+        author_ = last_commit['author']['name']
+        comment_ = last_commit['message']
+        date_time_ = last_commit['timestamp']
+
+        make_sure_mysql_usable()
+
+        rev = Revisions(sn = sn_, author = author_, comment = comment_,
+                        dateTime = date_time_)
+        rev.save()
+
+        return True
+
+
     # Process such a database related operation on background
     # is for the purpose of quick response to where request come
     # from. Responsbility will gain more benefit if such operation
@@ -174,24 +201,50 @@ class RevSync(ModuleDaemon):
 
             request = RevSync.revQueue.get(block=True, timeout=None)
 
-            # Premise of these code work correct is a merge request
-            # contain only a commit if it can't be satisfied
-            # should read gitlab when merge event arrived and
-            # compare with database then append theses new into
-            # database
-            body = self.gitlabWebHooksChecking(request)
+            self._requestHandle(request)
 
-            if body is None:
-                continue
 
-            last_commit = body['object_attributes']['last_commit']
-            sn_ = last_commit['id']
-            author_ = last_commit['author']['name']
-            comment_ = last_commit['message']
-            date_time_ = last_commit['timestamp']
 
-            make_sure_mysql_usable()
 
-            rev = Revisions(sn = sn_, author = author_, comment = comment_,
-                            dateTime = date_time_)
-            rev.save()
+# TestCases
+class HttpRequest_:
+
+    def __init__(self):
+        self.headers = ""
+        self.body = ""
+
+class VerControlTestCases(unittest.TestCase):
+
+    def test_new_rev(self):
+        import time
+        from manager.models import Revisions
+
+        revSyncer = RevSync(None)
+
+        request = HttpRequest_()
+        request.headers = {'Content-Type':'application/json',
+                           'X-Gitlab-Event':'Merge Request Hook'}
+
+        request.body = '{ "object_attributes": {\
+                            "state": "merged",\
+                            "last_commit": {\
+                              "id": "12345678",\
+                              "message": "message",\
+                              "timestamp": "2019-05-09T01:39:08Z",\
+                              "author": {\
+                                "name": "root"\
+                              }\
+                            }\
+                           }\
+                         }'
+
+        revSyncer._requestHandle(request)
+
+        time.sleep(0.5)
+
+        rev = Revisions.objects.get(pk='12345678')
+
+        self.assertEqual("12345678", rev.sn)
+        self.assertEqual("message", rev.comment)
+        self.assertEqual("root", rev.author)
+        self.assertEqual("2019-05-09 01:39:08+00:00", str(rev.dateTime))

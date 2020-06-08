@@ -1,5 +1,7 @@
 # info.py
 
+import unittest
+
 import typing
 from yaml import load, SafeLoader
 from functools import reduce
@@ -43,3 +45,23 @@ class Info(Module):
     def validityChecking(self, predicates) -> bool:
         results = list(map(lambda p: p(self._config), predicates))
         return reduce(lambda acc, curr: acc and curr, results)
+
+# TestCases
+class InfoTestCases(unittest.TestCase):
+
+    def test_info(self):
+        from manager.basic.info import Info
+
+        cfgs = Info("./config.yaml")
+
+        predicates = [
+            lambda c: "Address" in c,
+            lambda c: "Port" in c,
+            lambda c: "LogDir" in c,
+            lambda c: "ResultDir" in c,
+            lambda c: "GitlabUrl" in c,
+            lambda c: "PrivateToken" in c,
+            lambda c: "TimeZone" in c
+        ]
+
+        self.assertTrue(cfgs.validityChecking(predicates))

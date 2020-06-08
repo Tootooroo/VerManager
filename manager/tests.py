@@ -23,86 +23,15 @@ import unittest
 import socket
 
 # Create your tests here.
-class FunctionalTest(TestCase):
+from manager.master.verControl import VerControlTestCases
+from manager.basic.letter import letterTest
+from manager.master.dispatcher import DispatcherUnitTest
+from manager.basic.info import InfoTestCases
 
-    def test_dispatcher(self):
-        from .functionalTest import Tests
-        Tests.test_dispatcher(self)
 
 class UnitTest(TestCase):
 
-    def test_waitarea(self):
-        from manager.master.dispatcher import DispatcherUnitTest
-        DispatcherUnitTest.test_waitarea(self)
-
-    def tes_new_rev(self):
-        import manager.master.components as Components
-        from manager.basic.info import Info
-        Components.config = Info("./config.yaml")
-
-        revSyncner = RevSync()
-
-        revSyncner.revDBInit()
-        revSyncner.start()
-
-        request = HttpRequest_()
-        request.headers = {'Content-Type':'application/json', 'X-Gitlab-Event':'Merge Request Hook'}
-
-        request.body = '{ "object_attributes": {\
-                            "state": "merged",\
-                            "last_commit": {\
-                              "id": "12345678",\
-                              "message": "message",\
-                              "timestamp": "2019-05-09T01:39:08Z",\
-                              "author": {\
-                                "name": "root"\
-                              }\
-                            }\
-                           }\
-                         }'
-
-        from manager.views import newRev
-        newRev(request)
-
-        from manager.models import Revisions
-
-        import time
-        time.sleep(2)
-
-        try:
-            rev = Revisions.objects.get(pk='12345678')
-
-            self.assertEqual("12345678", rev.sn)
-            self.assertEqual("message", rev.comment)
-            self.assertEqual("root", rev.author)
-            self.assertEqual("2019-05-08 17:39:08+00:00", str(rev.dateTime))
-
-            self.assertTrue(True)
-        except Exception:
-            self.assertTrue(False)
-
-    def test_info(self):
-        from manager.basic.info import Info
-
-        cfgs = Info("./config.yaml")
-
-        predicates = [
-            lambda c: "Address" in c,
-            lambda c: "Port" in c,
-            lambda c: "LogDir" in c,
-            lambda c: "ResultDir" in c,
-            lambda c: "GitlabUrl" in c,
-            lambda c: "PrivateToken" in c,
-            lambda c: "TimeZone" in c
-        ]
-
-        self.assertTrue(cfgs.validityChecking(predicates))
-
-    def test_letter(self):
-        from manager.basic.letter import letterTest
-        letterTest(self)
-
-    def test_worker(self):
+    def tes_worker(self):
         from manager.master.build import Build, Merge
         from manager.master.task import SingleTask, PostTask
         from manager.basic.letter import sending as l_send, receving as l_recv, \
