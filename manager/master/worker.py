@@ -241,10 +241,9 @@ class WorkerTestCases(unittest.TestCase):
 
         canceled = False
 
-        async def worker_connect(server_task) -> None:
-
+        async def worker_connect(server_task):
             # Wait Server start
-            await asyncio.sleep(3)
+            await asyncio.sleep(1)
 
             reader, writer = await asyncio.open_connection(
                 "127.0.0.1", 9999
@@ -334,7 +333,7 @@ class WorkerTestCases(unittest.TestCase):
             nonlocal canceled
             canceled = True
 
-        async def test_main():
+        async def test_main() -> None:
             server_task = asyncio.create_task(server_mock())
 
             await asyncio.gather(

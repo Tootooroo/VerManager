@@ -418,5 +418,20 @@ class StorageTestCases(unittest.TestCase):
         self.assertTrue(not os.path.exists("./Storage/box/file4"))
         self.assertTrue(not os.path.exists("./Storage/box/file5"))
 
+        storage.create("box1", "file")
+        self.assertTrue(os.path.exists("./Storage/box1/file"))
+
+        storage.create("box2", "file")
+        self.assertTrue(os.path.exists("./Storage/box1/file"))
+
+        storage.delete("box1", "file")
+        self.assertTrue(not os.path.exists("./Storage/box1/file"))
+
+        storage.delete("box2", "file")
+        self.assertTrue(not os.path.exists("./Storage/box2/file"))
+
+        # Try to delete a file out of exists
+        storage.delete("box1", "file")
+
         storage.destruct()
         self.assertTrue(not os.path.exists("./Storage/"))
