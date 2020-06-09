@@ -5,6 +5,8 @@
 
 import socket
 import traceback
+import asyncio
+
 from typing import Tuple, Optional, List, Dict, Callable
 from .task import Task, TaskGroup, SingleTask, PostTask
 from datetime import datetime
@@ -27,10 +29,16 @@ class Worker:
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, sock: socket.socket, address: Tuple[str, int]) -> None:
+    def __init__(self, reader: asyncio.StreamReader,
+                 writer: asyncio.StreamWriter,
+                 address: Tuple[str, int]) -> None:
+
         self.role = None  # type: Optional[int]
-        self.sock = sock
+
+        self._reader = reader
+        self._writer = writer
         self.address = address
+
         self.max = 0
         self.inProcTask = TaskGroup()
         self.menus = []  # type: List[Tuple[str, str]]
@@ -61,21 +69,11 @@ class Worker:
         self.counters = [0, 0, 0]
         self._clock = datetime.now()
 
-    def active(self) -> None:
-        # Prevent permanent blocking from waiting
-        # for PropertyNotify from worker
-        self.sock.settimeout(10)
+    async def active(self) -> None:
+        letter = await self._recv()
 
-        try:
-            letter = self._recv()
-
-            if letter is None:
-                raise WorkerInitFailed()
-
-        except socket.timeout:
+        if letter is None:
             raise WorkerInitFailed()
-
-        self.sock.settimeout(None)
 
         if Letter.typeOfLetter(letter) == Letter.PropertyNotify:
             self.max = letter.propNotify_MAX()
@@ -160,13 +158,13 @@ class Worker:
         letter = cmd.toLetter()
         self._send(letter)
 
-    def do(self, task: Task) -> None:
+    async def do(self, task: Task) -> None:
         letter = task.toLetter()
 
         if letter is None:
             raise Exception
 
-        self._send(letter)
+        await self._send(letter)
 
         # Register task into task group
         task.toProcState()
@@ -204,22 +202,20 @@ class Worker:
         return status_dict
 
     @staticmethod
-    def receving(sock: socket.socket) -> Optional[Letter]:
-        return letter_receving(sock)
+    async def receving(reader: asyncio.StreamReader) -> Optional[Letter]:
+        return await letter_receving(reader)
 
     @staticmethod
-    def sending(sock: socket.socket, l: Letter) -> None:
-        return letter_sending(sock, l)
+    async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
+        return await letter_sending(writer, l)
 
-    def _recv(self) -> Optional[Letter]:
-        return Worker.receving(self.sock)
+    async def _recv(self) -> Optional[Letter]:
+        return await Worker.receving(self._reader)
 
-    def _send(self, l: Letter) -> None:
+    async def _send(self, l: Letter) -> None:
         try:
             with self.sendLock:
-                Worker.sending(self.sock, l)
-        except BrokenPipeError:
-            raise BrokenPipeError
+                await Worker.sending(self._writer, l)
         except Exception:
             traceback.print_exc()
 
@@ -243,16 +239,22 @@ class WorkerTestCases(unittest.TestCase):
         Max = "2"
         InProc = "0"
 
-        def worker_connect(sock:socket) -> None:
-            # Wait m_sock
-            time.sleep(3)
-            sock.connect(("127.0.0.1", 9999))
+        canceled = False
+
+        async def worker_connect(server_task) -> None:
+
+            # Wait Server start
+            await asyncio.sleep(3)
+
+            reader, writer = await asyncio.open_connection(
+                "127.0.0.1", 9999
+            )
 
             # Send PropLetter
             prop_l = PropLetter("TestWorker", Max, InProc)
-            l_send(sock, prop_l)
+            await l_send(writer, prop_l)
 
-            l = l_recv(sock)
+            l = await l_recv(reader)
             if l is None:
                 self.assertTrue(False)
             else:
@@ -261,7 +263,7 @@ class WorkerTestCases(unittest.TestCase):
                 else:
                     self.assertTrue(False)
 
-            l = l_recv(sock)
+            l = await l_recv(reader)
             if l is None:
                 self.assertTrue(False)
             else:
@@ -270,58 +272,77 @@ class WorkerTestCases(unittest.TestCase):
                 else:
                     self.assertTrue(False)
 
+            while canceled is False:
+                await asyncio.sleep(1)
 
-        s_sock = socket(AF_INET, SOCK_STREAM)
-        spawnThread(worker_connect, s_sock)
+            if canceled is True:
+                server_task.cancel()
 
-        # Get worker socket
-        m_sock = socket(AF_INET, SOCK_STREAM)
-        m_sock.bind(("127.0.0.1", 9999))
-        m_sock.listen()
+        async def server_mock():
+            server = await asyncio.start_server(
+                handler, '127.0.0.1', 9999
+            )
 
-        w_sock, addr = m_sock.accept()
+            await server.serve_forever()
 
-        worker = Worker(w_sock, addr)
-        worker.active()
+        async def handler(r: asyncio.StreamReader,
+                          w: asyncio.StreamWriter):
 
-        # Prop Assert
-        self.assertEqual(int(Max), worker.maxNumOfTask())
-        self.assertEqual(int(InProc), len(worker.inProcTasks()))
+            worker = Worker(r, w, w.get_extra_info('peername'))
+            await worker.active()
 
-        # Send a task to worker
-        build = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
-        worker.do(SingleTask("Test", "SN", "REV", build, {}))
+            # Prop Assert
+            self.assertEqual(int(Max), worker.maxNumOfTask())
+            self.assertEqual(int(InProc), len(worker.inProcTasks()))
 
-        # Now inProc task should be 1
-        inProcTasks = worker.inProcTasks()
-        self.assertTrue(1, len(inProcTasks))
+            # Send a task to worker
+            build = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
+            await worker.do(SingleTask("Test", "SN", "REV", build, {}))
 
-        task = inProcTasks[0]
-        self.assertEqual("Test", task.id())
-        self.assertEqual("SN", task.getSN())
-        self.assertEqual("REV", task.getVSN())
+            # Now inProc task should be 1
+            inProcTasks = worker.inProcTasks()
+            self.assertTrue(1, len(inProcTasks))
 
-        # Now Send a PostTask
-        build_post = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
-        worker.do(PostTask("PostTest", "VSN", [], [], Merge(build_post)))
+            task = inProcTasks[0]
+            self.assertEqual("Test", task.id())
+            self.assertEqual("SN", task.getSN())
+            self.assertEqual("REV", task.getVSN())
 
-        inProcTasks = worker.inProcTasks()
-        self.assertTrue(2, len(inProcTasks))
+            # Now Send a PostTask
+            build_post = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
+            await worker.do(PostTask("PostTest", "VSN", [], [], Merge(build_post)))
 
-        self.assertTrue("Test" in [t.id() for t in inProcTasks])
-        self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
+            inProcTasks = worker.inProcTasks()
+            self.assertTrue(2, len(inProcTasks))
 
-        # Remove tasks
-        worker.removeTask("Test")
-        inProcTasks = worker.inProcTasks()
-        self.assertEqual(1, len(inProcTasks))
-        self.assertTrue("Test" not in [t.id() for t in inProcTasks])
-        self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
+            self.assertTrue("Test" in [t.id() for t in inProcTasks])
+            self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
 
-        worker.removeTask("PostTest")
-        inProcTasks = worker.inProcTasks()
-        self.assertEqual(0, len(inProcTasks))
-        self.assertTrue("Test" not in [t.id() for t in inProcTasks])
-        self.assertTrue("PostTest" not in [t.id() for t in inProcTasks])
+            # Remove tasks
+            worker.removeTask("Test")
+            inProcTasks = worker.inProcTasks()
+            self.assertEqual(1, len(inProcTasks))
+            self.assertTrue("Test" not in [t.id() for t in inProcTasks])
+            self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
 
-        time.sleep(3)
+            worker.removeTask("PostTest")
+            inProcTasks = worker.inProcTasks()
+            self.assertEqual(0, len(inProcTasks))
+            self.assertTrue("Test" not in [t.id() for t in inProcTasks])
+            self.assertTrue("PostTest" not in [t.id() for t in inProcTasks])
+
+            nonlocal canceled
+            canceled = True
+
+        async def test_main():
+            server_task = asyncio.create_task(server_mock())
+
+            await asyncio.gather(
+                server_task,
+                worker_connect(server_task)
+            )
+
+        try:
+            asyncio.run(test_main())
+        except asyncio.exceptions.CancelledError:
+            pass
