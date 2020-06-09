@@ -97,3 +97,18 @@ class Logger(ModuleDaemon, Observer):
             self.log_register(tunnelname)
 
         self.log_put(tunnelname, msg)
+
+
+# TestCases
+import unittest
+
+class LoggerTestCases(unittest.TestCase):
+    def test_logger(self):
+
+        from manager.master.logger import Logger
+
+        logger = Logger("./logger")
+        logger.start()
+
+        logger.log_register("Test")
+        Logger.putLog(logger, "Test", "123")

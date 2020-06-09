@@ -361,3 +361,62 @@ class Storage(Module):
 
     def destruct(self) -> None:
         shutil.rmtree(self._path)
+
+
+
+
+# TestCases
+import unittest
+
+class StorageTestCases(unittest.TestCase):
+
+     def test_storage(self):
+
+        import os
+        from manager.basic.storage import Storage, StoChooser
+
+        storage = Storage("./Storage", None)
+
+        # Create a file via storage
+        boxName = "box"
+        fileName = "file"
+        chooser_create = storage.create(boxName, fileName)
+
+        self.assertTrue(os.path.exists("./Storage/box/file"))
+
+        # Open
+        chooser_open = storage.open(boxName, fileName)
+        self.assertEqual(chooser_create.path(), chooser_open.path())
+
+        self.assertEqual(1, storage.numOfFiles())
+
+        # Remove
+        storage.delete(boxName, fileName)
+        self.assertTrue(not os.path.exists("./Storage/box"))
+
+        self.assertEqual(0, storage.numOfFiles())
+
+        # Create files
+        files = ["file1", "file2", "file3", "file4", "file5"]
+
+        for file in files:
+            storage.create(boxName, file)
+        self.assertEqual(len(files), storage.numOfFiles())
+
+        self.assertTrue(os.path.exists("./Storage/box/file1"))
+        self.assertTrue(os.path.exists("./Storage/box/file2"))
+        self.assertTrue(os.path.exists("./Storage/box/file3"))
+        self.assertTrue(os.path.exists("./Storage/box/file4"))
+        self.assertTrue(os.path.exists("./Storage/box/file5"))
+
+        for file in files:
+            storage.delete(boxName, file)
+
+        self.assertTrue(not os.path.exists("./Storage/box/file1"))
+        self.assertTrue(not os.path.exists("./Storage/box/file2"))
+        self.assertTrue(not os.path.exists("./Storage/box/file3"))
+        self.assertTrue(not os.path.exists("./Storage/box/file4"))
+        self.assertTrue(not os.path.exists("./Storage/box/file5"))
+
+        storage.destruct()
+        self.assertTrue(not os.path.exists("./Storage/"))

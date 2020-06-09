@@ -822,9 +822,7 @@ class PostProcessor(Thread):
         spawnThread(self._post_collect_stuffs)
 
         statisfied_posts = self._satisfiedPosts
-
         workerIdent = self._cInst.getIdent()
-
         server = self._cInst.getModule(SERVER_M_NAME)
 
         while True:
@@ -1070,3 +1068,96 @@ class PostProcessor(Thread):
 
     def req(self, sock: socket.socket) -> None:
         self._addSock(sock)
+
+
+
+# TestCases
+import unittest
+
+class PostListenerTestCases(unittest.TestCase):
+
+    def tes_postListener(self):
+
+        from manager.basic.letter import MenuLetter, BinaryLetter
+        from manager.master.worker import Worker
+        from manager.basic.info import Info
+        from manager.worker.server import Server
+        from manager.basic.mmanager import MManager
+        from manager.worker.postListener import PostListener, PostProvider
+
+        manager = MManager()
+
+        info = Info("./manager/worker/config.yaml")
+        manager.addModule(info)
+
+        server = Server("127.0.0.1", 8044, info, manager)
+        manager.addModule(server)
+
+        pl = PostListener("127.0.0.1", 8033, manager)
+        pl.start()
+
+        manager.addModule(pl)
+
+        postTaskLetter = PostTaskLetter("version",
+                                        ["echo 'POST_PROCESSING'", "echo Processing > processing"],
+                                        "./processing")
+
+        menuLetter = MenuLetter("version", "Mid",
+
+                                ["cd /home/aydenlin",
+                                 "touch ll",
+                                 "echo '123' > ll"],
+
+                                ["file1", "file2", "file3"],
+                                "/home/aydenlin/ll")
+
+        postTaskLetter.addMenu(menuLetter)
+        pl.postAppend(postTaskLetter)
+
+        time.sleep(1)
+
+        # file1
+        binaryLetter = BinaryLetter("file1", b"123456", menu = "Mid", fileName = "file1", parent = "version")
+        binaryLetter_last = BinaryLetter("file1", b"", menu = "Mid", fileName = "file1", parent = "version")
+
+        provider_1 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_1.provide(binaryLetter)
+        provider_1.provide(binaryLetter_last)
+
+        # file2
+        binaryLetter = BinaryLetter("file2", b"123456", menu = "Mid", fileName = "file2", parent = "version")
+        binaryLetter_last = BinaryLetter("file2", b"", menu = "Mid", fileName = "file2", parent = "version")
+
+        provider_2 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_2.provide(binaryLetter)
+        provider_2.provide(binaryLetter_last)
+
+        # file3
+        binaryLetter = BinaryLetter("file3", b"123456", menu = "Mid", fileName = "file3", parent = "version")
+        binaryLetter_last = BinaryLetter("file3", b"", menu = "Mid", fileName = "file3", parent = "version")
+
+        provider_3 = PostProvider("127.0.0.1", 8033, connect=True)
+        provider_3.provide(binaryLetter)
+        provider_3.provide(binaryLetter_last)
+
+
+        time.sleep(3)
+
+        # Binary letter from postListener
+        bin_letter = server.responseRetrive()
+        self.assertTrue(bin_letter is not None)
+        self.assertEqual(b'Processing\n', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
+
+        bin_letter = server.responseRetrive()
+        self.assertTrue(bin_letter is not None)
+        self.assertEqual(b'', bin_letter.getContent('bytes'))
+        self.assertEqual("processing", bin_letter.getFileName())
+        self.assertEqual("version", bin_letter.getTid())
+
+        # Response letter from postListener
+        response_letter = server.responseRetrive()
+        self.assertTrue(response_letter is not None)
+        self.assertEqual("WORKER_EXAMPLE", response_letter.getIdent())
+        self.assertEqual("version", response_letter.getTid())

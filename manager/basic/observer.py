@@ -79,3 +79,64 @@ class Subject(ABC):
 
             for ob in obs:
                 ob.update(self._subject_ident, data)
+
+
+
+# TestCases
+import unittest
+
+class ObTestCases(unittest.TestCase):
+    def test_observer(self):
+        from manager.basic.observer import Subject, Observer
+
+        event = ""
+        log   = ""
+
+        event_msg = "Doing Something..."
+        log_msg   = "Logging message..."
+
+        class S(Subject):
+            EVENT = "EVENT"
+            LOG   = "Log"
+
+            def __init__(self) -> None:
+                Subject.__init__(self, "S")
+
+                self.addType(S.EVENT)
+                self.addType(S.LOG)
+
+            def do(self) -> None:
+                self.notify(S.EVENT, event_msg)
+
+            def log(self) -> None:
+                self.notify(S.LOG, log_msg)
+
+        class O(Observer):
+
+            def __init__(self) -> None:
+                Observer.__init__(self)
+
+            def eventListen(self, data:Any) -> None:
+                nonlocal event
+                event = data
+
+            def logListen(self, data:Any) -> None:
+                nonlocal log
+                log = data
+
+        s = S()
+
+        o_event = O()
+        o_event.handler_install("S", o_event.eventListen)
+
+        o_log   = O()
+        o_log.handler_install("S", o_log.logListen)
+
+        s.subscribe(S.EVENT, o_event)
+        s.subscribe(S.LOG, o_log)
+
+        s.do()
+        s.log()
+
+        self.assertEqual(event_msg, event)
+        self.assertEqual(log_msg, log)

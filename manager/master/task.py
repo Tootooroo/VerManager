@@ -684,3 +684,118 @@ class TaskGroup:
 
     def numOfTasks(self) -> int:
         return self._numOfTasks
+
+
+
+# TestCases
+import unittest
+
+class TaskTestCases(unittest.TestCase):
+
+    def test_task(self):
+        from manager.basic.info import Info
+        from manager.master.build import Build, BuildSet
+        from manager.master.task import Task, SuperTask, SingleTask, PostTask
+        from manager.basic.letter import MenuLetter
+
+        info = Info("./config_test.yaml")
+
+        buildSet = info.getConfig('BuildSet')
+
+        bs = BuildSet(buildSet)
+
+        # Create a taks object
+        t = SuperTask("VersionToto", "ABC", "VersionToto", bs, {})
+
+        # Get a group which GL5610 reside in
+        groupOfGL5610 = t.getGroupOf("GL5610")
+
+        # GL5610-v2 should in this group
+        GL5610_v2 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v2", groupOfGL5610))
+        self.assertTrue(len(GL5610_v2) == 1)
+        # Check the parent of GL5610-v2
+        self.assertTrue(GL5610_v2[0].isAChild() and GL5610_v2[0].getParent().id() == "VersionToto")
+
+        # GL5610-v3 should in this group too
+        GL5610_v3 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v3", groupOfGL5610))
+        self.assertTrue(len(GL5610_v3) == 1)
+        # Check the parent of GL5610-v3
+        self.assertTrue(GL5610_v3[0].isAChild() and GL5610_v3[0].getParent().id() == "VersionToto")
+
+        # Get group which GL8900 reside in
+        groupOfGL8900 = t.getGroupOf("GL8900")
+        self.assertTrue(len(groupOfGL8900) == 1)
+        # Check the parent of GL8900
+        self.assertTrue(groupOfGL8900[0].id() == "VersionToto__GL8900",
+                        groupOfGL8900[0].getParent().id() == "VersionToto")
+
+        # Posts
+        pt = t.getPostTask()
+        pt_ident = PostTask.genIdent("VersionToto")
+        self.assertEqual(pt_ident, pt.id())
+        postLetter = pt.toLetter()
+
+        deps = [t.id() for t in pt.dependence()]
+        deps_ = ["VersionToto__GL5610-v2", "VersionToto__GL5610-v3",
+                 "VersionToto__GL5610", "VersionToto__GL8900"]
+        self.assertEqual(4, len(deps))
+        self.assertEqual(deps_.sort(), deps.sort())
+
+        self.assertEqual([], postLetter.frags())
+        menus = postLetter.menus()
+        self.assertTrue("P1" in menus)
+        self.assertTrue("P2" in menus)
+
+        # Menu GL5610 check
+        menu_GL5610 = postLetter.getMenu("P1")
+        depends = menu_GL5610.getDepends()
+        self.assertTrue("VersionToto__GL5610" in depends)
+        self.assertTrue("VersionToto__GL5610-v2" in depends)
+        self.assertTrue("VersionToto__GL5610-v3" in depends)
+
+        cmds = menu_GL5610.getCmds()
+        self.assertEqual(["cat ll ll2 ll3 VersionToto  > post"], cmds)
+
+        # Menu GL8900 check
+        menu_GL8900 = postLetter.getMenu("P2")
+        depends_89 = menu_GL8900.getDepends()
+        self.assertTrue("VersionToto__GL8900" in depends_89)
+
+        cmds = menu_GL8900.getCmds()
+        self.assertEqual(["cat ll4 VersionToto  > post_gl8900", "echo 8900 VersionToto  >> post_gl8900"], cmds)
+
+        # Get children of the task
+        children = [child.id() for child in t.getChildren()]
+
+        # Check memebers
+        self.assertTrue("VersionToto__GL5610" in children)
+        self.assertTrue("VersionToto__GL5610-v2" in children)
+        self.assertTrue("VersionToto__GL5610-v3" in children)
+        self.assertTrue("VersionToto__GL8900" in children)
+
+        # Convert child to letter
+        # Format
+        # header  : '{"ident":"...", "tid":"...", "needPost":"true/false"}'
+        # content : '{"sn":"...", "vsn":"...", "datetime":"...",
+        #             "extra":{"resultPath":"...", "cmds":"..."} }"
+        v2Letter = GL5610_v2[0].toLetter()
+
+        v2Tid = v2Letter.getHeader("tid")
+        self.assertEqual("VersionToto__GL5610-v2", v2Tid)
+
+        v2NeedPost = v2Letter.getHeader("needPost")
+        self.assertEqual("true", v2NeedPost)
+
+        v2SN = v2Letter.getContent("sn")
+        self.assertEqual("ABC", v2SN)
+
+        v2VSN = v2Letter.getContent("vsn")
+        self.assertEqual("VersionToto", v2VSN)
+
+        extra = v2Letter.getContent("extra")
+
+        resultPath = extra['resultPath']
+        cmds = extra['cmds']
+
+        self.assertEqual("./ll2", resultPath)
+        self.assertEqual(['echo ll2 VersionToto  > ll2'], cmds)

@@ -222,3 +222,106 @@ class Worker:
             raise BrokenPipeError
         except Exception:
             traceback.print_exc()
+
+
+
+# TestCases
+import unittest
+
+class WorkerTestCases(unittest.TestCase):
+
+    def test_worker(self):
+        import time
+        from manager.basic.util import spawnThread
+        from manager.master.build import Build, Merge
+        from manager.master.task import SingleTask, PostTask
+        from manager.basic.letter import sending as l_send, receving as l_recv, \
+            NewLetter, PostTaskLetter, PropLetter
+        from socket import socket, AF_INET, SOCK_STREAM
+        from manager.master.worker import Worker
+
+        Max = "2"
+        InProc = "0"
+
+        def worker_connect(sock:socket) -> None:
+            # Wait m_sock
+            time.sleep(3)
+            sock.connect(("127.0.0.1", 9999))
+
+            # Send PropLetter
+            prop_l = PropLetter("TestWorker", Max, InProc)
+            l_send(sock, prop_l)
+
+            l = l_recv(sock)
+            if l is None:
+                self.assertTrue(False)
+            else:
+                if isinstance(l, NewLetter):
+                    pass
+                else:
+                    self.assertTrue(False)
+
+            l = l_recv(sock)
+            if l is None:
+                self.assertTrue(False)
+            else:
+                if isinstance(l, PostTaskLetter):
+                    pass
+                else:
+                    self.assertTrue(False)
+
+
+        s_sock = socket(AF_INET, SOCK_STREAM)
+        spawnThread(worker_connect, s_sock)
+
+        # Get worker socket
+        m_sock = socket(AF_INET, SOCK_STREAM)
+        m_sock.bind(("127.0.0.1", 9999))
+        m_sock.listen()
+
+        w_sock, addr = m_sock.accept()
+
+        worker = Worker(w_sock, addr)
+        worker.active()
+
+        # Prop Assert
+        self.assertEqual(int(Max), worker.maxNumOfTask())
+        self.assertEqual(int(InProc), len(worker.inProcTasks()))
+
+        # Send a task to worker
+        build = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
+        worker.do(SingleTask("Test", "SN", "REV", build, {}))
+
+        # Now inProc task should be 1
+        inProcTasks = worker.inProcTasks()
+        self.assertTrue(1, len(inProcTasks))
+
+        task = inProcTasks[0]
+        self.assertEqual("Test", task.id())
+        self.assertEqual("SN", task.getSN())
+        self.assertEqual("REV", task.getVSN())
+
+        # Now Send a PostTask
+        build_post = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
+        worker.do(PostTask("PostTest", "VSN", [], [], Merge(build_post)))
+
+        inProcTasks = worker.inProcTasks()
+        self.assertTrue(2, len(inProcTasks))
+
+        self.assertTrue("Test" in [t.id() for t in inProcTasks])
+        self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
+
+        # Remove tasks
+        worker.removeTask("Test")
+        inProcTasks = worker.inProcTasks()
+        self.assertEqual(1, len(inProcTasks))
+        self.assertTrue("Test" not in [t.id() for t in inProcTasks])
+        self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
+
+        worker.removeTask("PostTest")
+        inProcTasks = worker.inProcTasks()
+        self.assertEqual(0, len(inProcTasks))
+        self.assertTrue("Test" not in [t.id() for t in inProcTasks])
+        self.assertTrue("PostTest" not in [t.id() for t in inProcTasks])
+
+        time.sleep(3)

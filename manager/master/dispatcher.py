@@ -215,7 +215,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             if ret is False:
                 self._waitArea.enqueue(sub)
                 self.taskEvent.set()
-
             else:
                 sub.toProcState()
 
@@ -324,6 +323,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # fixme: need to setup a timeout value
             if self.taskEvent.wait(2):
                 task_peek = self._waitArea.peek()
+
+                # peek() return None if there is no
+                # task reside in waitArea
+                if task_peek is None:
+                    self.taskEvent.clear()
+                    continue
 
                 # To check that is a worker available.
                 cond = condChooser[type(task_peek).__name__]
