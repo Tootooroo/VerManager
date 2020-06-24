@@ -6,7 +6,6 @@ from manager.basic.letter import MenuLetter
 
 MAX_LENGTH_OF_COMMAND = 1024
 
-
 class BUILD_FORMAT_WRONG(Exception):
     pass
 
@@ -199,8 +198,6 @@ class BuildSet:
                 buildsOfGroup = list(map(lambda bId:  self._builds[bId],
                                          group))
                 self._postBelong[bId] = (pId, buildsOfGroup)
-
-
 
 
 

@@ -1,6 +1,7 @@
 # info.py
 
 import unittest
+import asyncio
 
 import typing
 from yaml import load, SafeLoader
@@ -10,21 +11,19 @@ from manager.basic.mmanager import Module
 
 M_NAME = "Info"
 
-
 # Abstruction of configuration file
 class Info(Module):
 
     def __init__(self, cfgPath: str) -> None:
-        global M_NAME
-
         Module.__init__(self, M_NAME)
+
         with open(cfgPath, "r") as f:
             self._config = load(f, Loader=SafeLoader)
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
     def getConfig(self, *cfgKeys) -> typing.Any:
