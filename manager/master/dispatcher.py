@@ -7,6 +7,7 @@ from django.test import TestCase
 
 import time
 import traceback
+import asyncio
 
 from typing import Any, List, Optional, Callable, Dict, Tuple
 from functools import reduce
@@ -70,6 +71,9 @@ class WaitArea:
         except Full:
             raise WaitArea.Area_Full
 
+    def enqueue_nowait(self, t: Any) -> None:
+        self.enqueue(t, timeout=0)
+
     def dequeue(self, timeout=None) -> Any:
         with self._cond:
             cond = self._cond.wait_for(
@@ -89,6 +93,9 @@ class WaitArea:
 
             except Empty:
                 pass
+
+    def dequeue_nowait(self) -> Any:
+        return self.dequeue(timeout=0)
 
     def peek(self) -> Any:
         if self._num_of_tasks == 0:
@@ -150,10 +157,16 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         self._workerLock = Lock()
         self._numOfWorkers = 0
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
+        return None
+
+    def needStop(seflf) -> bool:
+        return False
+
+    async def stop(self) -> None:
         return None
 
     def _dispatch_logging(self, msg: str) -> None:
@@ -300,24 +313,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return task
 
+    async def run(self) -> None:
+        asyncio.gather(
+            self._dispatching(),
+            self._taskAging()
+        )
+
     # Dispatcher thread is response to assign task
     # in queue which name is taskWait
-    def run(self) -> None:
-        last_aging = datetime.utcnow()
-
-        def needAging(now, last):
-            return (now - last).seconds > 1
-
+    async def _dispatching(self) -> None:
         while True:
-
-            time.sleep(1)
-
-            # Aging
-            now = datetime.utcnow()
-            if needAging(now, last_aging):
-                # Remove oudated tasks
-                self._taskAging()
-                last_aging = now
+            await asyncio.sleep(1)
 
             # Is there any task in taskWait queue
             # fixme: need to setup a timeout value
@@ -337,63 +343,54 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 # Dispatch task to worker
                 with self.dispatchLock:
-                    current = self._waitArea.dequeue()
+                    current = self._waitArea.dequeue_nowait()
                     if self._dispatch(current) is False:
                         self._waitArea.enqueue(current)
             else:
                 continue
 
-    def _taskAging(self) -> None:
-        tasks = self._taskTracker.tasks()
+    async def _taskAging(self) -> None:
 
-        current = datetime.utcnow()
+        while True:
+            # For a task that refs reduce
+            # to 0 do aging instance otherwise wait 1 min
+            tasks_outdated = [t for t in self._taskTracker.tasks()
+                            if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 10]
 
-        def cond_is_timeout(t):
-            return (current - t.last()).seconds > 10
+            self._dispatch_logging("Outdate tasks:" + str(
+                [t.id() for t in tasks_outdated]
+            ))
 
-        # For a task that refs reduce
-        # to 0 do aging instance otherwise wait 1 min
-        tasks_outdated = [t for t in tasks
-                          if t.refs == 0 or cond_is_timeout(t)]
+            for t in tasks_outdated:
+                ident = t.id()
 
-        idents_outdated = [t.id() for t in tasks_outdated]
-        self._dispatch_logging("Outdate tasks:" + str(idents_outdated))
+                if self._workers.getNumOfWorkers() != 0:
+                    # Task in proc or prepare status
+                    # will not be aging even though
+                    # their counter is out of date.
+                    if t.isProc() or t.isPrepare():
+                        self._dispatch_logging(
+                            "Task " + ident +
+                            " is in processing/Prepare. Abort to remove")
+                        continue
+                    else:
+                        # Need to check that is this task dependen on another task
+                        deps = t.dependedBy()
 
-        for ident in idents_outdated:
-            if not self._taskTracker.isInTrack(ident):
-                continue
+                        for dep in deps:
 
-            t = self._taskTracker.getTask(ident)
-            assert(t is not None)
+                            isPrepare = dep.taskState() == Task.STATE_PREPARE
+                            isInProc = dep.taskState == Task.STATE_IN_PROC
 
-            if self._workers.getNumOfWorkers() != 0:
+                            if isPrepare or isInProc:
+                                self._dispatch_logging(
+                                    "Task " + ident +
+                                    " is remain cause it depend on another tasks"
+                                )
+                                continue
 
-                # Task in proc or prepare status
-                # will not be aging even though
-                # their counter is out of date.
-                if t.isProc() or t.isPrepare():
-                    self._dispatch_logging(
-                        "Task " + ident +
-                        " is in processing/Prepare. Abort to remove")
-                    continue
-                else:
-                    # Need to check that is this task dependen on another task
-                    deps = t.dependedBy()
-
-                    for dep in deps:
-
-                        isPrepare = dep.taskState() == Task.STATE_PREPARE
-                        isInProc = dep.taskState == Task.STATE_IN_PROC
-
-                        if isPrepare or isInProc:
-                            self._dispatch_logging(
-                                "Task " + ident +
-                                " is remain cause it depend on another tasks"
-                            )
-                            continue
-
-            self._dispatch_logging("Remove task " + ident)
-            self._taskTracker.untrack(ident)
+                self._dispatch_logging("Remove task " + ident)
+                self._taskTracker.untrack(ident)
 
     # Cancel a task
     # This method cannot cancel a member of a SuperTask
@@ -632,9 +629,11 @@ condChooser = {
 # UnitTest
 class DispatcherUnitTest(TestCase):
 
-    def test_waitarea(self):
-
-        type_of_tasks = [("Single", 1, 10), ("Post", 0, 10)]
+    def test_waitarea(self) -> None:
+        type_of_tasks = [
+            WaitAreaSpec("Post", 0, 10),
+            WaitAreaSpec("Single", 1, 10)
+        ]
         area = WaitArea("Area", type_of_tasks)
 
         class Single:
@@ -727,3 +726,25 @@ class DispatcherUnitTest(TestCase):
         self.assertTrue("P1" in allT)
         self.assertTrue("P2" in allT)
         self.assertTrue("P3" in allT)
+
+
+        # Test nowait version of enqueue and dequeue
+        area_nowait = WaitArea("Nowait", type_of_tasks)
+        try:
+            area_nowait.dequeue_nowait()
+            self.assertTrue(False)
+        except WaitArea.Area_Empty:
+            pass
+
+        # Use all space of WaitArea
+        i = 0
+        while i < 10:
+            area_nowait.enqueue(Single("S"+str(i)))
+            area_nowait.enqueue(Post("P"+str(i)))
+            i += 1
+
+        try:
+            area_nowait.enqueue_nowait(Single("FULL"))
+            self.assertTrue(False)
+        except WaitArea.Area_Full:
+            pass
