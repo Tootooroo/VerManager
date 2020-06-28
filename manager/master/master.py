@@ -121,8 +121,3 @@ class ServerInst(Thread):
             logger.handler_install(module, logger.listenTo)
 
         self._mmanager.startAll()
-
-        # Block the initial thread cause the entire program
-        # exists when only daemon-thread exists. initial thread
-        # is the only one non-daemon thread.
-        self._mmanager.join()
