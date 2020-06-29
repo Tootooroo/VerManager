@@ -4,6 +4,7 @@
 
 import time
 import socket
+import asyncio
 
 from collections import namedtuple
 from datetime import datetime
@@ -71,10 +72,10 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # This lock is use to protect _workers
         # while add or remove workers from it
         # Note: This lock will not protect access to a worker object
-        self.lock = Lock()
+        self.lock = asyncio.Lock()
 
         # Lock to prevent race between Waiting thread and maintain thread
-        self.syncLock = Lock()
+        self.syncLock = asyncio.Lock()
 
         # _workers is a collection of workers in online state
         self._workers = {}  # type: Dict[str, Worker]
@@ -85,7 +86,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         self._workers_waiting = {}  # type: Dict[str, Worker]
         self.numOfWorkers = 0
 
-        self._eventQueue = Queue(256)  # type: Queue
+        self._eventQueue = asyncio.Queue(256)  # type: asyncio.Queue
 
         self._lisAddr = ("", 0)
 
@@ -105,11 +106,19 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self._lastCandidates = []  # type: List[str]
 
-    def begin(self) -> None:
+        self._stop = False
+
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
+
+    async def stop(self) -> None:
+        return None
+
+    def needStop(self) -> bool:
+        return False
 
     def sockSetup(self, sock: socket.socket) -> None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -120,95 +129,87 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def _WR_LOG(self, msg: str) -> None:
         self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
-    def run(self) -> None:
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.bind((self._host, self._port))
-        self.sock.listen(5)
+    async def _accept_workers(self, r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
+        arrived_worker = Worker(r, w)
 
-        # Spawn a thread which respond to worker maintain
-        spawnThread(lambda wr: wr.maintain(), self)
+        w_ident = ""
 
-        while True:
-            (workersocket, address) = self.sock.accept()
-            self._WR_LOG("A new connection(" + str(address)
-                         + ") has been accepted")
+        try:
+            arrived_worker.active()
+            w_ident = arrived_worker.getIdent()
 
-            self.sockSetup(workersocket)
-            self._WR_LOG("Socket options set up")
+            self._WR_LOG("Worker " + w_ident + " inited")
+        except WorkerInitFailed:
+            self._WR_LOG("Worker " + w_ident + " init failed")
+            w.close()
+            return None
 
-            try:
-                acceptedWorker = Worker(workersocket, address)
-                acceptedWorker.active()
+        if self.isExists(w_ident):
+            w.close()
+            self._WR_LOG("Worker " + w_ident + " is already exists")
 
-                ident = acceptedWorker.getIdent()
+            return None
 
-                self._WR_LOG("Worker " + ident + " initialized success")
+        async with self.syncLock:
+            if w_ident in self._workers_waiting:
+                # fixme: socket of workerInWait is broken need to
+                # change to acceptedWorker
+                workerInWait = self._workers_waiting[w_ident]
+                workerInWait.setStream(arrived_worker.getStream())
 
-            except WorkerInitFailed:
-                self._WR_LOG("Worker initialize faile and close the socket")
-                workersocket.shutdown(socket.SHUT_RDWR)
-                continue
+                old_address = workerInWait.getAddress()
+                new_address = arrived_worker.getAddress()
 
-            if self.isExists(ident):
-                workersocket.close()
-                self._WR_LOG("Worker " + ident +
-                             " is already exist in WorkerRoom")
-                continue
+                # Note: Need to setup worker's status before listener
+                #       address update otherwise
+                #       listener itself will unable
+                #       to know address changed.
+                workerInWait.setAddress(new_address)
+                workerInWait.setState(Worker.STATE_ONLINE)
 
-            with self.syncLock:
-                if ident in self._workers_waiting:
-                    # fixme: socket of workerInWait is broken need to
-                    # change to acceptedWorker
-                    workerInWait = self._workers_waiting[ident]
+                self.addWorker(workerInWait)
+                del self._workers_waiting[w_ident]
 
-                    # Update worker's status.
-                    workerInWait.sockSet(acceptedWorker.sockGet())
+                if self._pManager.isListener(w_ident):
+                    if new_address != old_address:
+                        # Broadcast command to all workers that online.
+                        #
+                        # Note: This update command will only broadcast
+                        #       to workers that in online state. These
+                        #       worker that in waiting state can acquire
+                        #       new address via request.
+                        self.broadcast(LisAddrUpdateCmd(new_address))
 
-                    arrived_addr, arrived_port = acceptedWorker.getAddress()
-                    old_addr, old_port = workerInWait.getAddress()
+                self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
 
-                    # Note: Need to setup worker's status before listener
-                    #       address update otherwise
-                    #       listener itself will unable
-                    #       to know address changed.
-                    workerInWait.setAddress((arrived_addr, arrived_port))
-                    workerInWait.setState(Worker.STATE_ONLINE)
+                # Send an accept command to the worker
+                # so it able to transfer message.
+                workerInWait.control(AcceptCommand())
 
-                    # Move worker from waiting to online list.
-                    self.addWorker(workerInWait)
-                    del self._workers_waiting[ident]
+                if workerInWait.role is None:
+                    self._pManager.addCandidate(workerInWait)
 
-                    if self._pManager.isListener(workerInWait.getIdent()):
-                        if arrived_addr != old_addr:
-                            # Broadcast command to all workers that online.
-                            #
-                            # Note: This update command will only broadcast
-                            #       to workers that in online state. These
-                            #       worker that in waiting state can acquire
-                            #       new address via request.
-                            cmd = LisAddrUpdateCmd(arrived_addr, arrived_port)
-                            self.broadcast(cmd)
+                self._WR_LOG("Worker " + w_ident + " is reconnect")
 
-                    self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
+                return None
 
-                    # Send an accept command to the worker
-                    # so it able to transfer message.
-                    workerInWait.control(AcceptCommand())
+            # Need to reset the accepted worker
+            # before it transfer any messages.
+            arrived_worker.control(AcceptRstCommand())
 
-                    if workerInWait.role is None:
-                        self._pManager.addCandidate(workerInWait)
+            self.addWorker(arrived_worker)
+            self._pManager.addCandidate(arrived_worker)
 
-                    self._WR_LOG("Worker " + ident + " is reconnect")
-                    continue
+            self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
 
-                # Need to reset the accepted worker
-                # before it transfer any messages.
-                acceptedWorker.control(AcceptRstCommand())
 
-                self.addWorker(acceptedWorker)
-                self._pManager.addCandidate(acceptedWorker)
+    async def run(self) -> None:
+        server = await asyncio.start_server(self._accept_workers, self._host, self._port)
 
-                self.notify(WorkerRoom.NOTIFY_CONN, acceptedWorker)
+        asyncio.gather(
+            server.serve_forever()
+        )
+
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self._lastChangedPoint).seconds
@@ -252,16 +253,16 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     # and remove from WorkerRoom
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
-    def maintain(self) -> None:
+    async def maintain(self) -> None:
 
         while True:
-            self._waiting_worker_update()
-            self._waiting_worker_processing(self._workers_waiting)
-            self._postProcessing()
+            await self._waiting_worker_update()
+            await self._waiting_worker_processing(self._workers_waiting)
+            await self._postProcessing()
 
             time.sleep(0.01)
 
-    def _postProcessing(self) -> None:
+    async def _postProcessing(self) -> None:
 
         candidates = [c.getIdent() for c in self._pManager.candidates()]
         if candidates != self._lastCandidates:
@@ -280,19 +281,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             # Stepping
             self._pManager.proto_step()
 
-    def _waiting_worker_update(self) -> None:
+    async def _waiting_worker_update(self) -> None:
         try:
-            (eventType, index) = self._eventQueue.get(timeout=1)
-        except Empty:
+            (eventType, index) = await self._eventQueue.get_nowait()
+        except asyncio.QueueEmpty:
             return None
 
-        if isinstance(index, str):
-            # Via Worker Ident
-            worker = self.getWorker(index)
-        elif isinstance(index, int):
-            # Via Fd in worker
-            worker = self.getWorkerViaFd(index)
-
+        worker = self.getWorker(index)
         if worker is None:
             return None
 
@@ -302,7 +297,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             self._WR_LOG("Worker " + ident +
                          " is disconnected changed state into Waiting")
 
-            with self.syncLock:
+            async with self.syncLock:
                 # Update worker's counter
                 worker.setState(Worker.STATE_WAITING)
                 self.removeWorker(ident)
@@ -315,7 +310,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
                 self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
-    def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
+    async def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
 
         if len(workers) == 0:
@@ -328,7 +323,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             )
         )
 
-        with self.syncLock:
+        async with self.syncLock:
             for worker in outOfTime:
                 ident = worker.getIdent()
                 self._WR_LOG("Worker " + ident +
@@ -359,36 +354,27 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
 
-    def notifyEventFd(self, eventType: EVENT_TYPE, fd: int) -> None:
-        self._eventQueue.put((eventType, fd))
-
-    def getWorkerViaFd(self, fd: int) -> Optional[Worker]:
-        workers = list(self._workers.values())
-        theWorker = list(filter(lambda w: w.sock.fileno() == fd, workers))
-
-        if len(theWorker) == 0:
+    def getWorker(self, ident: str) -> Optional[Worker]:
+        if ident not in self._workers:
             return None
 
-        return theWorker[0]
+        return self._workers[ident]
 
-    def getWorker(self, ident: str) -> Optional[Worker]:
-        with self.lock:
-            if ident not in self._workers:
-                return None
-
-            return self._workers[ident]
-
-    def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
-        with self.lock:
+    async def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
+        async with self.lock:
             workerList = list(self._workers.values())
             return condRtn(workerList)
+
+    def getWorkerWithCond_nosync(self, condRtn: filterFunc) -> List[Worker]:
+        workerList = list(self._workers.values())
+        return condRtn(workerList)
 
     def getWorkers(self) -> List[Worker]:
         return list(self._workers.values())
 
-    def addWorker(self, w: Worker) -> State:
+    async def addWorker(self, w: Worker) -> State:
         ident = w.getIdent()
-        with self.lock:
+        async with self.lock:
             if ident in self._workers:
                 return Error
 
@@ -434,8 +420,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         return Ok
 
-    def removeWorker(self, ident: str) -> State:
-        with self.lock:
+    async def removeWorker(self, ident: str) -> State:
+        async with self.lock:
             if ident not in self._workers:
                 return Error
 

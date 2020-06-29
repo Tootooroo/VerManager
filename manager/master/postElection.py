@@ -160,7 +160,7 @@ class PostElectProtocol:
     def step(self) -> State:
         raise Exception
 
-    def init(self) -> State:
+    async def init(self) -> State:
         raise Exception
 
     def terminate(self) -> State:

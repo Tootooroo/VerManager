@@ -116,18 +116,14 @@ class AcceptRstCommand(Command):
 
 class LisAddrUpdateCmd(Command):
 
-    def __init__(self, address: str, port: int) -> None:
-        content = {"address": address, "port": port}
+    def __init__(self, address: str) -> None:
+        content = {"address": address}
         Command.__init__(self, CMD_LIS_ADDR_UPDATE, content=content)
 
         self._address = address
-        self._port = port
 
     def address(self) -> str:
         return self._address
-
-    def port(self) -> int:
-        return self._port
 
     def toLetter(self) -> CommandLetter:
         cmdLetter = CommandLetter(self.type, content=self.content)
@@ -138,8 +134,7 @@ class LisAddrUpdateCmd(Command):
         if not isinstance(l, CommandLetter):
             return None
 
-        return LisAddrUpdateCmd(l.getContent('address'),
-                                int(l.getContent('port')))
+        return LisAddrUpdateCmd(l.getContent('address'))
 
 
 class ReWorkCommand(Command):

@@ -197,7 +197,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         if isinstance(task, PostTask):
             cond = theListener
 
-        workers = self._workers.getWorkerWithCond(cond)
+        workers = self._workers.getWorkerWithCond_nosync(cond)
 
         # No workers satisfiy the condition.
         if workers == []:
@@ -321,7 +321,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def _peek_trimUntrackTask(self, area: WaitArea) -> Any:
         while True:
             task_peek = area.peek()
-            print([t.id() for t in area.all()])
             if task_peek is None:
                 return None
             else:
@@ -329,7 +328,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 if not self._taskTracker.isInTrack(ident):
                     # Drop untracked task
                     area.dequeue_nowait()
-                    print("untrack")
                     continue
                 else:
                     return task_peek
@@ -352,7 +350,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 # To check that is a worker available.
                 cond = condChooser[type(task_peek).__name__]
-                if self._workers.getWorkerWithCond(cond) == []:
+                if await self._workers.getWorkerWithCond(cond) == []:
                     continue
 
                 # Dispatch task to worker
@@ -786,7 +784,7 @@ class DispatcherUnitTest(TestCase):
         class WorkerRMock(WorkerRoom):
 
             def __init__(self, inst) -> None:
-                WorkerRoom.__init__(self, "", "", inst)
+                WorkerRoom.__init__(self, " ", 8066, inst)
 
             def needStop(self) -> bool:
                 return False
@@ -849,7 +847,6 @@ class DispatcherUnitTest(TestCase):
 
             # If there is no workers during age interval
             # all taskk will be aged
-            print(len(d.getTaskInWaits()))
             self.assertTrue(len(d.getTaskInWaits()) == 0)
 
             await d.stop()

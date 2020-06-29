@@ -30,14 +30,13 @@ class Worker:
     STATE_OFFLINE = 2
 
     def __init__(self, reader: asyncio.StreamReader,
-                 writer: asyncio.StreamWriter,
-                 address: Tuple[str, int]) -> None:
+                 writer: asyncio.StreamWriter) -> None:
 
         self.role = None  # type: Optional[int]
 
         self._reader = reader
         self._writer = writer
-        self.address = address
+        self.address = "0.0.0.0"
 
         self.max = 0
         self.inProcTask = TaskGroup()
@@ -78,16 +77,17 @@ class Worker:
         if Letter.typeOfLetter(letter) == Letter.PropertyNotify:
             self.max = letter.propNotify_MAX()
             self.ident = letter.propNotify_IDENT()
+            self.address = "0.0.0.0"
             self.state = Worker.STATE_ONLINE
             self._clock = datetime.utcnow()
         else:
             raise WorkerInitFailed()
 
-    def sockSet(self, sock: socket.socket) -> None:
-        self.sock = sock
+    def getStream(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return (self._reader, self._writer)
 
-    def sockGet(self) -> socket.socket:
-        return self.sock
+    def setStream(self, stream: Tuple[asyncio.StreamReader, asyncio.StreamWriter]) -> None:
+        self._reader, self._writer = stream
 
     def waitCounter(self) -> int:
         self._counterSync()
@@ -112,10 +112,10 @@ class Worker:
         self.state = s
         self._clock = datetime.utcnow()
 
-    def getAddress(self) -> Tuple[str, int]:
+    def getAddress(self) -> str:
         return self.address
 
-    def setAddress(self, address: Tuple[str, int]) -> None:
+    def setAddress(self, address: str) -> None:
         self.address = address
 
     def getIdent(self) -> str:
@@ -194,7 +194,6 @@ class Worker:
     def status(self) -> Dict:
         status_dict = {
             "max": self.max,
-            "sock": self.sock,
             "processing": self.inProcTask.numOfTasks(),
             "inProcTask": self.inProcTask.toList_(),
             "ident": self.ident
@@ -287,7 +286,7 @@ class WorkerTestCases(unittest.TestCase):
         async def handler(r: asyncio.StreamReader,
                           w: asyncio.StreamWriter):
 
-            worker = Worker(r, w, w.get_extra_info('peername'))
+            worker = Worker(r, w)
             await worker.active()
 
             # Prop Assert

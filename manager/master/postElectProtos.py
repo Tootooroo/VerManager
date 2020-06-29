@@ -1,6 +1,7 @@
 # postElectProtos.py
 
 import traceback
+import asyncio
 
 from datetime import datetime
 from functools import reduce
@@ -26,7 +27,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         self._proto_port = 8066
 
-    def init(self) -> State:
+    async def init(self) -> State:
         # group maybe None because WorkerRoom is in instable status
         if self.group is None:
             return Error
@@ -49,15 +50,13 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def _ProvidersInit(self, lisAddr: Tuple[str, int]) -> None:
+    def _ProvidersInit(self, lisAddr: str) -> None:
 
         if self.group is None:
             return None
 
-        host, port = lisAddr
-
         candidates = self.group.candidateIter()
-        cmd_set_provider = PostConfigCmd(host, self._proto_port,
+        cmd_set_provider = PostConfigCmd(lisAddr, self._proto_port,
                                          PostConfigCmd.ROLE_PROVIDER)
 
         inWait = {}  # type: Dict[str, Worker]
@@ -130,7 +129,7 @@ class RandomElectProtocol(PostElectProtocol):
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
-        (host, port) = listener.getAddress()
+        host = listener.getAddress()
 
         cmd_set_listener = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_LISTENER)
@@ -165,7 +164,7 @@ class RandomElectProtocol(PostElectProtocol):
             if candidates == []:
                 return Ok
             else:
-                host, _ = listener.getAddress()
+                host = listener.getAddress()
                 self.msgClear()
 
                 self._ProvidersInit(listener.getAddress())

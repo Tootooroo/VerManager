@@ -107,7 +107,7 @@ class ServerInst(Thread):
         eventListener.handler_install(WR_M_NAME, new_worker_register)
 
         # Install observer handlers to WorkerRoom
-        wr_handler_disconn = lambda data:  workerRoom.notifyEventFd(
+        wr_handler_disconn = lambda data:  workerRoom.notifyEvent(
             WorkerRoom.EVENT_DISCONNECTED, data)
         workerRoom.handler_install(EVENT_M_NAME, wr_handler_disconn)
 
