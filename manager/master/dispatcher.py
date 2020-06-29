@@ -321,7 +321,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def _peek_trimUntrackTask(self, area: WaitArea) -> Any:
         while True:
             task_peek = area.peek()
-
+            print([t.id() for t in area.all()])
             if task_peek is None:
                 return None
             else:
