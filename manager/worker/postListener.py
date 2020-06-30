@@ -134,7 +134,7 @@ class LinuxPorts(ProviderPorts):
             return None
 
     def wait(self, timeout: int) -> List[Tuple[socket.socket, int]]:
-        readies = self._providers.poll(timeout)
+        readies = self._providers.poll(timeout*1000)
         return [(self._socks[fd], event) for (fd, event) in readies]
 
     def isExists(self, fd: int) -> bool:

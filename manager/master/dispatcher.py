@@ -437,14 +437,17 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             children = task.getChildren()
 
             for child in children:
-                theWorker = self._taskTracker.whichWorker(child.id())
+                ident = child.id()
+                theWorker = self._taskTracker.whichWorker(ident)
 
                 if theWorker is not None:
-                    theWorker.cancel(child.id())
+                    theWorker.cancel(ident)
 
                 child.stateChange(Task.STATE_FAILURE)
+                self._taskTracker.untrack(ident)
 
         task.stateChange(Task.STATE_FAILURE)
+        self._taskTracker.untrack(task.id())
 
     # Cancel all tasks processing on a worker
     def cancelOnWorker(self, wId: str) -> None:
