@@ -350,7 +350,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 # To check that is a worker available.
                 cond = condChooser[type(task_peek).__name__]
-                if await self._workers.getWorkerWithCond(cond) == []:
+                if self._workers.getWorkerWithCond(cond) == []:
                     continue
 
                 # Dispatch task to worker
@@ -776,7 +776,7 @@ class DispatcherUnitTest(TestCase):
         class WorkerMock(Worker):
 
             def __init__(self, ident:str) -> None:
-                Worker.__init__(self, None, None, {})  # type: ignore
+                Worker.__init__(self, None, None)  # type: ignore
                 self.ident = ident
                 self.done = False
 

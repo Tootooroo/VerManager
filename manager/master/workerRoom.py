@@ -69,14 +69,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self._serverInst = sInst
 
-        # This lock is use to protect _workers
-        # while add or remove workers from it
-        # Note: This lock will not protect access to a worker object
-        self.lock = asyncio.Lock()
-
-        # Lock to prevent race between Waiting thread and maintain thread
-        self.syncLock = asyncio.Lock()
-
         # _workers is a collection of workers in online state
         self._workers = {}  # type: Dict[str, Worker]
 
@@ -150,48 +142,47 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             return None
 
-        async with self.syncLock:
-            if w_ident in self._workers_waiting:
-                # fixme: socket of workerInWait is broken need to
-                # change to acceptedWorker
-                workerInWait = self._workers_waiting[w_ident]
-                workerInWait.setStream(arrived_worker.getStream())
+        if w_ident in self._workers_waiting:
+            # fixme: socket of workerInWait is broken need to
+            # change to acceptedWorker
+            workerInWait = self._workers_waiting[w_ident]
+            workerInWait.setStream(arrived_worker.getStream())
 
-                old_address = workerInWait.getAddress()
-                new_address = arrived_worker.getAddress()
+            old_address = workerInWait.getAddress()
+            new_address = arrived_worker.getAddress()
 
-                # Note: Need to setup worker's status before listener
-                #       address update otherwise
-                #       listener itself will unable
-                #       to know address changed.
-                workerInWait.setAddress(new_address)
-                workerInWait.setState(Worker.STATE_ONLINE)
+            # Note: Need to setup worker's status before listener
+            #       address update otherwise
+            #       listener itself will unable
+            #       to know address changed.
+            workerInWait.setAddress(new_address)
+            workerInWait.setState(Worker.STATE_ONLINE)
 
-                self.addWorker(workerInWait)
-                del self._workers_waiting[w_ident]
+            self.addWorker(workerInWait)
+            del self._workers_waiting[w_ident]
 
-                if self._pManager.isListener(w_ident):
-                    if new_address != old_address:
-                        # Broadcast command to all workers that online.
-                        #
-                        # Note: This update command will only broadcast
-                        #       to workers that in online state. These
-                        #       worker that in waiting state can acquire
-                        #       new address via request.
-                        self.broadcast(LisAddrUpdateCmd(new_address))
+            if self._pManager.isListener(w_ident):
+                if new_address != old_address:
+                    # Broadcast command to all workers that online.
+                    #
+                    # Note: This update command will only broadcast
+                    #       to workers that in online state. These
+                    #       worker that in waiting state can acquire
+                    #       new address via request.
+                    self.broadcast(LisAddrUpdateCmd(new_address))
 
-                self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
+            self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
 
-                # Send an accept command to the worker
-                # so it able to transfer message.
-                workerInWait.control(AcceptCommand())
+            # Send an accept command to the worker
+            # so it able to transfer message.
+            workerInWait.control(AcceptCommand())
 
-                if workerInWait.role is None:
-                    self._pManager.addCandidate(workerInWait)
+            if workerInWait.role is None:
+                self._pManager.addCandidate(workerInWait)
 
-                self._WR_LOG("Worker " + w_ident + " is reconnect")
+            self._WR_LOG("Worker " + w_ident + " is reconnect")
 
-                return None
+            return None
 
             # Need to reset the accepted worker
             # before it transfer any messages.
@@ -207,7 +198,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         server = await asyncio.start_server(self._accept_workers, self._host, self._port)
 
         asyncio.gather(
-            server.serve_forever()
+            server.serve_forever(),
+            self._maintain()
         )
 
 
@@ -253,7 +245,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     # and remove from WorkerRoom
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
-    async def maintain(self) -> None:
+    async def _maintain(self) -> None:
 
         while True:
             await self._waiting_worker_update()
@@ -297,18 +289,17 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             self._WR_LOG("Worker " + ident +
                          " is disconnected changed state into Waiting")
 
-            async with self.syncLock:
-                # Update worker's counter
-                worker.setState(Worker.STATE_WAITING)
-                self.removeWorker(ident)
+            # Update worker's counter
+            worker.setState(Worker.STATE_WAITING)
+            self.removeWorker(ident)
 
-                if worker.role is None:
-                    # Worker is a candidate
-                    self._pManager.removeCandidate(ident)
+            if worker.role is None:
+                # Worker is a candidate
+                self._pManager.removeCandidate(ident)
 
-                self._workers_waiting[ident] = worker
+            self._workers_waiting[ident] = worker
 
-                self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
+            self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
     async def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
         workers_list = list(workers.values())
@@ -323,33 +314,32 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             )
         )
 
-        async with self.syncLock:
-            for worker in outOfTime:
-                ident = worker.getIdent()
-                self._WR_LOG("Worker " + ident +
-                             " is dissconnected for a \
-                             long time will be removed")
-                worker.setState(Worker.STATE_OFFLINE)
+        for worker in outOfTime:
+            ident = worker.getIdent()
+            self._WR_LOG("Worker " + ident +
+                            " is dissconnected for a \
+                            long time will be removed")
+            worker.setState(Worker.STATE_OFFLINE)
 
-                if worker.role is None:
-                    # Worker is a candidate
+            if worker.role is None:
+                # Worker is a candidate
+                self._pManager.removeCandidate(ident)
+            else:
+                # Remove this worker from PostManager
+                # if it's also a listener then set listener to None
+                if self._pManager.isListener(ident):
+
+                    # Send command to notify workers that the listener
+                    # is lost.
+                    self.broadcast(LisLostCommand())
+
+                    self._pManager.setListener(None)
                     self._pManager.removeCandidate(ident)
-                else:
-                    # Remove this worker from PostManager
-                    # if it's also a listener then set listener to None
-                    if self._pManager.isListener(ident):
 
-                        # Send command to notify workers that the listener
-                        # is lost.
-                        self.broadcast(LisLostCommand())
+                self._pManager.removeProvider(ident)
 
-                        self._pManager.setListener(None)
-                        self._pManager.removeCandidate(ident)
-
-                    self._pManager.removeProvider(ident)
-
-                self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
-                del self._workers_waiting[ident]
+            self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
+            del self._workers_waiting[ident]
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
@@ -357,13 +347,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def getWorker(self, ident: str) -> Optional[Worker]:
         if ident not in self._workers:
             return None
-
         return self._workers[ident]
 
-    async def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
-        async with self.lock:
-            workerList = list(self._workers.values())
-            return condRtn(workerList)
+    def getWorkerWithCond(self, condRtn: filterFunc) -> List[Worker]:
+        workerList = list(self._workers.values())
+        return condRtn(workerList)
 
     def getWorkerWithCond_nosync(self, condRtn: filterFunc) -> List[Worker]:
         workerList = list(self._workers.values())
@@ -372,17 +360,16 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def getWorkers(self) -> List[Worker]:
         return list(self._workers.values())
 
-    async def addWorker(self, w: Worker) -> State:
+    def addWorker(self, w: Worker) -> State:
         ident = w.getIdent()
-        async with self.lock:
-            if ident in self._workers:
-                return Error
+        if ident in self._workers:
+            return Error
 
-            self._workers[ident] = w
-            self.numOfWorkers += 1
-            self._changePoint()
+        self._workers[ident] = w
+        self.numOfWorkers += 1
+        self._changePoint()
 
-            return Ok
+        return Ok
 
     def isExists(self, ident: str) -> bool:
         if ident in self._workers:
@@ -420,14 +407,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         return Ok
 
-    async def removeWorker(self, ident: str) -> State:
-        async with self.lock:
-            if ident not in self._workers:
-                return Error
+    def removeWorker(self, ident: str) -> State:
+        if ident not in self._workers:
+            return Error
 
-            del self._workers[ident]
-            self.numOfWorkers -= 1
-            self._changePoint()
+        del self._workers[ident]
+        self.numOfWorkers -= 1
+        self._changePoint()
 
         return Ok
 
