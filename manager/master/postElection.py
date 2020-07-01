@@ -1,5 +1,7 @@
 # postelection.py
 
+import abc
+
 from queue import Queue, Empty as QUEUE_EMPTY
 
 from threading import Lock
@@ -147,7 +149,7 @@ class ElectGroup:
         return ident in self._providers
 
 
-class PostElectProtocol:
+class PostElectProtocol(abc.ABC):
 
     def __init__(self) -> None:
         self.isInit = False
@@ -157,14 +159,17 @@ class PostElectProtocol:
     def setGroup(self, group: ElectGroup) -> None:
         self.group = group
 
-    def step(self) -> State:
-        raise Exception
+    @abc.abstractmethod
+    async def step(self) -> State:
+        """ Execute a step of protocol """
 
+    @abc.abstractmethod
     async def init(self) -> State:
-        raise Exception
+        """ Method to initialized protocol """
 
-    def terminate(self) -> State:
-        raise Exception
+    @abc.abstractmethod
+    async def terminate(self) -> State:
+        """ Terminate protocol daemon """
 
     def msgTransfer(self, l: CmdResponseLetter) -> None:
         self.msgQueue.put(l)
@@ -232,17 +237,17 @@ class PostManager:
     def candidates(self) -> List[Worker]:
         return self._eGroup.candidates()
 
-    def proto_init(self) -> State:
-        return self._eProtocol.init()
+    async def proto_init(self) -> State:
+        return await self._eProtocol.init()
 
-    def proto_step(self) -> State:
-        return self._eProtocol.step()
+    async def proto_step(self) -> State:
+        return await self._eProtocol.step()
 
     def proto_msg_transfer(self, l: CmdResponseLetter) -> None:
         self._eProtocol.msgTransfer(l)
 
-    def proto_terminate(self) -> State:
-        return self._eProtocol.terminate()
+    async def proto_terminate(self) -> State:
+        return await self._eProtocol.terminate()
 
     def relations(self) -> Tuple[str, List[str]]:
         return self._eProtocol.relations()

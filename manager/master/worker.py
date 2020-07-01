@@ -154,9 +154,9 @@ class Worker:
     def numOfTaskProc(self) -> int:
         return self.inProcTask.numOfTasks()
 
-    def control(self, cmd: Command) -> None:
+    async def control(self, cmd: Command) -> None:
         letter = cmd.toLetter()
-        self._send(letter)
+        await self._send(letter)
 
     async def do(self, task: Task) -> None:
         letter = task.toLetter()

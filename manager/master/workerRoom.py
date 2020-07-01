@@ -72,6 +72,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # _workers is a collection of workers in online state
         self._workers = {}  # type: Dict[str, Worker]
 
+        # Lock to protect _workers_waiting
+        self._lock = asyncio.Lock()
+
         # _workers_waiting is a collection of workers in waiting state
         # if a worker which in this collection exceed WAIT limit it will
         # be removed
@@ -142,6 +145,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             return None
 
+        await self._lock.acquire()
+
         if w_ident in self._workers_waiting:
             # fixme: socket of workerInWait is broken need to
             # change to acceptedWorker
@@ -181,6 +186,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 self._pManager.addCandidate(workerInWait)
 
             self._WR_LOG("Worker " + w_ident + " is reconnect")
+
+            self._lock.release()
 
             return None
 
@@ -255,7 +262,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             time.sleep(0.01)
 
     async def _postProcessing(self) -> None:
-
         candidates = [c.getIdent() for c in self._pManager.candidates()]
         if candidates != self._lastCandidates:
             self._WR_LOG("Role:" + str(self.postRelations()))
@@ -314,6 +320,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             )
         )
 
+        await self._lock.acquire()
+
         for worker in outOfTime:
             ident = worker.getIdent()
             self._WR_LOG("Worker " + ident +
@@ -331,7 +339,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
                     # Send command to notify workers that the listener
                     # is lost.
-                    self.broadcast(LisLostCommand())
+                    await self.broadcast(LisLostCommand())
 
                     self._pManager.setListener(None)
                     self._pManager.removeCandidate(ident)
@@ -340,6 +348,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
             del self._workers_waiting[ident]
+
+            self._lock.release()
 
     def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
@@ -383,9 +393,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def getNumOfWorkersInWait(self) -> int:
         return len(self._workers_waiting)
 
-    def broadcast(self, command: Command) -> None:
+    async def broadcast(self, command: Command) -> None:
         for w in self._workers.values():
-            w.control(command)
+            await w.control(command)
 
     def control(self, ident: str, command: Command) -> State:
         try:
