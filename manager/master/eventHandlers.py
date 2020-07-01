@@ -246,6 +246,10 @@ def responseHandler_ResultStore(task: Task,
         Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
 
     url = cfgs.getConfig('GitlabUr')
+
+    if not os.path.exists("./data"):
+        os.mkdir("./data")
+
     task.setData(url + "/data/" + fileName)
 
 
