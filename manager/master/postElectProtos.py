@@ -50,7 +50,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def _ProvidersInit(self, lisAddr: str) -> None:
+    async def _ProvidersInit(self, lisAddr: str) -> None:
 
         if self.group is None:
             return None
@@ -75,7 +75,7 @@ class RandomElectProtocol(PostElectProtocol):
             if len(inWait) == 0:
                 break
 
-            response = self.waitMsg(timeout=1)
+            response = await self.waitMsg(timeout=1)
             if response is None:
                 continue
 
@@ -100,7 +100,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def _send_command_and_wait(self, w: Worker,
+    async def _send_command_and_wait(self, w: Worker,
                                cmd: Command,
                                timeout=None) -> Optional[CmdResponseLetter]:
 
@@ -108,7 +108,7 @@ class RandomElectProtocol(PostElectProtocol):
         if ret is Error:
             return None
 
-        response = self.waitMsg(timeout=timeout)
+        response = await self.waitMsg(timeout=timeout)
         if response is None:
             return None
 
@@ -131,7 +131,7 @@ class RandomElectProtocol(PostElectProtocol):
         host = listener.getAddress()
         cmd_set_listener = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_LISTENER)
-        letter = self._send_command_and_wait(listener,
+        letter = await self._send_command_and_wait(listener,
                                              cmd_set_listener,
                                              timeout=2)
         if letter is None:
@@ -145,7 +145,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return (Ok, letter.getIdent())
 
-    def step(self) -> State:
+    async def step(self) -> State:
 
         assert(self.group is not None)
 
@@ -179,7 +179,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return Ok
 
-    def terminate(self) -> State:
+    async def terminate(self) -> State:
         pass
 
     def _random_elect(self, w1: Worker, w2: Worker) -> Worker:
