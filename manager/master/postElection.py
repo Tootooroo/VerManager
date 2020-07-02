@@ -1,6 +1,7 @@
 # postelection.py
 
 import abc
+import asyncio
 
 from queue import Queue, Empty as QUEUE_EMPTY
 
@@ -154,7 +155,7 @@ class PostElectProtocol(abc.ABC):
     def __init__(self) -> None:
         self.isInit = False
         self.group = None  # type: Optional[ElectGroup]
-        self.msgQueue = Queue(256)  # type: Queue[CmdResponseLetter]
+        self.msgQueue = asyncio.Queue(256)  # type: asyncio.Queue[CmdResponseLetter]
 
     def setGroup(self, group: ElectGroup) -> None:
         self.group = group
@@ -171,17 +172,14 @@ class PostElectProtocol(abc.ABC):
     async def terminate(self) -> State:
         """ Terminate protocol daemon """
 
-    def msgTransfer(self, l: CmdResponseLetter) -> None:
-        self.msgQueue.put(l)
+    async def msgTransfer(self, l: CmdResponseLetter) -> None:
+        await self.msgQueue.put(l)
 
-    def waitMsg(self, timeout=None) -> Optional[CmdResponseLetter]:
+    async def waitMsg(self, timeout=None) -> Optional[CmdResponseLetter]:
         try:
-            return self.msgQueue.get(timeout=timeout)
+            return await asyncio.wait_for(self.msgQueue.get(), timeout=float(timeout))
         except QUEUE_EMPTY:
             return None
-
-    def msgClear(self) -> None:
-        self.msgQueue.queue.clear()
 
     def relations(self) -> Tuple[str, List[str]]:
 

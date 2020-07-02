@@ -253,13 +253,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     #
     # Caution: Calling of hooks is necessary while a worker's state is changed
     async def _maintain(self) -> None:
-
         while True:
             await self._waiting_worker_update()
             await self._waiting_worker_processing(self._workers_waiting)
             await self._postProcessing()
-
-            time.sleep(0.01)
+            await asyncio.sleep(0.1)
 
     async def _postProcessing(self) -> None:
         candidates = [c.getIdent() for c in self._pManager.candidates()]
@@ -273,11 +271,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         # Init postManager
         if self._isPManager_init is False:
-            self._pManager.proto_init()
+            await self._pManager.proto_init()
             self._isPManager_init = True
         else:
             # Stepping
-            self._pManager.proto_step()
+            await self._pManager.proto_step()
 
     async def _waiting_worker_update(self) -> None:
         try:

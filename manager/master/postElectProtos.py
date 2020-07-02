@@ -36,7 +36,7 @@ class RandomElectProtocol(PostElectProtocol):
             return Error
 
         # Listener elect
-        (ret, ident) = self._elect_listener()
+        (ret, ident) = await self._elect_listener()
         if ret == Error:
             return Error
 
@@ -114,7 +114,7 @@ class RandomElectProtocol(PostElectProtocol):
 
         return response
 
-    def _elect_listener(self) -> Tuple[State, str]:
+    async def _elect_listener(self) -> Tuple[State, str]:
 
         if self.group is None:
             return (Ok, "")
@@ -125,20 +125,14 @@ class RandomElectProtocol(PostElectProtocol):
         candidates = self.group.candidates()
 
         listener = reduce(self._random_elect, candidates)
-
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
         host = listener.getAddress()
-
         cmd_set_listener = PostConfigCmd(host, self._proto_port,
                                          PostConfigCmd.ROLE_LISTENER)
-
-        # Clear messages trivial messages may remain in queue
-        # due to failed election before.
-        self.msgClear()
-
-        letter = self._send_command_and_wait(listener, cmd_set_listener,
+        letter = self._send_command_and_wait(listener,
+                                             cmd_set_listener,
                                              timeout=2)
         if letter is None:
             return (Error, "")
@@ -165,7 +159,7 @@ class RandomElectProtocol(PostElectProtocol):
                 return Ok
             else:
                 host = listener.getAddress()
-                self.msgClear()
+                # self.msgClear()
 
                 self._ProvidersInit(listener.getAddress())
 
