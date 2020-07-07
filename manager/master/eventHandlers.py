@@ -183,49 +183,53 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
 
 
 def temporaryBuild_handling(task: Task, eventListener:  EventListener) -> None:
+    logger = eventListener.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
-
     seperator = pathSeperator()
-
     taskId = task.id()
 
     chooser = chooserSet[taskId]
     filePath = chooser.path()
     fileName = filePath.split(seperator)[-1]
 
-    if not os.path.exists("private"):
-        os.mkdir("private")
-    shutil.copy(filePath, "private" + seperator + fileName)
+    try:
+        if not os.path.exists("private"):
+            os.mkdir("private")
+        shutil.copy(filePath, "private" + seperator + fileName)
+    except FileNotFoundError as e:
+        Logger.putLog(logger, letterLog, str(e))
+    except PermissionError as e:
+        Logger.putLog(logger, letterLog, str(e))
 
 
 def responseHandler_ResultStore(task: Task,
                                 eventListener:  EventListener) -> None:
 
-    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
+    logger = eventListener.getModule('Logger')
 
+    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
     seperator = pathSeperator()
 
     # Pending feature
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
+    if isinstance(task, SuperTask):
+        # Binary file correspond to a SuperTask
+        # is transfer from PostListener.
+        taskId = PostTask.genIdent(task.id())
+    else:
+        taskId = task.id()
+
+    extra = task.getExtra()
+    chooser = chooserSet[taskId]
+
+    cfgs = eventListener.getModule(INFO_M_NAME)
+    resultDir = cfgs.getConfig("ResultDir")
+
+    fileName = chooser.path().split(seperator)[-1]
+
     try:
-
-        if isinstance(task, SuperTask):
-            # Binary file correspond to a SuperTask
-            # is transfer from PostListener.
-            taskId = PostTask.genIdent(task.id())
-        else:
-            taskId = task.id()
-
-        extra = task.getExtra()
-        chooser = chooserSet[taskId]
-
-        cfgs = eventListener.getModule(INFO_M_NAME)
-        resultDir = cfgs.getConfig("ResultDir")
-
-        fileName = chooser.path().split(seperator)[-1]
-
         if extra is not None and "logFrom" in extra and "logTo" in extra:
             fileName = EVENT_HANDLER_TOOLS.packDataWithChangeLog(
                 fileName, chooser.path(), resultDir,
@@ -240,10 +244,10 @@ def responseHandler_ResultStore(task: Task,
         if not os.path.exists("public"):
             os.mkdir("public")
         shutil.copy(chooser.path(), "public/"+fileName)
-
-    except FileNotFoundError:
-        logger = eventListener.getModule('Logger')
-        Logger.putLog(logger, letterLog, "ResultDir's value is invalid")
+    except FileNotFoundError as e:
+        Logger.putLog(logger, letterLog, str(e))
+    except PermissionError as e:
+        Logger.putLog(logger, letterLog, str(e))
 
     url = cfgs.getConfig('GitlabUr')
 
@@ -338,8 +342,8 @@ def lisAddrUpdateHandler(eventListener: EventListener, letter: Letter) -> None:
     if lis is None:
         return None
 
-    addr, port = lis.getAddress()
-    command = LisAddrUpdateCmd(addr, port)
+    addr= lis.getAddress()
+    command = LisAddrUpdateCmd(addr)
     request_from = letter.getIdent()
 
     wr.control(request_from, command)

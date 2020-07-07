@@ -14,28 +14,22 @@ from threading import Event, Lock
 
 from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
     CmdResponseLetter, ResponseLetter, BinaryLetter, CancelLetter
-
 from ..basic.observer import Subject
 from ..basic.info import Info
 from ..basic.type import Ok, Error, State
 from ..basic.util import partition, packShellCommands, \
     execute_shell, pathSeperator
 from ..basic.storage import M_NAME as STO_M_NAME
-
 from ..basic.mmanager import Module
-
 from .task import Task
 from .post import Post
 from .server import Server
 from .postListener import PostListener, PostProvider
-
 from ..basic.commands import PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
-
 from .server import M_NAME as SERVER_M_NAME
 from .postListener import M_NAME as POST_LISTENER_M_NAME
 from .postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
 from .sender import M_NAME as SENDER_M_NAME
-
 from ..basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
     CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN, CMD_LIS_LOST
 
