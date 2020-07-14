@@ -44,8 +44,6 @@ class Worker:
         self.ident = ""
         self.needUpdate = False
 
-        self.sendLock = Lock()
-
         # Before a PropertyNotify letter is report
         # from worker we see a worker as an offline
         # worker
@@ -201,20 +199,19 @@ class Worker:
         return status_dict
 
     @staticmethod
-    async def receving(reader: asyncio.StreamReader) -> Optional[Letter]:
-        return await letter_receving(reader)
+    async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Letter]:
+        return await letter_receving(reader, timeout=timeout)
 
     @staticmethod
     async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
         return await letter_sending(writer, l)
 
-    async def _recv(self) -> Optional[Letter]:
-        return await Worker.receving(self._reader)
+    async def _recv(self, timeout=None) -> Optional[Letter]:
+        return await Worker.receving(self._reader, timeout=timeout)
 
     async def _send(self, l: Letter) -> None:
         try:
-            with self.sendLock:
-                await Worker.sending(self._writer, l)
+            await Worker.sending(self._writer, l)
         except Exception:
             traceback.print_exc()
 

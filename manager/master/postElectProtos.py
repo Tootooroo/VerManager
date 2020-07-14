@@ -1,7 +1,9 @@
 # postElectProtos.py
 
+import unittest
 import traceback
 import asyncio
+import manager.basic.letter as L
 
 from datetime import datetime
 from functools import reduce
@@ -36,7 +38,7 @@ class RandomElectProtocol(PostElectProtocol):
             return Error
 
         # Listener elect
-        (ret, ident) = await self._elect_listener()
+        ret, ident = await self._elect_listener()
         if ret == Error:
             return Error
 
@@ -44,7 +46,7 @@ class RandomElectProtocol(PostElectProtocol):
         listener = self.group.getListener()
         assert(listener is not None)
 
-        self._ProvidersInit(listener.getAddress())
+        await self._ProvidersInit(listener.getAddress())
 
         self.isInit = True
 
@@ -56,22 +58,17 @@ class RandomElectProtocol(PostElectProtocol):
             return None
 
         candidates = self.group.candidateIter()
-        cmd_set_provider = PostConfigCmd(lisAddr, self._proto_port,
-                                         PostConfigCmd.ROLE_PROVIDER)
+        cmd_set_provider = PostConfigCmd(
+            lisAddr, self._proto_port, PostConfigCmd.ROLE_PROVIDER)
 
         inWait = {}  # type: Dict[str, Worker]
         for c in candidates:
-            ret = self._send_command(c, cmd_set_provider)
+            ret = await self._send_command(c, cmd_set_provider)
             if ret is None:
                 continue
-
             inWait[c.getIdent()] = c
 
-
-        needWait = lambda t: (datetime.utcnow() - t).seconds < 1
-        beginTime = datetime.utcnow()
-
-        while needWait(beginTime):
+        while True:
             if len(inWait) == 0:
                 break
 
@@ -81,17 +78,20 @@ class RandomElectProtocol(PostElectProtocol):
 
             if response.getState() is CmdResponseLetter.STATE_SUCCESS:
                 ident = response.getIdent()
-                worker = inWait[ident]
 
-                self.group.addProvider(worker)
-                self.group.removeCandidate_(worker)
+                if ident in inWait:
+                    worker = inWait[ident]
+                    self.group.addProvider(worker)
+                    self.group.removeCandidate_(worker)
+                    del inWait[ident]
+                else:
+                    # Letter is response to previous init. Just
+                    # ignore this response
+                    continue
 
-                del inWait[ident]
-
-    def _send_command(self, w: Worker, cmd: Command, timeout=None) -> State:
-
+    async def _send_command(self, w: Worker, cmd: Command) -> State:
         try:
-            w.control(cmd)
+            await w.control(cmd)
         except (BrokenPipeError, queue_Empty):
             return Error
         except Exception:
@@ -104,15 +104,16 @@ class RandomElectProtocol(PostElectProtocol):
                                cmd: Command,
                                timeout=None) -> Optional[CmdResponseLetter]:
 
-        ret = self._send_command(w, cmd, timeout=timeout)
+        ret = await self._send_command(w, cmd)
         if ret is Error:
             return None
 
-        response = await self.waitMsg(timeout=timeout)
-        if response is None:
-            return None
-
-        return response
+        while True:
+            response = await self.waitMsg(timeout=timeout)
+            if response is None:
+                return None
+            else:
+                return response
 
     async def _elect_listener(self) -> Tuple[State, str]:
 
@@ -129,31 +130,36 @@ class RandomElectProtocol(PostElectProtocol):
             raise ELECT_PROTO_INIT_FAILED
 
         host = listener.getAddress()
-        cmd_set_listener = PostConfigCmd(host, self._proto_port,
-                                         PostConfigCmd.ROLE_LISTENER)
-        letter = await self._send_command_and_wait(listener,
-                                             cmd_set_listener,
-                                             timeout=2)
+        cmd_set_listener = PostConfigCmd(
+            host, self._proto_port, PostConfigCmd.ROLE_LISTENER)
+
+        letter = await self._send_command_and_wait(
+            listener, cmd_set_listener, timeout=2)
+
         if letter is None:
             return (Error, "")
 
-        state = letter.getState()
-        if state == CmdResponseLetter.STATE_FAILED:
-            return (Error, letter.getIdent())
+        if letter.getType() == L.Letter.CmdResponse:
+            state = letter.getState()
 
-        self.group.setListener(listener)
+            isListener = letter.getExtra('isListener')
+            if isListener is None or isListener == 'false':
+                return (Error, "")
 
-        return (Ok, letter.getIdent())
+            if state == CmdResponseLetter.STATE_FAILED:
+                return (Error, letter.getIdent())
+
+            self.group.setListener(listener)
+            return (Ok, letter.getIdent())
+        else:
+            return (Error, "")
 
     async def step(self) -> State:
-
         assert(self.group is not None)
-
+        candidates = self.group.candidates()
         listener = self.group.getListener()
 
         # Listener is still online.
-        candidates = self.group.candidates()
-
         if listener is not None:
             if candidates == []:
                 return Ok
@@ -161,7 +167,7 @@ class RandomElectProtocol(PostElectProtocol):
                 host = listener.getAddress()
                 # self.msgClear()
 
-                self._ProvidersInit(listener.getAddress())
+                await self._ProvidersInit(listener.getAddress())
 
                 return Ok
 
@@ -175,7 +181,7 @@ class RandomElectProtocol(PostElectProtocol):
             self.group.removeProvider(provider.getIdent())
             self.group.addCandidate(provider)
 
-        self.init()
+        await self.init()
 
         return Ok
 
@@ -184,3 +190,17 @@ class RandomElectProtocol(PostElectProtocol):
 
     def _random_elect(self, w1: Worker, w2: Worker) -> Worker:
         return w1
+
+# Test Cases
+import unittest
+
+class RandomElectProtos(unittest.Testcase):
+
+    def test_send_wait_command(self) -> None:
+        pass
+
+    def test_elect_listener(self) -> None:
+        pass
+
+    def test_providers_init(self) -> None:
+        pass

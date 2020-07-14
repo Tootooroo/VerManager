@@ -36,13 +36,9 @@ class ElectGroup:
     def __init__(self, workers: List[Worker] = []) -> None:
         self._listener = None  # type: Optional[Worker]
         self._providers = {}  # type: Dict[str, Worker]
-
-        self._lock_c = Lock()
         self._candidate = []  # type: List[Worker]
-
-        for w in workers:
-            # At begining all workers is provider
-            self._providers[w.getIdent()] = w
+        # At begining all workers is provider
+        self._providers = {w.getIdent():w for w in workers}
 
     def __iter__(self) -> ElectGroup_iter:
         workers = self._providers.copy()
@@ -86,6 +82,8 @@ class ElectGroup:
             w.role = Role_Provider
 
         self._providers[ident] = w
+        self._candidate.remove(w)
+
         return Ok
 
     def getProviders(self) -> List[Worker]:
@@ -98,48 +96,43 @@ class ElectGroup:
         return self._providers[ident]
 
     def addCandidate(self, w: Worker) -> State:
-        with self._lock_c:
-            if w in self._candidate:
-                return Error
+        if w in self._candidate:
+            return Error
 
-            w.role = None
-            self._candidate.append(w)
+        w.role = None
+        self._candidate.append(w)
 
         return Ok
 
     def removeCandidate(self, ident: str) -> Optional[Worker]:
-        with self._lock_c:
-            beRemoved, remain = partition(self._candidate,
-                                          lambda c: c.getIdent() == ident)
+        beRemoved, remain = partition(self._candidate,
+                                        lambda c: c.getIdent() == ident)
 
-            if beRemoved == []:
-                return None
-            else:
-                self._candidate = remain
-                return beRemoved[0]
+        if beRemoved == []:
+            return None
+        else:
+            self._candidate = remain
+            return beRemoved[0]
 
     def removeCandidate_(self, w: Worker) -> State:
-        with self._lock_c:
-            if w not in self._candidate:
-                return Error
-            else:
-                self._candidate.remove(w)
-                return Ok
+        if w not in self._candidate:
+            return Error
+        else:
+            self._candidate.remove(w)
+            return Ok
 
     def candidateIter(self) -> Generator:
         for candidate in self._candidate:
             yield candidate
 
     def removeAllCandidates(self) -> None:
-        with self._lock_c:
-            for c in self._candidate:
-                self._candidate.remove(c)
+        for c in self._candidate:
+            self._candidate.remove(c)
 
     def getCandidate(self, ident: str) -> Optional[Worker]:
-        with self._lock_c:
-            for candidate in self._candidate:
-                if candidate.getIdent() == ident:
-                    return candidate
+        for candidate in self._candidate:
+            if candidate.getIdent() == ident:
+                return candidate
 
         return None
 
@@ -177,8 +170,10 @@ class PostElectProtocol(abc.ABC):
 
     async def waitMsg(self, timeout=None) -> Optional[CmdResponseLetter]:
         try:
-            return await asyncio.wait_for(self.msgQueue.get(), timeout=float(timeout))
-        except QUEUE_EMPTY:
+            return await asyncio.wait_for(
+                self.msgQueue.get(), timeout=float(timeout)
+            )
+        except asyncio.exceptions.TimeoutError:
             return None
 
     def relations(self) -> Tuple[str, List[str]]:
@@ -205,7 +200,6 @@ class PostManager:
 
         self._eGroup = ElectGroup(workers)
         self._eProtocol = proto
-
         self._eProtocol.group = self._eGroup
 
     def getListener(self) -> Optional[Worker]:
@@ -249,3 +243,68 @@ class PostManager:
 
     def relations(self) -> Tuple[str, List[str]]:
         return self._eProtocol.relations()
+
+
+# Test Cases
+import unittest
+
+class PostElectTestCases(unittest.TestCase):
+
+    from manager.master.worker import Worker
+
+    def test_electGroup(self) -> None:
+        group = ElectGroup()
+
+        # Initial state checking
+        self.assertEqual(0, group.numOfWorkers())
+        self.assertEqual(0, group.numOfCandidates())
+        self.assertEqual(None, group.getListener())
+        self.assertEqual([], group.getProviders())
+        self.assertEqual([], group.candidates())
+
+        for c in group.candidateIter():
+            self.assertTrue(False)
+
+        # Checking with some worker within group
+        workers = [Worker(None, None), Worker(None, None), Worker(None, None), Worker(None, None)] # type: ignore
+
+        for i in range(len(workers)):
+            workers[i].ident = str(i)
+
+        for worker in workers:
+            group.addCandidate(worker)
+
+        self.assertEqual(0, group.numOfWorkers())
+        self.assertEqual(len(workers), len(group.candidates()))
+
+        group.addProvider(workers[0])
+        self.assertEqual(len(workers)-1, len(group.candidates()))
+        self.assertEqual(1, group.numOfWorkers())
+
+        group.addProvider(workers[1])
+        self.assertEqual(len(workers)-2, len(group.candidates()))
+        self.assertEqual(2, group.numOfWorkers())
+
+        group.addProvider(workers[2])
+        group.addProvider(workers[3])
+        self.assertEqual(0, len(group.candidates()))
+        self.assertEqual(4, group.numOfWorkers())
+
+        # Check Listener
+        group.setListener(workers[0])
+        self.assertTrue(workers[0].ident == group.getListener().ident) # type: ignore
+
+        # Remove nont-exist Provider or candidate
+        # should raise no exceptions
+        group.removeAllCandidates()
+        group.removeAllCandidates()
+
+        group.removeCandidate("non-exists")
+        group.removeProvider("nont-exists")
+
+
+    def test_postElectProtocol(self) -> None:
+        pass
+
+    def test_PostManager(self) -> None:
+        pass

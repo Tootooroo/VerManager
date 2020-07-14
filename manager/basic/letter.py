@@ -232,16 +232,16 @@ class Letter:
     def letterBytesRemain(s:  bytes) -> int:
         if len(s) < 2:
             return 2 - len(s)
-
-        if int.from_bytes(s[:2], "big") == 1:
-            if len(s) < Letter.BINARY_HEADER_LEN:
-                return Letter.BINARY_HEADER_LEN - len(s)
-
-            length = int.from_bytes(s[2:6], "big")
-            return length - (len(s) - Letter.BINARY_HEADER_LEN)
         else:
-            length = int.from_bytes(s[:2], "big")
-            return length - (len(s) - 2)
+            if int.from_bytes(s[:2], "big") == 1:
+                if len(s) < Letter.BINARY_HEADER_LEN:
+                    return Letter.BINARY_HEADER_LEN - len(s)
+
+                length = int.from_bytes(s[2:6], "big")
+                return length - (len(s) - Letter.BINARY_HEADER_LEN)
+            else:
+                length = int.from_bytes(s[:2], "big")
+                return length - (len(s) - 2)
 
     @staticmethod
     def parse(s: bytes) -> Optional['Letter']:
@@ -453,7 +453,10 @@ class CmdResponseLetter(Letter):
         return self.getHeader('target')
 
     def getExtra(self, key:  str) -> Any:
-        return self.getContent('extra')[key]
+        try:
+            return self.getContent('extra')[key]
+        except IndexError:
+            return None
 
 
 class PostTaskLetter(Letter):
@@ -887,28 +890,21 @@ parseMethods = {
 
 
 # Function to receive a letter from a socket
-async def receving(reader: asyncio.StreamReader) -> Optional[Letter]:
-    content = b''
-    remain = 2
+async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Letter]:
+    content, remain = b'', 2
 
-    # Get first 2 bytes to know is a BinaryFile letter or
-    # another letter
     while remain > 0:
-        chunk = await reader.read(remain)
-        if chunk == b'':
+        try:
+            chunk = await asyncio.wait_for(
+                reader.read(remain), timeout=timeout
+            )
+        except asyncio.exceptions.TimeoutError:
             raise Exception
-        remain -= len(chunk)
-        content += chunk
 
-    remain = Letter.letterBytesRemain(content)
-
-    while remain > 0:
-        chunk = await reader.read(remain)
         if chunk == b'':
             raise Exception
 
         content += chunk
-
         remain = Letter.letterBytesRemain(content)
 
     return Letter.parse(content)
@@ -916,8 +912,10 @@ async def receving(reader: asyncio.StreamReader) -> Optional[Letter]:
 
 async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     writer.write(l.toBytesWithLength())
+
     if writer.is_closing():
         raise Exception
+
     await writer.drain()
 
 
