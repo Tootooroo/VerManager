@@ -26,7 +26,6 @@ class RandomElectProtocol(PostElectProtocol):
     def __init__(self) -> None:
         PostElectProtocol.__init__(self)
         self._blackList = []  # type: List[str]
-
         self._proto_port = 8066
 
     async def init(self) -> State:
@@ -196,7 +195,10 @@ import unittest
 
 class RandomElectProtosTest(unittest.TestCase):
 
-    def test_send_wait_command(self) -> None:
+    def test_send_command(self) -> None:
+        pass
+
+    def test_wait_command(self) -> None:
         pass
 
     def test_elect_listener(self) -> None:
