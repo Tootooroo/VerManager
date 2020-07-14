@@ -194,7 +194,7 @@ class RandomElectProtocol(PostElectProtocol):
 # Test Cases
 import unittest
 
-class RandomElectProtos(unittest.Testcase):
+class RandomElectProtosTest(unittest.TestCase):
 
     def test_send_wait_command(self) -> None:
         pass
