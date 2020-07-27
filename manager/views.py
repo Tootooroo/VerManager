@@ -1,29 +1,13 @@
-import manager.apps
-
-import json
-import time
-
-from typing import Optional, cast
-
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from typing import cast
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
 from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ObjectDoesNotExist
-
-from functools import reduce
+from django.utils import timezone
 from django.shortcuts import render
-from django.template import RequestContext
-from django.shortcuts import get_object_or_404
-
 from .master.verControl import RevSync
 from .master.dispatcher import Dispatcher
 from .master.worker import Task
-from .basic.restricts import VERSION_MAX_LENGTH, TASK_ID_MAX_LENGTH
-
-from .basic.type import *
-
-from datetime import datetime
-
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -31,10 +15,10 @@ from .serializers import VersionSerializer, RevisionSerializer, \
     BuildInfoSerializer, VersionInfoSerializer
 
 import manager.master.master as S
-import traceback
 
 # Models
 from .models import Revisions, Versions
+
 
 # Create your views here.
 class VersionViewSet(viewsets.ModelViewSet):
@@ -115,7 +99,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         assert(S.ServerInstance is not None)
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
-        if dispatcher.dispatch(task) == False:
+        if dispatcher.dispatch(task) is False:
             return HttpResponseBadRequest()
 
         return Response('Success')
@@ -129,11 +113,12 @@ class VersionViewSet(viewsets.ModelViewSet):
 
         revision = pk
 
-        version = str(datetime.now())
+        version = str(timezone.localtime())
         version = version.split(".")[0].replace("-", "").\
             replace(":", "").replace(" ", "") + "_" + revision[0:10]
 
-        task = Task(version, revision, version, extra = {"Temporary":"true"})
+        task = Task(version, revision, version,
+                    extra = {"Temporary":"true"})
 
         if not task.isValid():
             return HttpResponseBadRequest()
