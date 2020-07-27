@@ -2,19 +2,14 @@
 #
 # Maintain connection with workers
 
-import time
 import socket
 import asyncio
 
-from collections import namedtuple
 from datetime import datetime
-from threading import Lock, Condition
 from manager.basic.observer import Subject, Observer
 from manager.basic.type import State, Error, Ok
 from manager.master.worker import Worker, WorkerInitFailed
 from manager.basic.mmanager import ModuleDaemon
-from queue import Queue, Empty, Full
-from manager.basic.util import spawnThread
 from manager.basic.commands import Command, LisAddrUpdateCmd
 from manager.master.task import Task
 from manager.master.postElectProtos import RandomElectProtocol
@@ -124,7 +119,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def _WR_LOG(self, msg: str) -> None:
         self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
-    async def _accept_workers(self, r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
+    async def _accept_workers(self, r: asyncio.StreamReader,
+                              w: asyncio.StreamWriter) -> None:
+
         arrived_worker = Worker(r, w)
 
         w_ident = ""
@@ -200,15 +197,14 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
 
-
     async def run(self) -> None:
-        server = await asyncio.start_server(self._accept_workers, self._host, self._port)
+        server = await asyncio.start_server(self._accept_workers,
+                                            self._host, self._port)
 
         asyncio.gather(
             server.serve_forever(),
             self._maintain()
         )
-
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self._lastChangedPoint).seconds
@@ -305,7 +301,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
-    async def _waiting_worker_processing(self, workers: Dict[str, Worker]) -> None:
+    async def _waiting_worker_processing(self,
+                                         workers: Dict[str, Worker]) -> None:
+
         workers_list = list(workers.values())
 
         if len(workers) == 0:
@@ -323,8 +321,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         for worker in outOfTime:
             ident = worker.getIdent()
             self._WR_LOG("Worker " + ident +
-                            " is dissconnected for a \
-                            long time will be removed")
+                         " is dissconnected for a \
+                         long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
 
             if worker.role is None:
