@@ -248,4 +248,27 @@ class RandomElectProtosTest(unittest.TestCase):
         self.assertTrue(self.w2.asProvider)
 
     def test_PostElectProtos_stepListenerOnline(self) -> None:
-        pass
+
+        async def doTest() -> None:
+            # Fixture Setup
+            random = RandomElectProtocol()
+            random.setGroup(self.group)
+            self.w1.queue = random.msgQueue
+            self.w2.queue = random.msgQueue
+
+            worker3 = WorkerMock("w3")
+            worker3.queue = random.msgQueue
+
+            self.group.addCandidate(worker3)
+            self.group.setListener(self.w1)
+
+            # Exercise
+            await random.step()
+
+            # Verify
+            providers = [p.ident for p in self.group.getProviders()]
+            self.assertTrue("w1" in providers)
+            self.assertTrue("w2" in providers)
+            self.assertTrue("w3" in providers)
+
+        asyncio.run(doTest())
