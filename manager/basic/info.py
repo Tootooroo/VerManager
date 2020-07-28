@@ -48,11 +48,34 @@ class Info(Module):
 # TestCases
 class InfoTestCases(unittest.TestCase):
 
-    def test_info(self):
-        from manager.basic.info import Info
+    def setUp(self) -> None:
+        # Fixture setup
+        self.cfgs = Info("./config.yaml")
 
-        cfgs = Info("./config.yaml")
+    def test_Info_getConfig(self) -> None:
+        # Exercise
+        tzvalue = self.cfgs.getConfig("TimeZone")
+        prjId = self.cfgs.getConfig("Project_ID")
+        cmds = self.cfgs.getConfig("BuildSet", "Builds", "GL5610", "cmd")
 
+        # Verify
+        self.assertEqual(480, tzvalue)
+        self.assertEqual(34, prjId)
+        self.assertEqual(
+            [
+                '.\\GBN\\src\\gcom_gpon_build_boot.bat 1',
+                '.\\GBN\\src\\gcom_gpon_build_host.bat 1',
+                'cd .\\BSP\\config\\image',
+                'rar a -r 5610gpon NOBRAND_OEM_TiNetS5610_10gpon',
+                'cd ..\\..\\..'
+            ],
+            cmds
+        )
+
+    def test_Info_getConfigs(self) -> None:
+        pass
+
+    def test_Info_validityChecking(self):
         predicates = [
             lambda c: "Address" in c,
             lambda c: "Port" in c,
@@ -63,4 +86,4 @@ class InfoTestCases(unittest.TestCase):
             lambda c: "TimeZone" in c
         ]
 
-        self.assertTrue(cfgs.validityChecking(predicates))
+        self.assertTrue(self.cfgs.validityChecking(predicates))

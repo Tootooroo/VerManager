@@ -44,7 +44,6 @@ class RandomElectProtocol(PostElectProtocol):
         # Broadcast configuration to providers
         listener = self.group.getListener()
         assert(listener is not None)
-
         await self._ProvidersInit(listener.getAddress())
 
         self.isInit = True
@@ -115,19 +114,14 @@ class RandomElectProtocol(PostElectProtocol):
                 return response
 
     async def _elect_listener(self) -> Tuple[State, str]:
+        candidates = self.group.candidates()  # type: ignore
 
-        if self.group is None:
-            return (Ok, "")
-
-        if self.group.numOfCandidates() == 0:
-            return (Ok, "")
-
-        candidates = self.group.candidates()
-
+        # Elect listener
         listener = reduce(self._random_elect, candidates)
         if listener is None:
             raise ELECT_PROTO_INIT_FAILED
 
+        # Listener setup
         host = listener.getAddress()
         cmd_set_listener = PostConfigCmd(
             host, self._proto_port, PostConfigCmd.ROLE_LISTENER)
@@ -135,6 +129,7 @@ class RandomElectProtocol(PostElectProtocol):
         letter = await self._send_command_and_wait(
             listener, cmd_set_listener, timeout=2)
 
+        # Check setup result
         if letter is None:
             return (Error, "")
 
@@ -148,7 +143,7 @@ class RandomElectProtocol(PostElectProtocol):
             if state == CmdResponseLetter.STATE_FAILED:
                 return (Error, letter.getIdent())
 
-            self.group.setListener(listener)
+            self.group.setListener(listener)  # type: ignore
             return (Ok, letter.getIdent())
         else:
             return (Error, "")
@@ -192,17 +187,90 @@ class RandomElectProtocol(PostElectProtocol):
 
 # Test Cases
 import unittest
+from manager.master.postElection import ElectGroup
+from manager.basic.stubs.workerStup import WorkerStub
+
+class WorkerStubSpec(WorkerStub):
+
+    def __init__(self, ident) -> None:
+        WorkerStub.__init__(self)
+        self.ident = ident
+
+        self.asListener = False
+        self.asProvider = False
+
+
 
 class RandomElectProtosTest(unittest.TestCase):
 
-    def test_send_command(self) -> None:
+    def setUp(self) -> None:
+        # Fixture Setup
+        self.w1 = worker1 = WorkerStub()
+        self.w2 = worker2 = WorkerStub()
+        worker1.ident = "w1"
+        worker2.ident = "w2"
+        self.group = ElectGroup([worker1, worker2])
+
+    def test_PostElectProtos_Init(self) -> None:
+        # Fixture setup
+        self.w1.setControlRtn(self.w1BeListener)
+        self.w1.setReplyRtn(self.replyMethod)
+        self.w2.setControlRtn(self.w2BeListener)
+        self.w2.setReplyRtn(self.replyMethod)
+
+        # Exercise
+        async def setupCoro() -> None:
+            self.random = RandomElectProtocol()
+            self.random.setGroup(self.group)
+
+            ret = await self.random.init()
+            self.assertEqual(0, ret)
+
+        asyncio.run(setupCoro())
+
+        # Verify
+        self.assertTrue(w1AsListener)
+        self.assertTrue(not w2AsListener)
+        self.assertTrue(w1AsProvider and w2AsProvider)
+
+
+    def test_PostElectProtos_step(self) -> None:
         pass
 
-    def test_wait_command(self) -> None:
-        pass
+    @staticmethod
+    async def w1BeListener(arg: Command) -> None:
+        nonlocal w1AsListener, w1AsProvider
 
-    def test_elect_listener(self) -> None:
-        pass
+        if arg.role() == PostConfigCmd.ROLE_LISTENER:
+            w1AsListener = True  # type: ignore
+            isListener = "true"
+        else:
+            w1AsProvider = True
+            isListener = "false"
 
-    def test_providers_init(self) -> None:
-        pass
+        r = CmdResponseLetter(
+            "w1", L.Letter.CmdResponse,
+            CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener})
+
+        await self.w1.reply(r)
+
+    @staticmethod
+    async def w2BeListener(arg):
+        nonlocal w2AsListener, w2AsProvider
+
+        if arg.role() == PostConfigCmd.ROLE_LISTENER:
+            w2AsListener = True  # type: ignore
+            isListener = "true"
+        else:
+            w2AsProvider = True
+            isListener = "false"
+
+        r = CmdResponseLetter(
+            "w2", L.Letter.CmdResponse,
+            CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener})
+
+        await self.w2.reply(r)
+
+    @staticmethod
+    async def replyMethod(msg):
+        await self.random.msgQueue.put(msg)

@@ -52,13 +52,24 @@ class Logger(ModuleDaemon, Observer):
             return None
 
         while True:
-            if self._stop: return None
+            if self._stop:
+                return None
 
-            msgUnit = await self.logQueue.get()  # type: Tuple[LOG_ID, LOG_MSG]
+            try:
+                msgUnit = await asyncio.wait_for(
+                    self.logQueue.get(), timeout=1)
+            except asyncio.exceptions.TimeoutError:
+                continue
+
             self._output(msgUnit)
 
     async def stop(self) -> None:
         self._stop = True
+
+    async def stopDelay(self, timeout: Optional[int] = None) -> None:
+        if timeout is not None:
+            await asyncio.sleep(timeout)
+        await self.stop()
 
     def needStop(self) -> bool:
         return self._stop
@@ -85,6 +96,8 @@ class Logger(ModuleDaemon, Observer):
             return None
 
         fd = self.logTunnels[logId]
+        del self.logTunnels[logId]
+
         fd.close()
 
     def _output(self, unit: Tuple[LOG_ID, LOG_MSG]) -> None:
@@ -125,29 +138,54 @@ class Logger(ModuleDaemon, Observer):
 
 # TestCases
 import unittest
+import shutil
+
 
 class LoggerTestCases(unittest.TestCase):
 
-    def test_logger(self):
+    def setUp(self) -> None:
+        self.logger = Logger("./logger")
 
-        from manager.master.logger import Logger
+    def tearDown(self) -> None:
+        shutil.rmtree("./logger")
 
-        logger = Logger("./logger")
+    def test_Logger_logRegister(self) -> None:
+        self.logger.log_register("ID")
+        self.assertTrue("ID" in self.logger.logTunnels)
 
-        async def loggerDaemon(logger: Logger) -> None:
-            await logger.begin()
-            await logger.start()
+    def test_Logger_logRegister_duplicate(self) -> None:
+        self.logger.log_register("ID")
+        self.logger.log_register("ID")
+        self.assertTrue("ID" in self.logger.logTunnels)
 
-        async def loggerUser(logger: Logger) -> None:
-            logger.log_register("Test")
-            await Logger.putLog(logger, "Test", "123")
+    def test_Logger_logPut(self) -> None:
+        # Setup
+        self.logger.log_register("ID")
 
-            await logger.stop()
-
-        async def test() -> None:
+        # Exercise
+        async def exerciseHelper() -> None:
+            await self.logger.begin()
+            await self.logger.log_put("ID", "123456789")
             await asyncio.gather(
-                loggerDaemon(logger),
-                loggerUser(logger)
+                self.logger.run(),
+                self.logger.stopDelay(1)
             )
 
-        asyncio.run(test())
+        asyncio.run(exerciseHelper())
+
+        # Verify
+        f = open("./logger/ID")
+        val = f.read(100)
+        val = val.split(":")[-1].strip()
+        self.assertEqual("123456789", val)
+
+    def test_logger_close(self) -> None:
+        # Setup
+        self.logger.log_register("ID")
+        self.assertTrue("ID" in self.logger.logTunnels)
+
+        # Exercise
+        self.logger.log_close("ID")
+
+        # Verify
+        self.assertTrue("ID" not in self.logger.logTunnels)

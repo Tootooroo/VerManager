@@ -4,7 +4,8 @@ import os
 import platform
 import shutil
 
-from typing import Optional, Dict, BinaryIO, Any, List
+from typing import Optional, Dict, BinaryIO, \
+    Any, List, cast
 
 from .mmanager import Module
 from manager.basic.type import State, Ok, Error
@@ -47,17 +48,12 @@ class StoChooser:
         return True
 
     def store(self, content: bytes) -> None:
-
         fd = self._fd
-
         fd.write(content)
 
     def retrive(self, count: int) -> bytes:
-
         fd = self._fd
-
         content = fd.read(count)
-
         return content
 
     def close(self) -> State:
@@ -367,71 +363,83 @@ class Storage(Module):
 
 # TestCases
 import unittest
+import os
+import shutil
 
 class StorageTestCases(unittest.TestCase):
 
-     def test_storage(self):
+    def setUp(self) -> None:
+        self.storage = Storage("./Storage", None)
 
-        import os
-        from manager.basic.storage import Storage, StoChooser
+    def tearDown(self) -> None:
+        shutil.rmtree("./Storage")
 
-        storage = Storage("./Storage", None)
+    def test_Storage_create(self) -> None:
+        # Setup
+        boxName = "Test"
 
-        # Create a file via storage
-        boxName = "box"
-        fileName = "file"
-        chooser_create = storage.create(boxName, fileName)
+        # Exercise
+        chooser = cast(StoChooser, self.storage.create(boxName, "File"))
 
-        self.assertTrue(os.path.exists("./Storage/box/file"))
+        # Verify
+        self.assertEqual("./Storage/Test/File", chooser.path())
+        self.assertTrue(os.path.exists(chooser.path()))
 
-        # Open
-        chooser_open = storage.open(boxName, fileName)
-        self.assertEqual(chooser_create.path(), chooser_open.path())
+    def test_Storage_open(self) -> None:
+        # Setup
+        boxName = "Test"
+        self.storage.create(boxName, "File")
 
-        self.assertEqual(1, storage.numOfFiles())
+        # Exercise
+        contents = "Contents of TestFile"
+        chooser = cast(StoChooser, self.storage.open("Test", "File"))
+        chooser.store(contents.encode())
+        chooser.close()
 
-        # Remove
-        storage.delete(boxName, fileName)
-        self.assertTrue(not os.path.exists("./Storage/box"))
+        # Verify
+        fd = open("./Storage/Test/File")
+        string = fd.read(len(contents))
+        self.assertEqual(contents, string)
 
-        self.assertEqual(0, storage.numOfFiles())
+    def test_Storage_getFile(self) -> None:
+        # Setup
+        boxName = "Test"
+        self.storage.create(boxName, "File")
 
-        # Create files
-        files = ["file1", "file2", "file3", "file4", "file5"]
+        # Exercise
+        file = cast(File, self.storage.getFile(boxName, "File"))
 
-        for file in files:
-            storage.create(boxName, file)
-        self.assertEqual(len(files), storage.numOfFiles())
+        # Verify
+        self.assertEqual("./Storage/Test/File", file.path())
 
-        self.assertTrue(os.path.exists("./Storage/box/file1"))
-        self.assertTrue(os.path.exists("./Storage/box/file2"))
-        self.assertTrue(os.path.exists("./Storage/box/file3"))
-        self.assertTrue(os.path.exists("./Storage/box/file4"))
-        self.assertTrue(os.path.exists("./Storage/box/file5"))
+    def test_Storage_filesOf(self) -> None:
+        # Setup
+        boxName = "Test"
 
-        for file in files:
-            storage.delete(boxName, file)
+        # Exercise
+        self.storage.create(boxName, "File1")
+        self.storage.create(boxName, "File2")
 
-        self.assertTrue(not os.path.exists("./Storage/box/file1"))
-        self.assertTrue(not os.path.exists("./Storage/box/file2"))
-        self.assertTrue(not os.path.exists("./Storage/box/file3"))
-        self.assertTrue(not os.path.exists("./Storage/box/file4"))
-        self.assertTrue(not os.path.exists("./Storage/box/file5"))
+        # Verify
+        filesOfBox = self.storage.filesOf(boxName)
+        self.assertEqual(["File1", "File2"], [f.name for f in filesOfBox])
 
-        storage.create("box1", "file")
-        self.assertTrue(os.path.exists("./Storage/box1/file"))
+    def test_Storage_delete(self) -> None:
+        # Setup
+        boxName1 = "B1"
+        boxName2 = "B2"
 
-        storage.create("box2", "file")
-        self.assertTrue(os.path.exists("./Storage/box1/file"))
+        self.storage.create(boxName1, "File1")
+        self.storage.create(boxName1, "File2")
+        self.storage.create(boxName2, "File1")
+        self.storage.create(boxName2, "File2")
 
-        storage.delete("box1", "file")
-        self.assertTrue(not os.path.exists("./Storage/box1/file"))
+        # Exercise
+        self.storage.delete(boxName1, "File1")
+        self.storage.delete(boxName2, "File2")
 
-        storage.delete("box2", "file")
-        self.assertTrue(not os.path.exists("./Storage/box2/file"))
-
-        # Try to delete a file out of exists
-        storage.delete("box1", "file")
-
-        storage.destruct()
-        self.assertTrue(not os.path.exists("./Storage/"))
+        # Verify
+        self.assertTrue(not os.path.exists("./Storage/B1/File1"))
+        self.assertTrue(not os.path.exists("./Storage/B2/File2"))
+        self.assertTrue(os.path.exists("./Storage/B1/File2"))
+        self.assertTrue(os.path.exists("./Storage/B2/File1"))

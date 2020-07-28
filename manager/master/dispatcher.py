@@ -647,7 +647,9 @@ condChooser = {
 
 
 # UnitTest
-class DispatcherUnitTest(TestCase):
+import unittest
+
+class DispatcherUnitTest(unittest.TestCase):
 
     def test_waitarea(self) -> None:
         type_of_tasks = [
@@ -838,7 +840,7 @@ class DispatcherUnitTest(TestCase):
             t1 = Task("ID1", "SN1", "VSN1", {})
             d.dispatch(t1)
 
-            # 7 Tasks should in wait for worker
+            # 6 Tasks should in wait for worker
             self.assertTrue(len(d.getTaskInWaits()) == 6)
 
             # Remove all worker
@@ -854,13 +856,10 @@ class DispatcherUnitTest(TestCase):
 
             await d.stop()
 
-
-
         async def mainTest() -> None:
             await asyncio.gather(
                 d.run(),
                 dispatch_test(d)
             )
-
 
         asyncio.run(mainTest())

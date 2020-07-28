@@ -36,9 +36,10 @@ class ElectGroup:
     def __init__(self, workers: List[Worker] = []) -> None:
         self._listener = None  # type: Optional[Worker]
         self._providers = {}  # type: Dict[str, Worker]
-        self._candidate = []  # type: List[Worker]
+        self._candidate = workers  # type: List[Worker]
         # At begining all workers is provider
         self._providers = {w.getIdent():w for w in workers}
+
 
     def __iter__(self) -> ElectGroup_iter:
         workers = self._providers.copy()
@@ -148,7 +149,8 @@ class PostElectProtocol(abc.ABC):
     def __init__(self) -> None:
         self.isInit = False
         self.group = None  # type: Optional[ElectGroup]
-        self.msgQueue = asyncio.Queue(256)  # type: asyncio.Queue[CmdResponseLetter]
+        self.msgQueue = asyncio.Queue(256) \
+            # type: asyncio.Queue[CmdResponseLetter]
 
     def setGroup(self, group: ElectGroup) -> None:
         self.group = group

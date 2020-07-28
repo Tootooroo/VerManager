@@ -203,51 +203,36 @@ class BuildSet:
 
 # TestCases
 import unittest
+from manager.basic.info import Info
+from functools import reduce
 
 class BuildTestCases(unittest.TestCase):
 
-    def test_build(self):
-        from manager.basic.info import Info
-        from manager.master.build import Build, BuildSet
+    def setUp(self) -> None:
+        build_dict = {
+            "cmd": ["echo ll <version> <datetime> > ll"],
+            "output": ["./ll<version><datetime>"]
+        }
+        self.build = Build("GL5610", build_dict)
 
-        from functools import reduce
+    def test_Build_basic(self) -> None:
+        build = self.build
 
-        info = Info("./config_test.yaml")
+        # Exercise
+        ident = build.getIdent()
+        cmd = build.getCmd()
+        output = build.getOutput()
 
-        buildSet = info.getConfig("BuildSet")
+        # Verify
+        self.assertEqual("GL5610", ident)
+        self.assertEqual(["echo ll <version> <datetime> > ll"], cmd)
+        self.assertEqual("./ll<version><datetime>", output)
 
-        self.assertTrue(BuildSet.isValid(buildSet))
+    def test_Build_varAssign(self) -> None:
+        build = self.build
+        # Exercise
+        build.varAssign([("<version>", "VER"), ("<datetime>", "TOD")])
 
-        bs = BuildSet(buildSet)
-
-        # VarAssign testing
-        builds = bs.getBuilds()
-        for build in builds:
-            build.varAssign([("<version>", "Ver"), ("<datetime>", "Date")])
-
-        ret = []
-        for build in builds:
-            vars = ["Ver", "Date"]
-            ret = [reduce(lambda acc, cur: acc and (cur in cmd), vars, True) for cmd in build.getCmd()]
-
-        self.assertTrue(False not in ret)
-
-
-        # Get a Build and test it.
-        b = bs.getBuild("GL5610")
-        self.assertTrue("GL5610", b.getIdent())
-
-        builds = bs.getBuilds()
-        builds_id = list(map(lambda b: b.getIdent(), builds))
-        self.assertTrue('GL5610' in builds_id)
-        self.assertTrue('GL5610-v2' in builds_id)
-        self.assertTrue('GL5610-v3' in builds_id)
-        self.assertTrue('GL8900' in builds_id)
-
-        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v2'))
-        self.assertTrue(bs.belongTo('GL5610') == bs.belongTo('GL5610-v3'))
-
-        bs_GL8900 = bs.belongTo('GL8900')
-        self.assertEqual("P2", bs_GL8900[0])
-        self.assertTrue(len(bs_GL8900[1]) == 1)
-        self.assertTrue(bs_GL8900[1][0].getIdent() == 'GL8900')
+        # Verify
+        self.assertEqual(["echo ll VER TOD > ll"], build.getCmd())
+        self.assertEqual("./llVERTOD", build.getOutput())
