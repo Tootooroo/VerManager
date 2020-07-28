@@ -7,7 +7,7 @@ import manager.basic.letter as L
 
 from datetime import datetime
 from functools import reduce
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional, Dict, Any
 
 from queue import Empty as queue_Empty
 from manager.basic.type import Ok, Error, State
@@ -189,8 +189,9 @@ class RandomElectProtocol(PostElectProtocol):
 import unittest
 from manager.master.postElection import ElectGroup
 from manager.basic.stubs.workerStup import WorkerStub
+from manager.basic.commands import Command
 
-class WorkerStubSpec(WorkerStub):
+class WorkerMock(WorkerStub):
 
     def __init__(self, ident) -> None:
         WorkerStub.__init__(self)
@@ -198,79 +199,53 @@ class WorkerStubSpec(WorkerStub):
 
         self.asListener = False
         self.asProvider = False
+        self.queue = None  # type: Optional[asyncio.Queue]
 
+    async def control(self, cmd: Command) -> None:
+        if cmd.role() == PostConfigCmd.ROLE_LISTENER:  # type: ignore
+            self.asListener = True  # type: ignore
+            isListener = "true"
+        else:
+            self.asProvider = True
+            isListener = "false"
+
+        r = CmdResponseLetter(
+            self.ident, L.Letter.CmdResponse,
+            CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener})
+
+        await self.reply(r)
+
+    async def reply(self, msg: Any) -> None:
+        await self.queue.put(msg)  # type: ignore
 
 
 class RandomElectProtosTest(unittest.TestCase):
 
     def setUp(self) -> None:
         # Fixture Setup
-        self.w1 = worker1 = WorkerStub()
-        self.w2 = worker2 = WorkerStub()
-        worker1.ident = "w1"
-        worker2.ident = "w2"
+        self.w1 = worker1 = WorkerMock("w1")
+        self.w2 = worker2 = WorkerMock("w2")
         self.group = ElectGroup([worker1, worker2])
 
     def test_PostElectProtos_Init(self) -> None:
-        # Fixture setup
-        self.w1.setControlRtn(self.w1BeListener)
-        self.w1.setReplyRtn(self.replyMethod)
-        self.w2.setControlRtn(self.w2BeListener)
-        self.w2.setReplyRtn(self.replyMethod)
-
-        # Exercise
         async def setupCoro() -> None:
+            # Fixture Setup
             self.random = RandomElectProtocol()
             self.random.setGroup(self.group)
+            self.w1.queue = self.random.msgQueue
+            self.w2.queue = self.random.msgQueue
 
+            # Exercise
             ret = await self.random.init()
             self.assertEqual(0, ret)
 
         asyncio.run(setupCoro())
 
         # Verify
-        self.assertTrue(w1AsListener)
-        self.assertTrue(not w2AsListener)
-        self.assertTrue(w1AsProvider and w2AsProvider)
+        self.assertTrue(self.w1.asListener)
+        self.assertTrue(self.w1.asProvider)
+        self.assertTrue(not self.w2.asListener)
+        self.assertTrue(self.w2.asProvider)
 
-
-    def test_PostElectProtos_step(self) -> None:
+    def test_PostElectProtos_stepListenerOnline(self) -> None:
         pass
-
-    @staticmethod
-    async def w1BeListener(arg: Command) -> None:
-        nonlocal w1AsListener, w1AsProvider
-
-        if arg.role() == PostConfigCmd.ROLE_LISTENER:
-            w1AsListener = True  # type: ignore
-            isListener = "true"
-        else:
-            w1AsProvider = True
-            isListener = "false"
-
-        r = CmdResponseLetter(
-            "w1", L.Letter.CmdResponse,
-            CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener})
-
-        await self.w1.reply(r)
-
-    @staticmethod
-    async def w2BeListener(arg):
-        nonlocal w2AsListener, w2AsProvider
-
-        if arg.role() == PostConfigCmd.ROLE_LISTENER:
-            w2AsListener = True  # type: ignore
-            isListener = "true"
-        else:
-            w2AsProvider = True
-            isListener = "false"
-
-        r = CmdResponseLetter(
-            "w2", L.Letter.CmdResponse,
-            CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener})
-
-        await self.w2.reply(r)
-
-    @staticmethod
-    async def replyMethod(msg):
-        await self.random.msgQueue.put(msg)
