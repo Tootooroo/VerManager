@@ -194,9 +194,7 @@ from manager.basic.commands import Command
 class WorkerMock(WorkerStub):
 
     def __init__(self, ident) -> None:
-        WorkerStub.__init__(self)
-        self.ident = ident
-
+        WorkerStub.__init__(self, ident)
         self.asListener = False
         self.asProvider = False
         self.queue = None  # type: Optional[asyncio.Queue]

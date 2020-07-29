@@ -25,12 +25,13 @@ class CONTROL_RTN_NOT_SETED(Exception):
 
 class WorkerStub(Worker):
 
-    def __init__(self) -> None:
+    def __init__(self, ident) -> None:
         Worker.__init__(
             self,
             StreamReaderDummy(),
             StreamWriterDummy()
         )
+        self.ident = ident
 
     async def do(self, task: Task) -> None:
         """

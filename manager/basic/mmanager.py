@@ -1,11 +1,9 @@
 # mmanager.py
 
 import unittest
-import asyncio
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict
-from threading import Thread
 from .util import partition
 
 from .type import State, Ok, Error
@@ -37,6 +35,7 @@ class Daemon(ABC):
 
     async def start(self) -> None:
         await self.run()
+
 
 class Module(ABC):
 
@@ -135,13 +134,12 @@ class MManager:
             if isinstance(m, ModuleDaemon):
                 await m.stop()
 
-    async def startAll(self) -> None:
-        allMods = self.getAllModules()
-
-        for mod in allMods:
-            await mod.begin()
-            if isinstance(mod, ModuleDaemon):
-                await mod.start()
+    def allDaemons(self) -> List:
+        all = []
+        for m in self.getAllModules():
+            if isinstance(m, ModuleDaemon):
+                all.append(m)
+        return all
 
     async def stopAll(self) -> None:
         allMods = self.getAllModules()
@@ -154,87 +152,68 @@ class MManager:
 
 
 # TestCases
+import asyncio
+
+
+class ModuleExample(Module):
+
+    def __init__(self, name: str) -> None:
+        Module.__init__(self, name)
+
+        self.running = False
+
+    async def begin(self):
+        self.running = True
+
+    async def cleanup(self):
+        self.running = False
+
+class DaemonExample(ModuleDaemon):
+
+    def __init__(self, name: str) -> None:
+        ModuleDaemon.__init__(self, name)
+
+        self.running = False
+        self.done = False
+        self.stoped = False
+
+    async def begin(self) -> None:
+        self.running = True
+
+    async def cleanup(self) -> None:
+        self.running = False
+
+    async def stop(self) -> None:
+        self.stoped = True
+
+    def needStop(self) -> bool:
+        return True
+
+    async def run(self) -> None:
+        self.done = True
+
 class MManagerTestCases(unittest.TestCase):
 
-    def test_case(self):
+    def setUp(self) -> None:
+        self.manager = MManager()
 
-        class ModuleExample(Module):
+        self.modules = modules = [ModuleExample("M1"), ModuleExample("M2")]
+        self.daemons = daemons = [DaemonExample("D1"), DaemonExample("D2")]
 
-            def __init__(self, name: str) -> None:
-                Module.__init__(self, name)
+        for m in modules:
+            self.manager.addModule(m)
 
-                self.running = False
+        for d in daemons:
+            self.manager.addModule(d)
 
-            async def begin(self):
-                self.running = True
+    def test_MManager_DaemonRuns(self):
+        # Exercise
+        runAwaits = (d.run() for d in self.manager.allDaemons())
 
-            async def cleanup(self):
-                self.running = False
+        async def doTest() -> None:
+            await asyncio.gather(*runAwaits)
+        asyncio.run(doTest())
 
-        class DaemonExample(ModuleDaemon):
-
-            def __init__(self, name:str) -> None:
-                ModuleDaemon.__init__(self, name)
-
-                self.running = False
-                self.done = False
-                self.stoped = False
-
-            async def begin(self) -> None:
-                self.running = True
-
-            async def cleanup(self) -> None:
-                self.running = False
-
-            async def stop(self) ->  None:
-                self.stoped = True
-
-            def needStop(self) -> bool:
-                return True
-
-            async def run(self) -> None:
-                self.done = True
-
-        async def test() -> None:
-            manager = MManager()
-
-            m1 = ModuleExample("M1")
-            m2 = ModuleExample("M2")
-
-            manager.addModule(m1)
-            manager.addModule(m2)
-
-            self.assertTrue(manager.isModuleExists("M1"))
-            self.assertTrue(manager.isModuleExists("M2"))
-
-            self.assertTrue(not manager.isModuleExists("M_NOT_EXISTS"))
-
-            await manager.startAll()
-
-            self.assertTrue(m1.running is True)
-            self.assertTrue(m2.running is True)
-
-            await manager.stopAll()
-            self.assertTrue(m1.running is False)
-            self.assertTrue(m2.running is False)
-
-            # Test Daemon
-            dm1 = DaemonExample("dm1")
-            dm2 = DaemonExample("dm2")
-            manager.addModule(dm1)
-            manager.addModule(dm2)
-
-            await manager.startAll()
-            self.assertTrue(m1.running is True)
-            self.assertTrue(m2.running is True)
-            self.assertTrue(dm1.running is True and dm1.done is True)
-            self.assertTrue(dm2.running is True and dm2.done is True)
-
-            await manager.stopAll()
-            self.assertTrue(m1.running is False)
-            self.assertTrue(m2.running is False)
-            self.assertTrue(dm1.running is False and dm1.stoped is True)
-            self.assertTrue(dm2.running is False and dm2.stoped is True)
-
-
-        asyncio.run(test())
+        # Verify
+        for d in self.daemons:
+            self.assertTrue(d.done)

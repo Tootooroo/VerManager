@@ -1,9 +1,10 @@
 # EventListener
 
+import unittest
 import socket
-import select
+import asyncio
 
-from typing import Callable, Any, Dict, BinaryIO, List
+from typing import Callable, Any, Dict, List
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
@@ -40,19 +41,19 @@ class EventListener(ModuleDaemon, Subject, Observer):
         # Init as Observer
         Observer.__init__(self)
 
-        self.entries = select.poll()
-        self.numOfEntries = 0
-
         # Handler in handlers should be unique
         self.handlers = {}  # type: Dict[str, List[Handler]]
 
-        # {tid:fd}
-        self.taskResultFdSet = {}  # type: Dict[str, BinaryIO]
-
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
+        return None
+
+    async def stop(self) -> None:
+        return None
+
+    def needStop(self) -> None:
         return None
 
     def getModule(self, m: str) -> Any:
@@ -72,13 +73,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
             return None
 
         del self.handlers[eventType]
-
-    def fdRegister(self, worker: Worker) -> None:
-        sock = worker.sock
-        self.entries.register(sock.fileno(), select.POLLIN)
-
-    def fdUnregister(self, fd) -> None:
-        self.entries.unregister(fd)
 
     def Acceptor(self, letter: Letter) -> None:
         # Check letter's type
@@ -135,3 +129,115 @@ class EventListener(ModuleDaemon, Subject, Observer):
 def workerRegister(eventListener: EventListener,
                    worker: Worker) -> None:
     eventListener.fdRegister(worker)
+
+
+# Testcases
+from manager.basic.stubs.workerStup import WorkerStub
+from manager.basic.commands import Command
+from manager.basic.letter import CmdResponseLetter
+
+
+async def runEventL(e) -> None:
+    await e.run()
+
+
+async def stopEventLDelay(e) -> None:
+    await e.stop()
+
+
+
+class WorkerMockEvent(WorkerStub):
+    def __init__(self, ident: str) -> None:
+        WorkerStub.__init__(self, ident)
+        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+
+    async def eventProc(self, l: CmdResponseLetter) -> None:
+        pass
+
+
+class WorkerMockHeartBeat(WorkerStub):
+    def __init__(self, ident: str) -> None:
+        WorkerStub.__init__(self, ident)
+        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+
+    async def control(self, cmd: Command) -> None:
+        pass
+
+    async def heartbeatProc(self) -> None:
+        pass
+
+    def heartbeatCount(self) -> int:
+        pass
+
+
+class EventListenerTestCases(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.eventL = EventListener(None)
+
+    def test_EventListener_register(self) -> None:
+        # Exercise
+        w1 = WorkerStub("w1")
+        self.eventL.register(w1)
+
+        # Verify
+        regWorkers= self.eventL.registered()
+        self.assertTrue(w1 in regWorkers)
+
+    def test_EventListener_remove(self) -> None:
+        # Setup
+        w1 = WorkerStub("w1")
+        w2 = WorkerStub("w2")
+        self.eventL.register(w1)
+        self.eventL.register(w2)
+
+        # Exercise
+        self.eventL.remove(w1.ident)
+
+        # Verify
+        regWorkers = self.eventL.registered()
+        self.assertTrue(w1 in regWorkers)
+        self.assertTrue(w2 not in regWorkers)
+
+    def test_EventListener_HeartBeat(self) -> None:
+        # Setup
+        w1 = WorkerMockHeartBeat("w1")
+        w2 = WorkerMockHeartBeat("w2")
+        self.eventL.register(w1)
+        self.eventL.register(w2)
+
+        # Exercise
+        asyncio.gather(
+            runEventL(self.eventL),
+            stopEventLDelay(self.eventL),
+            w1.heartbeatProc()
+        )
+
+        # Verify
+        self.assertEqual(3, w1.heartbeatCount)
+        self.assertEqual(3, w2.heartbeatCount)
+
+    def test_EventListener_handleEvent(self) -> None:
+        # Setup
+        w1 = WorkerMockEvent("w1")
+        w2 = WorkerMockEvent("w2")
+        self.eventL.register(w1)
+        self.eventL.register(w2)
+
+        hDone = False
+
+        def handler(e, l):
+            nonlocal hDone
+            hDone = True
+
+        self.eventL.registerEvent("H", handler)
+
+        # Exercise
+        asyncio.gather(
+            runEventL(self.eventL),
+            stopEventLDelay(self.eventL),
+            w1.eventProc()
+        )
+
+        # Verify
+        self.assertTrue(hDone)

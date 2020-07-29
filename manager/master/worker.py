@@ -3,14 +3,12 @@
 # Maintain connection with workers and
 # provide communication interface to another module
 
-import socket
 import traceback
 import asyncio
 
 from typing import Tuple, Optional, List, Dict, Callable
 from .task import Task, TaskGroup, SingleTask, PostTask
 from datetime import datetime
-from threading import Lock
 from manager.basic.letter import Letter, receving as letter_receving, \
     sending as letter_sending, CancelLetter
 from manager.basic.commands import Command
