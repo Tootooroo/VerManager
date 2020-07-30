@@ -167,6 +167,12 @@ class Worker:
 
         self.inProcTask.newTask(task)
 
+    async def sendLetter(self, letter: Letter) -> None:
+        await self._send(letter)
+
+    async def waitResponse(self, timeout=None) -> Optional[Letter]:
+        pass
+
     # Provide ability to cancel task in queue or
     # processed task
     # Note: sn here should be a verion sn

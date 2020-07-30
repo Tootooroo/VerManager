@@ -144,6 +144,14 @@ class Letter:
     """
     Req = "Req"
 
+    """
+    Fortmath of HeartbeatLetter
+    Type    : 'Hb'
+    Header  : {"type":..., "ident":..., "seq":...}}
+    Content : {}
+    """
+    Heartbeat = "Hb"
+
     BINARY_HEADER_LEN = 260
     BINARY_MIN_HEADER_LEN = 6
     LETTER_TYPE_LEN = 2
@@ -858,6 +866,37 @@ class ReqLetter(Letter):
         return ReqLetter(header['ident'], header['type'], content['reqMsg'])
 
 
+class HeartbeatLetter(Letter):
+    """
+    HeartbeatLetter is use to maintain connection
+    between master and worker.
+    """
+
+    def __init__(self, ident: str, seq: int) -> None:
+        Letter.__init__(self, Letter.Heartbeat,
+                        {"ident": ident, "seq": str(seq)}, {})
+
+    def setIdent(self, ident: str) -> None:
+        self.setHeader('ident', ident)
+
+    def getIdent(self) -> str:
+        return self.getHeader('ident')
+
+    def setSeq(self, seq: str) -> None:
+        self.setHeader('seq', seq)
+
+    def getSeq(self) -> int:
+        return int(self.getHeader('seq'))
+
+    @staticmethod
+    def parse(s: bytes) -> Optional['HeartbeatLetter']:
+        (type_, header, content) = bytesDivide(s)
+
+        if type_ != Letter.Heartbeat:
+            return None
+
+        return HeartbeatLetter(header['ident'], header['seq'])
+
 validityMethods = {
     Letter.NewTask        :  newTaskLetterValidity,
     Letter.Response       :  responseLetterValidity,
@@ -870,7 +909,8 @@ validityMethods = {
     Letter.CmdResponse    :  lambda letter:   True,
     Letter.Post           :  lambda letter:   True,
     Letter.TaskCancel     :  lambda letter:   True,
-    Letter.Req            :  lambda letter:   True
+    Letter.Req            :  lambda letter:   True,
+    Letter.Heartbeat      :  lambda letter:   True,
 } # type:   Dict[str, Callable]
 
 parseMethods = {
@@ -885,7 +925,8 @@ parseMethods = {
     Letter.CmdResponse    :  CmdResponseLetter,
     Letter.Post           :  PostTaskLetter,
     Letter.TaskCancel     :  CancelLetter,
-    Letter.Req            :  ReqLetter
+    Letter.Req            :  ReqLetter,
+    Letter.Heartbeat      :  HeartbeatLetter
 } # type:   Any
 
 
@@ -1027,3 +1068,16 @@ class LetterTestCases(unittest.TestCase):
         self.assertEqual(CmdResponseLetter.STATE_SUCCESS, cmdRLetter_parsed.getState())
         self.assertEqual("NN", cmdRLetter_parsed.getReason())
         self.assertEqual("tt", cmdRLetter_parsed.getTarget())
+
+    def test_HeartbeatLetter_Parse(self) -> None:
+        # Setup
+        heartbeatLetter = HeartbeatLetter("HB", 1)
+        bytestr = heartbeatLetter.toBytesWithLength()
+
+        # Exercise
+        heartbeatLetter_parsed = cast(HeartbeatLetter, Letter.parse(bytestr))
+
+        # Verify
+        self.assertIsNotNone(heartbeatLetter_parsed)
+        self.assertEqual("HB", heartbeatLetter_parsed.getIdent())
+        self.assertEqual(1, heartbeatLetter_parsed.getSeq())
