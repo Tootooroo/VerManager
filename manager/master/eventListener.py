@@ -1,16 +1,17 @@
 # EventListener
 
 import unittest
-import socket
 import asyncio
 
 from typing import Callable, Any, Dict, List
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.basic.letter import Letter, BinaryLetter
+from manager.basic.letter import Letter
 
-import traceback
+# Test imports
+from manager.basic.stubs.workerStup import WorkerStub
+from manager.basic.commands import Command
 
 M_NAME = "EventListener"
 
@@ -44,6 +45,9 @@ class EventListener(ModuleDaemon, Subject, Observer):
         # Handler in handlers should be unique
         self.handlers = {}  # type: Dict[str, List[Handler]]
 
+        # Registered Workers
+        self.regWorkers = []  # type: List[Worker]
+
     async def begin(self) -> None:
         return None
 
@@ -53,8 +57,8 @@ class EventListener(ModuleDaemon, Subject, Observer):
     async def stop(self) -> None:
         return None
 
-    def needStop(self) -> None:
-        return None
+    def needStop(self) -> bool:
+        return False
 
     def getModule(self, m: str) -> Any:
         return self._sInst.getModule(m)
@@ -87,56 +91,27 @@ class EventListener(ModuleDaemon, Subject, Observer):
     def event_log(self, msg: str) -> None:
         self.notify(EventListener.NOTIFY_LOG, (letterLog, msg))
 
-    def run(self) -> None:
-        global letterLog
+    def register(self, worker: Worker) -> None:
+        if worker not in self.regWorkers:
+            self.regWorkers.append(worker)
 
-        while True:
-            # Polling every 10 seconds due to polling
-            # may not affect to new worker which be
-            # added after poll() is called
-            readyEntries = self.entries.poll(1000)
+    def registered(self) -> List[Worker]:
+        return self.regWorkers
 
-            # Read message from socket and then transfer
-            # this message into letter. Then hand the
-            # letter to acceptor
-            for fd, event in readyEntries:
-                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+    def remove(self, ident: str) -> None:
+        self.regWorkers = \
+            [w for w in self.regWorkers if w.getIdent() != ident]
 
-                try:
-                    letter = Worker.receving(sock)
-
-                    if letter is None:
-                        self.event_log("Letter is NoneType")
-                        continue
-
-                    if not letter.validity():
-                        self.event_log("Receive invalid letter "
-                                       + letter.toString())
-                        continue
-                except Exception:
-                    traceback.print_exc()
-                    # Notify observers that a connection is lost.
-                    self.notify(EventListener.NOTIFY_LOST, fd)
-                    self.entries.unregister(fd)
-                    continue
-
-                if letter is not None:
-                    if not isinstance(letter, BinaryLetter):
-                        self.event_log("Receive: " + letter.toString())
-                    self.Acceptor(letter)
+    async def run(self) -> None:
+        return None
 
 
 def workerRegister(eventListener: EventListener,
                    worker: Worker) -> None:
-    eventListener.fdRegister(worker)
+    return None
 
 
 # Testcases
-from manager.basic.stubs.workerStup import WorkerStub
-from manager.basic.commands import Command
-from manager.basic.letter import CmdResponseLetter
-
-
 async def runEventL(e) -> None:
     await e.run()
 
@@ -145,20 +120,19 @@ async def stopEventLDelay(e) -> None:
     await e.stop()
 
 
-
 class WorkerMockEvent(WorkerStub):
     def __init__(self, ident: str) -> None:
         WorkerStub.__init__(self, ident)
-        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+        self.q = None  # type: Optional[asyncio.Queue]
 
-    async def eventProc(self, l: CmdResponseLetter) -> None:
+    async def eventProc(self) -> None:
         pass
 
 
 class WorkerMockHeartBeat(WorkerStub):
     def __init__(self, ident: str) -> None:
         WorkerStub.__init__(self, ident)
-        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+        self.q = None  # type: Optional[asyncio.Queue]
 
     async def control(self, cmd: Command) -> None:
         pass
@@ -181,7 +155,7 @@ class EventListenerTestCases(unittest.TestCase):
         self.eventL.register(w1)
 
         # Verify
-        regWorkers= self.eventL.registered()
+        regWorkers = self.eventL.registered()
         self.assertTrue(w1 in regWorkers)
 
     def test_EventListener_remove(self) -> None:
@@ -196,8 +170,8 @@ class EventListenerTestCases(unittest.TestCase):
 
         # Verify
         regWorkers = self.eventL.registered()
-        self.assertTrue(w1 in regWorkers)
-        self.assertTrue(w2 not in regWorkers)
+        self.assertTrue(w1 not in regWorkers)
+        self.assertTrue(w2 in regWorkers)
 
     def test_EventListener_HeartBeat(self) -> None:
         # Setup
@@ -207,11 +181,16 @@ class EventListenerTestCases(unittest.TestCase):
         self.eventL.register(w2)
 
         # Exercise
-        asyncio.gather(
-            runEventL(self.eventL),
-            stopEventLDelay(self.eventL),
-            w1.heartbeatProc()
-        )
+        async def doTest():
+            w1.q = asyncio.Queue(10)
+            w2.q = asyncio.Queue(10)
+
+            asyncio.gather(
+                runEventL(self.eventL),
+                stopEventLDelay(self.eventL),
+                w1.heartbeatProc()
+            )
+        asyncio.run(doTest())
 
         # Verify
         self.assertEqual(3, w1.heartbeatCount)
@@ -233,11 +212,16 @@ class EventListenerTestCases(unittest.TestCase):
         self.eventL.registerEvent("H", handler)
 
         # Exercise
-        asyncio.gather(
-            runEventL(self.eventL),
-            stopEventLDelay(self.eventL),
-            w1.eventProc()
-        )
+        async def doTest():
+            w1.q = asyncio.Queue(10)
+            w2.q = asyncio.Queue(10)
+
+            asyncio.gather(
+                runEventL(self.eventL),
+                stopEventLDelay(self.eventL),
+                w1.eventProc()
+            )
+        asyncio.run(doTest())
 
         # Verify
         self.assertTrue(hDone)
