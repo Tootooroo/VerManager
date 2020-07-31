@@ -536,7 +536,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             for child in children:
                 child.lastUpdate()
 
-    def workerLost_redispatch(self, worker: Worker) -> None:
+    async def workerLost_redispatch(self, worker: Worker) -> None:
 
         tasks = worker.inProcTasks()
 

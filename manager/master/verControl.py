@@ -4,13 +4,11 @@
 
 import unittest
 import django.db.utils
-import manager.master.components as Components
-from typing import *
+from typing import Any, Optional, Dict
 
 from manager.basic.type import State, Ok, Error
 from manager.basic.util import map_strict
 from manager.basic.mmanager import ModuleDaemon
-from threading import Thread
 from manager.models import Revisions, make_sure_mysql_usable
 from django.http import HttpRequest
 import re
@@ -19,25 +17,21 @@ import gitlab  # type: ignore
 
 import json
 
-from django.dispatch import receiver
-from django.db.backends.signals import connection_created  # type: ignore
-
 from manager.basic.info import M_NAME as INFO_M_NAME
 
-import traceback
-
 revSyncner = None
-
 M_NAME = "RevSyncner"
 
+
 class RevSync(ModuleDaemon):
+
     # This queue will fill by new revision that merged into
     # repository after RevSync started and RevSync will
     # put such revision into model so the revision database
     # will remain updated
-    revQueue = queue.Queue(maxsize=10) # type: queue.Queue
+    revQueue = queue.Queue(maxsize=10)  # type: queue.Queue
 
-    def __init__(self, sInst:Any) -> None:
+    def __init__(self, sInst: Any) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
@@ -46,14 +40,17 @@ class RevSync(ModuleDaemon):
 
         self._sInst = sInst
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         self._stop = True
+
+    def needStop(self) -> bool:
+        return self._stop
 
     def connectToGitlab(self) -> State:
         cfgs = self._sInst.getModule(INFO_M_NAME)
@@ -66,7 +63,7 @@ class RevSync(ModuleDaemon):
             return Error
         # fixme: repo url and token key must not a constant just place these in
         #        configuration file
-        self.gitlabRef = gitlab.Gitlab(url, token);
+        self.gitlabRef = gitlab.Gitlab(url, token)
 
         try:
             self.gitlabRef.auth()
@@ -82,7 +79,7 @@ class RevSync(ModuleDaemon):
                              dateTime=rev.committed_date)
         try:
             revision.save()
-        except:
+        except Exception:
             pass
 
         return revision
@@ -134,7 +131,7 @@ class RevSync(ModuleDaemon):
     def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
         headers = request.headers  # type: ignore
 
-        if not 'X-Gitlab-Event' in headers:
+        if 'X-Gitlab-Event' not in headers:
             print("X-Gitlab-Event not found")
             return None
 
@@ -142,18 +139,20 @@ class RevSync(ModuleDaemon):
             contentType = headers['Content-Type']
             event = headers['X-Gitlab-Event']
 
-            if contentType == 'application/json' and event == 'Merge Request Hook':
-                body = json.loads(request.body) # type: ignore
+            if contentType == 'application/json' \
+               and event == 'Merge Request Hook':
+
+                body = json.loads(request.body)  # type: ignore
                 state = body['object_attributes']['state']
 
                 if state == 'merged':
                     return body
-        except:
+        except Exception:
             return None
 
         return None
 
-    def _requestHandle(self, request:HttpRequest) -> bool:
+    def _requestHandle(self, request: HttpRequest) -> bool:
         # Premise of these code work correct is a merge request
         # contain only a commit if it can't be satisfied
         # should read gitlab when merge event arrived and
@@ -172,27 +171,23 @@ class RevSync(ModuleDaemon):
 
         make_sure_mysql_usable()
 
-        rev = Revisions(sn = sn_, author = author_, comment = comment_,
-                        dateTime = date_time_)
+        rev = Revisions(sn=sn_, author=author_, comment=comment_,
+                        dateTime=date_time_)
         rev.save()
 
         return True
-
 
     # Process such a database related operation on background
     # is for the purpose of quick response to where request come
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
-    def run(self) -> None:
+    async def run(self) -> None:
 
         if self.connectToGitlab() is Error:
             return None
 
-        if self.revDBInit() == False:
+        if self.revDBInit() is False:
             return None
-
-        config = self._sInst.getModule(INFO_M_NAME)
-        tz = config.getConfig('TimeZone')
 
         while True:
 
@@ -204,14 +199,13 @@ class RevSync(ModuleDaemon):
             self._requestHandle(request)
 
 
-
-
 # TestCases
 class HttpRequest_:
 
     def __init__(self):
         self.headers = ""
         self.body = ""
+
 
 class VerControlTestCases(unittest.TestCase):
 
@@ -222,8 +216,8 @@ class VerControlTestCases(unittest.TestCase):
         revSyncer = RevSync(None)
 
         request = HttpRequest_()
-        request.headers = {'Content-Type':'application/json',
-                           'X-Gitlab-Event':'Merge Request Hook'}
+        request.headers = {'Content-Type': 'application/json',
+                           'X-Gitlab-Event': 'Merge Request Hook'}
 
         request.body = '{ "object_attributes": {\
                             "state": "merged",\

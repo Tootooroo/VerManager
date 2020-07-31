@@ -1,5 +1,8 @@
 # logger.py
 
+import unittest
+import shutil
+
 import os
 import asyncio
 
@@ -137,10 +140,6 @@ class Logger(ModuleDaemon, Observer):
 
 
 # TestCases
-import unittest
-import shutil
-
-
 class LoggerTestCases(unittest.TestCase):
 
     def setUp(self) -> None:

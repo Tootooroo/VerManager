@@ -11,8 +11,7 @@ from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
 from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME
-from manager.master.eventListener import EventListener, workerRegister, \
-    M_NAME as EVENT_M_NAME
+from manager.master.eventListener import EventListener, M_NAME as EVENT_M_NAME
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler
 from manager.master.logger import Logger
@@ -103,21 +102,20 @@ class ServerInst(Thread):
         dispatcher.subscribe(Dispatcher.NOTIFY_LOG, logger)
 
         # Install observer handlers to EventListener
-        new_worker_register = lambda data:  workerRegister(eventListener, data)
+        async def new_worker_register(data):
+            await eventListener.workerRegister(data)
         eventListener.handler_install(WR_M_NAME, new_worker_register)
 
         # Install observer handlers to WorkerRoom
-        wr_handler_disconn = lambda data:  workerRoom.notifyEvent(
-            WorkerRoom.EVENT_DISCONNECTED, data)
+        async def wr_handler_disconn(data):
+            await workerRoom.notifyEvent(WorkerRoom.EVENT_DISCONNECTED, data)
         workerRoom.handler_install(EVENT_M_NAME, wr_handler_disconn)
 
         # Install observer handlers to Dispatcher
-        handler_dispatcher = \
-            lambda data:  dispatcher.workerLost_redispatch(data)
+        async def handler_dispatcher(data):
+            await dispatcher.workerLost_redispatch(data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
 
         # Install log handler to logger
         for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:
             logger.handler_install(module, logger.listenTo)
-
-        self._mmanager.startAll()

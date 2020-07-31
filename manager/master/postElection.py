@@ -237,8 +237,8 @@ class PostManager:
     async def proto_step(self) -> State:
         return await self._eProtocol.step()
 
-    def proto_msg_transfer(self, l: CmdResponseLetter) -> None:
-        self._eProtocol.msgTransfer(l)
+    async def proto_msg_transfer(self, l: CmdResponseLetter) -> None:
+        await self._eProtocol.msgTransfer(l)
 
     async def proto_terminate(self) -> State:
         return await self._eProtocol.terminate()

@@ -3,10 +3,12 @@
 import unittest
 import asyncio
 
+from django.utils import timezone
+
 from collections import namedtuple
-from typing import Callable, Any, Dict, List, Optional, cast
+from typing import Callable, Any, Dict, List, Optional, cast, Coroutine
 from manager.basic.observer import Subject, Observer
-from manager.basic.mmanager import Module
+from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.letter import Letter
 
@@ -20,7 +22,7 @@ M_NAME = "EventListener"
 # Constant
 letterLog = "letterLog"
 
-Handler = Callable[['Entry.EntryEnv', Letter], None]
+Handler = Callable[['Entry.EntryEnv', Letter], Coroutine[Any, Any, None]]
 
 
 class Entry:
@@ -32,10 +34,16 @@ class Entry:
     EntryEnv = namedtuple('EntryEnv', 'eventListener handlers')
 
     def __init__(self, ident: str, worker, env: EntryEnv) -> None:
+        self._ident = ident
         self._worker = worker
         self._env = env
         self._hbCount = 0
+        self._hbTimer = timezone.now()
+        self._hbTimerLimit = 3
         self._stop = False
+
+    def getIdent(self) -> str:
+        return self._ident
 
     def setWorker(self, worker: Worker) -> None:
         self._worker = worker
@@ -72,12 +80,28 @@ class Entry:
             return None
 
         self._hbCount += 1
+        self._hbTimer = timezone.now()
 
         hbEvent.setIdent("Master")
         await self._worker.sendLetter(hbEvent)
 
+    def isHeartbeatTimeout(self, current) -> bool:
+        interval = (current - self._hbTimer).seconds
+        return interval >= self._hbTimerLimit
+
+    async def _heartbeatMaintain(self) -> None:
+        current = timezone.now()
+        eventL = self._env.eventListener  # type: EventListener
+        ident = self._worker.getIdent()
+
+        if self.isHeartbeatTimeout(current):
+            await eventL.notify(eventL.NOTIFY_LOST, ident)
+            eventL.remove(ident)
+            eventL.removeEntry(ident)
+            self.stop()
+
     async def eventProc(self) -> None:
-        event = await self._worker.waitResponse(timeout=1)  \
+        event = await self._worker.waitResponse(timeout=2)  \
             # type: Optional[CmdResponseLetter]
         if event is None:
             return None
@@ -92,7 +116,7 @@ class Entry:
             # eventProc must not throw any of exceptions
             # if exceptions is catch from event handlers
             # need to log into logfile.
-            self._env.handlers[type](self._env, event)
+            await self._env.handlers[type](self._env, event)
         except Exception:
             pass
 
@@ -102,9 +126,10 @@ class Entry:
                 return None
 
             await self.eventProc()
+            await self._heartbeatMaintain()
 
 
-class EventListener(Module, Subject, Observer):
+class EventListener(ModuleDaemon, Subject, Observer):
 
     NOTIFY_LOG = "log"
     NOTIFY_LOST = "lost"
@@ -115,7 +140,7 @@ class EventListener(Module, Subject, Observer):
         self._sInst = inst
 
         # Init as module
-        Module.__init__(self, M_NAME)
+        ModuleDaemon.__init__(self, M_NAME)
 
         # Init as Subject
         Subject.__init__(self, M_NAME)
@@ -131,14 +156,27 @@ class EventListener(Module, Subject, Observer):
         # Registered Workers
         self.regWorkers = []  # type: List[Worker]
 
+        self._regWorkerQ = asyncio.Queue(25)  # type: asyncio.Queue[Worker]
+
         # Entries
-        self.entries = {}  # type: Dict[str, Entry]
+        self._entries = {}  # type: Dict[str, Entry]
+        self._stop = False
 
     async def begin(self) -> None:
         return None
 
     async def cleanup(self) -> None:
         return None
+
+    async def stop(self) -> None:
+        self._stop = True
+
+    async def _doStop(self) -> None:
+        for ident in self._entries:
+            self.stopEntry(ident)
+
+    def needStop(self) -> bool:
+        return self._stop
 
     def getModule(self, m: str) -> Any:
         return self._sInst.getModule(m)
@@ -166,26 +204,61 @@ class EventListener(Module, Subject, Observer):
             self.regWorkers.append(worker)
 
     def registered(self) -> List[Worker]:
-        workerOfEntries = [e.getWorker() for e in self.entries.values()]
+        workerOfEntries = [e.getWorker() for e in self._entries.values()]
         return self.regWorkers + workerOfEntries
 
     def remove(self, ident: str) -> None:
         self.regWorkers = \
             [w for w in self.regWorkers if w.getIdent() != ident]
 
+    def addEntry(self, entry: Entry) -> None:
+        ident = entry.getIdent()
+
+        if ident not in self._entries:
+            self._entries[ident] = entry
+
+    def removeEntry(self, ident: str) -> None:
+        if ident in self._entries:
+            del self._entries[ident]
+
+    def stopEntry(self, ident: str) -> None:
+        if ident in self._entries:
+            self._entries[ident].stop()
+
     async def _attachEntry(self, entry: Entry) -> None:
         loop = asyncio.get_event_loop()
         loop.create_task(entry.monitor())
 
-    def workerRegister(self, worker: Worker) -> None:
-        # Register worker
+    async def run(self) -> None:
+        while True:
+
+            if self.needStop():
+                await self._doStop()
+                return None
+
+            try:
+                w = await asyncio.wait_for(
+                    self._regWorkerQ.get(),
+                    timeout=2
+                )
+            except asyncio.exceptions.TimeoutError:
+                continue
+
+            if w.getIdent() in self._entries:
+                continue
+
+            entryEnv = Entry.EntryEnv(self, self.handlers)
+            entry = Entry(w.getIdent(), w, entryEnv)
+
+            self.addEntry(entry)
+            await self._attachEntry(entry)
+
+    async def workerRegister(self, worker: Worker) -> None:
+        if worker in self.registered():
+            return None
+
         self.register(worker)
-
-        # Alloc entry
-        entry = Entry(worker.getIdent(), worker, Entry.EntryEnv(self, {}))
-
-        # Attach the entry's monitor coro to eventloop
-        self._attachEntry(entry)
+        await self._regWorkerQ.put(worker)
 
 
 # Entry TestCases
@@ -374,7 +447,9 @@ class WorkerMockHeartBeat(WorkerStub):
 class EventListenerTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.eventL = EventListener(None)
+        async def doSetUp() -> None:
+            self.eventL = EventListener(None)
+        asyncio.run(doSetUp())
 
     def test_EventListener_register(self) -> None:
         # Exercise
@@ -399,3 +474,26 @@ class EventListenerTestCases(unittest.TestCase):
         regWorkers = self.eventL.registered()
         self.assertTrue(w1 not in regWorkers)
         self.assertTrue(w2 in regWorkers)
+
+    def test_EventListener_WorkerLost(self) -> None:
+        # Setup
+        worker = WorkerMockEntry("w1")
+
+        # Exercise
+        async def stopEventL() -> None:
+            await asyncio.sleep(5)
+            await self.eventL.stop()
+
+        async def doTest() -> None:
+            worker.q = asyncio.Queue(10)
+            worker.rq = asyncio.Queue(10)
+            self.eventL._regWorkerQ = asyncio.Queue(25)
+            await self.eventL._regWorkerQ.put(worker)
+
+            await asyncio.gather(self.eventL.run(), stopEventL())
+
+        asyncio.run(doTest())
+
+        # Verify
+        self.assertEqual(0, len(self.eventL._entries))
+        self.assertEqual(0, len(self.eventL.regWorkers))

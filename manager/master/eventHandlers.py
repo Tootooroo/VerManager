@@ -1,5 +1,8 @@
 # EventHandlers.py
 
+import asyncio
+import concurrent.futures
+
 import os
 import zipfile
 import shutil
@@ -112,8 +115,8 @@ class EVENT_HANDLER_TOOLS:
         return zipFileName
 
     @staticmethod
-    def _singletask_fin_action(t: SingleTask,
-                               eventListener: EventListener) -> None:
+    async def _singletask_fin_action(
+            t: SingleTask, eventListener: EventListener) -> None:
 
         if t.getParent() is None:
             responseHandler_ResultStore(t, eventListener)
@@ -155,7 +158,7 @@ class EVENT_HANDLER_TOOLS:
                     dispatcher.cancel(parent.id())
 
 
-def responseHandler(eventListener: EventListener, letter: Letter) -> None:
+async def responseHandler(eventListener: EventListener, letter: Letter) -> None:
 
     if not isinstance(letter, ResponseLetter):
         return None
@@ -182,7 +185,15 @@ def responseHandler(eventListener: EventListener, letter: Letter) -> None:
         wr.removeTaskFromWorker(ident, taskId)
 
 
-def temporaryBuild_handling(task: Task, eventListener:  EventListener) -> None:
+async def copyFileInExecutor(src: str, dest: str) -> None:
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
+        await loop.run_in_executor(pool, shutil.copy(src, dest))
+
+
+async def temporaryBuild_handling(task: Task,
+                                  eventListener:  EventListener) -> None:
+
     logger = eventListener.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
@@ -196,15 +207,19 @@ def temporaryBuild_handling(task: Task, eventListener:  EventListener) -> None:
     try:
         if not os.path.exists("private"):
             os.mkdir("private")
-        shutil.copy(filePath, "private" + seperator + fileName)
+
+        # Copy may happen on NFS may take a long time to deal
+        # just run in another process.
+        await copyFileInExecutor(filePath, "private" + seperator + fileName)
+
     except FileNotFoundError as e:
         Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
         Logger.putLog(logger, letterLog, str(e))
 
 
-def responseHandler_ResultStore(task: Task,
-                                eventListener:  EventListener) -> None:
+async def responseHandler_ResultStore(task: Task,
+                                      eventListener:  EventListener) -> None:
 
     logger = eventListener.getModule('Logger')
 
@@ -236,14 +251,14 @@ def responseHandler_ResultStore(task: Task,
                 extra['logFrom'],
                 extra['logTo']
             )
-
         else:
             dest = resultDir + seperator + fileName
             shutil.copy(chooser.path(), dest)
 
         if not os.path.exists("public"):
             os.mkdir("public")
-        shutil.copy(chooser.path(), "public/"+fileName)
+        await copyFileInExecutor(chooser.path(), "public/"+fileName)
+
     except FileNotFoundError as e:
         Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
@@ -257,7 +272,7 @@ def responseHandler_ResultStore(task: Task,
     task.setData(url + "/data/" + fileName)
 
 
-def binaryHandler(eventListener:  EventListener, letter:  Letter) -> None:
+async def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
 
     import traceback
 
@@ -293,33 +308,36 @@ def binaryHandler(eventListener:  EventListener, letter:  Letter) -> None:
         traceback.print_exc()
 
 
-def logHandler(eventListener: EventListener, letter: Letter) -> None:
+async def logHandler(eventListener: EventListener, letter: Letter) -> None:
     logger = eventListener.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
 
     if isinstance(logMsg, str):
-        Logger.putLog(logger, logId, logMsg)
+        await Logger.putLog(logger, logId, logMsg)
 
 
-def logRegisterhandler(eventListener: EventListener, letter: Letter) -> None:
+async def logRegisterhandler(eventListener: EventListener,
+                             letter: Letter) -> None:
+
     logger = eventListener.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logger.log_register(logId)
 
 
-def postHandler(eventListener: EventListener, letter: Letter) -> None:
+async def postHandler(eventListener: EventListener, letter: Letter) -> None:
 
     if not isinstance(letter, CmdResponseLetter):
         return None
 
     wr = eventListener.getModule(WORKER_ROOM_MOD_NAME)  # type:  WorkerRoom
-    wr.msgToPostManager(letter)
+    await wr.msgToPostManager(letter)
 
 
-def lisAddrUpdateHandler(eventListener: EventListener, letter: Letter) -> None:
+async def lisAddrUpdateHandler(eventListener: EventListener,
+                               letter: Letter) -> None:
     """
     This handler does not to ensure that that last address
     is successfully sended to worker.
@@ -342,8 +360,8 @@ def lisAddrUpdateHandler(eventListener: EventListener, letter: Letter) -> None:
     if lis is None:
         return None
 
-    addr= lis.getAddress()
+    addr = lis.getAddress()
     command = LisAddrUpdateCmd(addr)
     request_from = letter.getIdent()
 
-    wr.control(request_from, command)
+    await wr.control(request_from, command)

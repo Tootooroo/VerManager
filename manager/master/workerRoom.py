@@ -216,8 +216,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def _changePoint(self) -> None:
         self._lastChangedPoint = datetime.utcnow()
 
-    def msgToPostManager(self, l: CmdResponseLetter) -> None:
-        self._pManager.proto_msg_transfer(l)
+    async def msgToPostManager(self, l: CmdResponseLetter) -> None:
+        await self._pManager.proto_msg_transfer(l)
 
     def postRelations(self) -> Tuple[str, List[str]]:
         return self._pManager.relations()
@@ -347,7 +347,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             self._lock.release()
 
-    def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
+    async def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))
 
     def getWorker(self, ident: str) -> Optional[Worker]:
@@ -393,9 +393,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         for w in self._workers.values():
             await w.control(command)
 
-    def control(self, ident: str, command: Command) -> State:
+    async def control(self, ident: str, command: Command) -> State:
         try:
-            self._workers[ident].control(command)
+            await self._workers[ident].control(command)
         except KeyError:
             return Error
         except BrokenPipeError:
@@ -403,7 +403,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         return Ok
 
-    def do(self, ident: str, t: Task) -> State:
+    async def do(self, ident: str, t: Task) -> State:
         try:
             self._workers[ident].do(t)
         except KeyError:
