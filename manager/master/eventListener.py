@@ -6,7 +6,7 @@ import asyncio
 from collections import namedtuple
 from typing import Callable, Any, Dict, List, Optional, cast
 from manager.basic.observer import Subject, Observer
-from manager.basic.mmanager import ModuleDaemon
+from manager.basic.mmanager import Module
 from manager.master.worker import Worker
 from manager.basic.letter import Letter
 
@@ -31,7 +31,7 @@ class Entry:
     """
     EntryEnv = namedtuple('EntryEnv', 'eventListener handlers')
 
-    def __init__(self, worker, env: EntryEnv) -> None:
+    def __init__(self, ident: str, worker, env: EntryEnv) -> None:
         self._worker = worker
         self._env = env
         self._hbCount = 0
@@ -79,7 +79,6 @@ class Entry:
     async def eventProc(self) -> None:
         event = await self._worker.waitResponse(timeout=1)  \
             # type: Optional[CmdResponseLetter]
-
         if event is None:
             return None
 
@@ -105,7 +104,7 @@ class Entry:
             await self.eventProc()
 
 
-class EventListener(ModuleDaemon, Subject, Observer):
+class EventListener(Module, Subject, Observer):
 
     NOTIFY_LOG = "log"
     NOTIFY_LOST = "lost"
@@ -116,7 +115,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
         self._sInst = inst
 
         # Init as module
-        ModuleDaemon.__init__(self, M_NAME)
+        Module.__init__(self, M_NAME)
 
         # Init as Subject
         Subject.__init__(self, M_NAME)
@@ -132,17 +131,14 @@ class EventListener(ModuleDaemon, Subject, Observer):
         # Registered Workers
         self.regWorkers = []  # type: List[Worker]
 
+        # Entries
+        self.entries = {}  # type: Dict[str, Entry]
+
     async def begin(self) -> None:
         return None
 
     async def cleanup(self) -> None:
         return None
-
-    async def stop(self) -> None:
-        return None
-
-    def needStop(self) -> bool:
-        return False
 
     def getModule(self, m: str) -> Any:
         return self._sInst.getModule(m)
@@ -162,16 +158,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
         del self.handlers[eventType]
 
-    def Acceptor(self, letter: Letter) -> None:
-        # Check letter's type
-        event = letter.type_
-
-        if event == Letter.NewTask or event == Letter.TaskCancel:
-            return None
-
-        handlers = self.handlers[event]
-        list(map(lambda h: h(self, letter), handlers))  # type: ignore
-
     def event_log(self, msg: str) -> None:
         self.notify(EventListener.NOTIFY_LOG, (letterLog, msg))
 
@@ -180,22 +166,26 @@ class EventListener(ModuleDaemon, Subject, Observer):
             self.regWorkers.append(worker)
 
     def registered(self) -> List[Worker]:
-        return self.regWorkers
+        workerOfEntries = [e.getWorker() for e in self.entries.values()]
+        return self.regWorkers + workerOfEntries
 
     def remove(self, ident: str) -> None:
         self.regWorkers = \
             [w for w in self.regWorkers if w.getIdent() != ident]
 
-    async def _entryDispatch(self) -> bool:
-        return True
+    async def _attachEntry(self, entry: Entry) -> None:
+        loop = asyncio.get_event_loop()
+        loop.create_task(entry.monitor())
 
-    async def run(self) -> None:
-        pass
+    def workerRegister(self, worker: Worker) -> None:
+        # Register worker
+        self.register(worker)
 
+        # Alloc entry
+        entry = Entry(worker.getIdent(), worker, Entry.EntryEnv(self, {}))
 
-def workerRegister(eventListener: EventListener,
-                   worker: Worker) -> None:
-    return None
+        # Attach the entry's monitor coro to eventloop
+        self._attachEntry(entry)
 
 
 # Entry TestCases
@@ -205,10 +195,10 @@ class WorkerStubEntry(WorkerStub):
         WorkerStub.__init__(self, ident)
         self.q = None  # type: Optional[asyncio.Queue]
 
-    async def sendEvent(self, letter: Letter) -> Optional[Letter]:
+    async def sendEvent(self, letter: Letter) -> None:
         if self.q is None:
             return None
-        return await self.q.put(letter)
+        await self.q.put(letter)
 
     async def waitResponse(self, timeout=None) -> Optional[Letter]:
         if self.q is None:
@@ -231,16 +221,24 @@ class WorkerMockEntry(WorkerStubEntry):
 
     async def waitMsgFromServer(self) -> Optional[Letter]:
         try:
-            return await asyncio.wait_for(self.rq.get(), timeout=1)
+            return await asyncio.wait_for(
+                self.rq.get(), timeout=2)  # type: ignore
         except asyncio.exceptions.TimeoutError:
             return None
+
+    async def sendHeartbeat(self, seq):
+        heartbeat = HeartbeatLetter(self.ident, seq)
+        await self.sendEvent(heartbeat)
+
+        letter = await self.waitMsgFromServer()
+        assert(letter.getIdent() == 'Master')
 
 
 class EntryTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
         env = Entry.EntryEnv(None, {})  # type: Entry.EntryEnv
-        self.entry = Entry(WorkerStubEntry("w1"), env)
+        self.entry = Entry("Entry", WorkerStubEntry("w1"), env)
 
     def test_Entry_Exists(self) -> None:
         # Setup
@@ -317,14 +315,9 @@ class EntryTestCases(unittest.TestCase):
         # Setup
         self.entry.setWorker(WorkerMockEntry("w1"))
 
-        async def sendHeartbeat(worker: WorkerMockEntry):
-            heartbeat = HeartbeatLetter(worker.ident, 0)
-            await worker.sendEvent(heartbeat)
-            await asyncio.sleep(1)
-            letter = await worker.waitMsgFromServer()
-
-            # Verify
-            self.assertEqual("Master", letter.getIdent())  # type: ignore
+        async def heartbeatSend(worker):
+            for i in range(10):
+                await worker.sendHeartbeat(i)
 
             self.entry.stop()
 
@@ -335,14 +328,14 @@ class EntryTestCases(unittest.TestCase):
             worker.rq = asyncio.Queue(10)
 
             await asyncio.gather(
-                sendHeartbeat(worker),
-                self.entry.eventProc()
+                heartbeatSend(worker),
+                self.entry.monitor()
             )
 
         asyncio.run(doTest())
 
         # Verify
-        self.assertEqual(1, self.entry._hbCount)
+        self.assertEqual(10, self.entry._hbCount)
 
 
 # EventListener TestCases
@@ -406,56 +399,3 @@ class EventListenerTestCases(unittest.TestCase):
         regWorkers = self.eventL.registered()
         self.assertTrue(w1 not in regWorkers)
         self.assertTrue(w2 in regWorkers)
-
-    def test_EventListener_HeartBeat(self) -> None:
-        # Setup
-        w1 = WorkerMockHeartBeat("w1")
-        w2 = WorkerMockHeartBeat("w2")
-        self.eventL.register(w1)
-        self.eventL.register(w2)
-
-        # Exercise
-        async def doTest():
-            w1.q = asyncio.Queue(10)
-            w2.q = asyncio.Queue(10)
-
-            asyncio.gather(
-                runEventL(self.eventL),
-                stopEventLDelay(self.eventL),
-                w1.heartbeatProc()
-            )
-        asyncio.run(doTest())
-
-        # Verify
-        self.assertEqual(3, w1.heartbeatCount)
-        self.assertEqual(3, w2.heartbeatCount)
-
-    def test_EventListener_handleEvent(self) -> None:
-        # Setup
-        w1 = WorkerMockEvent("w1")
-        w2 = WorkerMockEvent("w2")
-        self.eventL.register(w1)
-        self.eventL.register(w2)
-
-        hDone = False
-
-        def handler(e, l):
-            nonlocal hDone
-            hDone = True
-
-        self.eventL.registerEvent("H", handler)
-
-        # Exercise
-        async def doTest():
-            w1.q = asyncio.Queue(10)
-            w2.q = asyncio.Queue(10)
-
-            asyncio.gather(
-                runEventL(self.eventL),
-                stopEventLDelay(self.eventL),
-                w1.eventProc()
-            )
-        asyncio.run(doTest())
-
-        # Verify
-        self.assertTrue(hDone)
