@@ -1,7 +1,8 @@
 # observer.py
 
 from abc import ABC
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, \
+    Any, Callable, Coroutine
 
 
 class Observer(ABC):
@@ -11,17 +12,17 @@ class Observer(ABC):
     """
 
     def __init__(self) -> None:
-        self._handlers = {}  # type: Dict[str, Callable[[Any], None]]
+        self._handlers = {}  # type: Dict[str, Callable[[Any], Coroutine]]
 
     def handler_install(self, source: str,
-                        handler: Callable[[Any], None]) -> None:
+                        handler: Callable[[Any], Coroutine]) -> None:
         self._handlers[source] = handler
 
     def handler_remove(self, source: str) -> None:
         if source in self._handlers:
             del self._handlers[source]
 
-    def update(self, source: str, data: Any) -> None:
+    async def update(self, source: str, data: Any) -> None:
         """
         Called by Subject to notify observer
         """
@@ -30,7 +31,7 @@ class Observer(ABC):
 
         handler = self._handlers[source]
 
-        handler(data)
+        await handler(data)
 
 
 class Subject(ABC):
@@ -73,12 +74,12 @@ class Subject(ABC):
             if ob in obs:
                 obs.remove(ob)
 
-    def notify(self, type: str, data: Any) -> None:
+    async def notify(self, type: str, data: Any) -> None:
         if type in self._observers:
             obs = self._observers[type]
 
             for ob in obs:
-                ob.update(self._subject_ident, data)
+                await ob.update(self._subject_ident, data)
 
 
 
@@ -86,7 +87,7 @@ class Subject(ABC):
 import unittest
 
 class ObTestCases(unittest.TestCase):
-    def test_observer(self):
+    def tes_observer(self):
         from manager.basic.observer import Subject, Observer
 
         event = ""

@@ -2,8 +2,8 @@
 #
 # Maintain connection with workers
 
-import socket
 import asyncio
+import unittest
 
 from datetime import datetime
 from manager.basic.observer import Subject, Observer
@@ -110,35 +110,28 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     def needStop(self) -> bool:
         return False
 
-    def sockSetup(self, sock: socket.socket) -> None:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 1)
-
-    def _WR_LOG(self, msg: str) -> None:
-        self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
+    async def _WR_LOG(self, msg: str) -> None:
+        await self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
     async def _accept_workers(self, r: asyncio.StreamReader,
                               w: asyncio.StreamWriter) -> None:
-
         arrived_worker = Worker(r, w)
 
         w_ident = ""
 
         try:
-            arrived_worker.active()
+            await arrived_worker.active()
             w_ident = arrived_worker.getIdent()
 
-            self._WR_LOG("Worker " + w_ident + " inited")
+            await self._WR_LOG("Worker " + w_ident + " inited")
         except WorkerInitFailed:
-            self._WR_LOG("Worker " + w_ident + " init failed")
+            await self._WR_LOG("Worker " + w_ident + " init failed")
             w.close()
             return None
 
         if self.isExists(w_ident):
             w.close()
-            self._WR_LOG("Worker " + w_ident + " is already exists")
+            await self._WR_LOG("Worker " + w_ident + " is already exists")
 
             return None
 
@@ -177,31 +170,33 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             # Send an accept command to the worker
             # so it able to transfer message.
-            workerInWait.control(AcceptCommand())
+            await workerInWait.control(AcceptCommand())
 
             if workerInWait.role is None:
                 self._pManager.addCandidate(workerInWait)
 
-            self._WR_LOG("Worker " + w_ident + " is reconnect")
+            await self._WR_LOG("Worker " + w_ident + " is reconnect")
 
             self._lock.release()
 
             return None
 
-            # Need to reset the accepted worker
-            # before it transfer any messages.
-            arrived_worker.control(AcceptRstCommand())
+        self._lock.release()
 
-            self.addWorker(arrived_worker)
-            self._pManager.addCandidate(arrived_worker)
+        # Need to reset the accepted worker
+        # before it transfer any messages.
+        await arrived_worker.control(AcceptRstCommand())
 
-            self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
+        self.addWorker(arrived_worker)
+        self._pManager.addCandidate(arrived_worker)
+
+        await self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
 
     async def run(self) -> None:
         server = await asyncio.start_server(self._accept_workers,
                                             self._host, self._port)
 
-        asyncio.gather(
+        await asyncio.gather(
             server.serve_forever(),
             self._maintain()
         )
@@ -250,16 +245,17 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     # Caution: Calling of hooks is necessary while a worker's state is changed
     async def _maintain(self) -> None:
         while True:
+            print(self.postListener())
             await self._waiting_worker_update()
             await self._waiting_worker_processing(self._workers_waiting)
             await self._postProcessing()
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(1)
 
     async def _postProcessing(self) -> None:
         candidates = [c.getIdent() for c in self._pManager.candidates()]
         if candidates != self._lastCandidates:
-            self._WR_LOG("Role:" + str(self.postRelations()))
-            self._WR_LOG("Candidates" + str(candidates))
+            await self._WR_LOG("Role:" + str(self.postRelations()))
+            await self._WR_LOG("Candidates" + str(candidates))
             self._lastCandidates = candidates
 
         if not self.isStable():
@@ -286,8 +282,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         ident = worker.getIdent()
 
         if eventType == WorkerRoom.EVENT_DISCONNECTED:
-            self._WR_LOG("Worker " + ident +
-                         " is disconnected changed state into Waiting")
+            await self._WR_LOG("Worker " + ident +
+                               " is disconnected changed state into Waiting")
 
             # Update worker's counter
             worker.setState(Worker.STATE_WAITING)
@@ -320,9 +316,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         for worker in outOfTime:
             ident = worker.getIdent()
-            self._WR_LOG("Worker " + ident +
-                         " is dissconnected for a \
-                         long time will be removed")
+            await self._WR_LOG("Worker " + ident +
+                               " is dissconnected for a \
+                               long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
 
             if worker.role is None:

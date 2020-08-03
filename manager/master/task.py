@@ -686,7 +686,6 @@ class TaskGroup:
         return self._numOfTasks
 
 
-
 # TestCases
 import unittest
 

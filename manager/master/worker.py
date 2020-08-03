@@ -176,7 +176,7 @@ class Worker:
     # Provide ability to cancel task in queue or
     # processed task
     # Note: sn here should be a verion sn
-    def cancel(self, id: str) -> None:
+    async def cancel(self, id: str) -> None:
 
         task = self.inProcTask.search(id)
         if task is None:
@@ -185,11 +185,11 @@ class Worker:
         letter = CancelLetter(id, CancelLetter.TYPE_SINGLE)
 
         if isinstance(task, SingleTask):
-            self._send(letter)
+            await self._send(letter)
 
         elif isinstance(task, PostTask):
             letter.setType(CancelLetter.TYPE_POST)
-            self._send(letter)
+            await self._send(letter)
 
         self.inProcTask.remove(id)
 

@@ -17,6 +17,7 @@ from manager.basic.letter import Letter, \
     CmdResponseLetter, ResponseLetter, BinaryLetter, ReqLetter
 
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
+from manager.master.dispatcher import Dispatcher
 
 from manager.basic.commands import LisAddrUpdateCmd
 from manager.basic.storage import StoChooser
@@ -36,6 +37,7 @@ ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 
 class EVENT_HANDLER_TOOLS:
 
+    ProcessPool = concurrent.futures.ProcessPoolExecutor()
     chooserSet = {}  # type: Dict[str, StoChooser]
 
     PREPARE_ACTIONS = []  # type: List[ActionInfo]
@@ -82,48 +84,66 @@ class EVENT_HANDLER_TOOLS:
         self.install_action(Task.STATE_FAILURE, task_common_fail_action_info)
 
     @classmethod
-    def do_action(self, t: Task, state: int) -> None:
+    async def do_action(self, t: Task, state: int) -> None:
         actions = self.ACTION_TBL[state]
 
         for action in actions:
             if action.isMatch(t):
-                action.execute(t, action.args)
+                await action.execute(t, action.args)
 
     @classmethod
     def install_action(self, state: int, action: ActionInfo) -> None:
         self.ACTION_TBL[state].append(action)
 
+    @classmethod
+    async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str,
+                                    log_start: str = "",
+                                    log_end: str = "") -> str:
+
+        zipFileName = vsn + ".rar"
+        zipPath = dest + "/" + zipFileName
+        self.changeLogGen(log_start, log_end, "./log.txt")
+
+        # Pack into a zipfile may take a while
+        # do it in another process.
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            EVENT_HANDLER_TOOLS.ProcessPool,
+            self.zipPackHelper,
+            ["./log.txt", filePath], zipPath
+        )
+
+        return zipFileName
+
     @staticmethod
-    def packDataWithChangeLog(vsn: str, filePath: str, dest: str,
-                              log_start: str = "", log_end: str = "") -> str:
+    def changeLogGen(start_commit: str,
+                     last_commit: str,
+                     destPath: str) -> None:
 
         from manager.models import infoBetweenRev
+        changeLog = infoBetweenRev(start_commit, last_commit)
 
-        changeLog = infoBetweenRev(log_start, log_end)
-
-        with open("./log.txt", "w") as logFile:
+        with open(destPath, "w") as logFile:
             for log in changeLog:
                 logFile.write(log)
 
-        zipFileName = vsn + ".rar"
-
-        zipFd = zipfile.ZipFile(dest + "/" + zipFileName, "w")
-        for aFile in ["./log.txt", filePath]:
-            zipFd.write(aFile)
+    @staticmethod
+    def zipPackHelper(files: List[str], zipPath: str) -> None:
+        zipFd = zipfile.ZipFile(zipPath)
+        for f in files:
+            zipFd.write(f)
         zipFd.close()
-
-        return zipFileName
 
     @staticmethod
     async def _singletask_fin_action(
             t: SingleTask, eventListener: EventListener) -> None:
 
         if t.getParent() is None:
-            responseHandler_ResultStore(t, eventListener)
+            await responseHandler_ResultStore(t, eventListener)
 
     @staticmethod
-    def _posttask_fin_action(t: PostTask,
-                             eventListener: EventListener) -> None:
+    async def _posttask_fin_action(t: PostTask,
+                                   eventListener: EventListener) -> None:
         super = t.getParent()
         assert(super is not None)
 
@@ -131,34 +151,38 @@ class EVENT_HANDLER_TOOLS:
         assert(extra is not None)
 
         if "Temporary" in extra:
-            temporaryBuild_handling(t, eventListener)
+            await temporaryBuild_handling(t, eventListener)
         else:
-            responseHandler_ResultStore(super, eventListener)
+            await responseHandler_ResultStore(super, eventListener)
 
         super.toFinState()
 
     @staticmethod
-    def _tasks_fin_action(t: Task, eventListener: EventListener) -> None:
+    async def _tasks_fin_action(t: Task, eventListener: EventListener) -> None:
         taskId = t.id()
         chooserSet = EVENT_HANDLER_TOOLS.chooserSet
         if taskId in chooserSet:
             del chooserSet[taskId]
 
     @staticmethod
-    def _tasks_fail_action(t: Task, eventListener: EventListener) -> None:
+    async def _tasks_fail_action(t: Task,
+                                 eventListener: EventListener) -> None:
 
         if isinstance(t, SingleTask) or isinstance(t, PostTask):
 
             if t.isAChild():
-                dispatcher = eventListener.getModule(DISPATCHER_M_NAME)
+                dispatcher = eventListener.getModule(DISPATCHER_M_NAME)  \
+                    # type: Dispatcher
+
                 assert(dispatcher is not None)
 
                 parent = t.getParent()
                 if isinstance(parent, SuperTask):
-                    dispatcher.cancel(parent.id())
+                    await dispatcher.cancel(parent.id())
 
 
-async def responseHandler(eventListener: EventListener, letter: Letter) -> None:
+async def responseHandler(eventListener: EventListener,
+                          letter: Letter) -> None:
 
     if not isinstance(letter, ResponseLetter):
         return None
@@ -179,7 +203,7 @@ async def responseHandler(eventListener: EventListener, letter: Letter) -> None:
     if task.stateChange(state) is Error:
         return None
 
-    EVENT_HANDLER_TOOLS.do_action(task, state)
+    await EVENT_HANDLER_TOOLS.do_action(task, state)
 
     if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
         wr.removeTaskFromWorker(ident, taskId)
@@ -187,8 +211,9 @@ async def responseHandler(eventListener: EventListener, letter: Letter) -> None:
 
 async def copyFileInExecutor(src: str, dest: str) -> None:
     loop = asyncio.get_running_loop()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
-        await loop.run_in_executor(pool, shutil.copy(src, dest))
+    await loop.run_in_executor(EVENT_HANDLER_TOOLS.ProcessPool,
+                               shutil.copy,
+                               src, dest)
 
 
 async def temporaryBuild_handling(task: Task,
@@ -246,7 +271,7 @@ async def responseHandler_ResultStore(task: Task,
 
     try:
         if extra is not None and "logFrom" in extra and "logTo" in extra:
-            fileName = EVENT_HANDLER_TOOLS.packDataWithChangeLog(
+            fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
                 fileName, chooser.path(), resultDir,
                 extra['logFrom'],
                 extra['logTo']
@@ -328,7 +353,6 @@ async def logRegisterhandler(eventListener: EventListener,
 
 
 async def postHandler(eventListener: EventListener, letter: Letter) -> None:
-
     if not isinstance(letter, CmdResponseLetter):
         return None
 

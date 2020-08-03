@@ -412,7 +412,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     # Cancel a task
     # This method cannot cancel a member of a SuperTask
     # but this method can cancel a SuperTask.
-    def cancel(self, taskId: str) -> None:
+    async def cancel(self, taskId: str) -> None:
         task = self._taskTracker.getTask(taskId)
 
         if task is None:
@@ -427,7 +427,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             theWorker = self._taskTracker.whichWorker(task.id())
             if theWorker is not None:
-                theWorker.cancel(task.id())
+                await theWorker.cancel(task.id())
 
         elif isinstance(task, PostTask):
             # PostTask must a member of a SuperTask
@@ -441,7 +441,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 theWorker = self._taskTracker.whichWorker(ident)
 
                 if theWorker is not None:
-                    theWorker.cancel(ident)
+                    await theWorker.cancel(ident)
 
                 child.stateChange(Task.STATE_FAILURE)
                 self._taskTracker.untrack(ident)

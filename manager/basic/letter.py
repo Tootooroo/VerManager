@@ -3,7 +3,6 @@
 # How to communicate with worker ?
 
 import json
-import socket
 import asyncio
 
 import traceback
