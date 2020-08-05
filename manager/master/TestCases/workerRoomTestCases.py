@@ -10,10 +10,6 @@ from typing import Any, Optional, Tuple
 from manager.basic.info import Info
 from manager.basic.observer import Subject
 
-async def stop(coro, delay):
-    await asyncio.sleep(delay)
-    coro.cancel()
-
 
 class sInst:
 
@@ -47,7 +43,7 @@ class VirtualWorker:
             return None
         self.stream[1].close()
 
-        self.wr._eventQueue.put(self.ident)
+        await self.wr._eventQueue.put(self._ident)
 
     async def recv(self) -> Optional[Letter]:
         if self.stream is None:
@@ -55,7 +51,7 @@ class VirtualWorker:
         return await receving(self.stream[0])
 
     async def proto_exec(self) -> None:
-        self.proto(self)
+        await self.proto(self)
 
     async def send(self, l: Letter) -> None:
         assert(isinstance(l, CmdResponseLetter))
@@ -92,8 +88,10 @@ async def proto_postElect(vir: VirtualWorker) -> None:
     await vir.send(response)
 
 
-def workerReconnAction_beforeRemoved(vir: VirtualWorker) -> None:
-    pass
+async def workerReconnAction_beforeRemoved(vir: VirtualWorker) -> None:
+    await vir.disconnect()
+    await asyncio.sleep(2)
+    await vir.connect("127.0.0.1", 30000)
 
 
 class WorkerRoomTestCases(unittest.TestCase):
@@ -118,6 +116,11 @@ class WorkerRoomTestCases(unittest.TestCase):
             while True:
                 await w.proto_exec()
 
+        async def stop():
+            nonlocal coro
+            await asyncio.sleep(5)
+            coro.cancel()
+
         async def doTest():
             nonlocal coro
 
@@ -128,7 +131,7 @@ class WorkerRoomTestCases(unittest.TestCase):
                 self.wr.run(),
                 worker_run(self.v_wr1),
                 worker_run(self.v_wr2),
-                stop(coro, 4)
+                stop()
             )
 
             try:
@@ -158,17 +161,34 @@ class WorkerRoomTestCases(unittest.TestCase):
         self.v_wr2.proto = proto_postElect
 
         # Exercise
+        async def stop():
+            await asyncio.sleep(5)
+            coro.cancel()
+
         async def doTest():
             nonlocal coro
 
             self.wr._lock = asyncio.Lock()
-            self.wr._PManager._eProtocol.msgQueue = asyncio.Queue(128)
+            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(128)
 
             coro = asyncio.gather(
                 self.wr.run(),
                 workerReconnAction_beforeRemoved(self.v_wr1),
-                workerReconnAction_beforeRemoved(self.v_wr2)
+                workerReconnAction_beforeRemoved(self.v_wr2),
+                stop()
             )
+
+            try:
+                await coro
+            except asyncio.exceptions.CancelledError:
+                pass
+
+        asyncio.run(doTest())
+
+        # Verify
+        workers = [w.getIdent() for w in self.wr.getWorkers()]
+        self.assertTrue("w1" in workers)
+        self.assertTrue("w2" in workers)
 
     def test_WorkerRoom_lisAddrUpdate(self) -> None:
         pass
