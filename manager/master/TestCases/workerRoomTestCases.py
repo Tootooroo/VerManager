@@ -2,12 +2,16 @@
 
 import unittest
 import asyncio
-import time
 
-from manager.basic.letter import PropLetter, receving
+from manager.basic.letter import Letter, PropLetter, receving, \
+    CommandLetter, CmdResponseLetter
 from manager.master.workerRoom import WorkerRoom
 from typing import Any, Optional, Tuple
 from manager.basic.info import Info
+
+async def stop(coro, delay):
+    await asyncio.sleep(delay)
+    coro.cancel()
 
 
 class sInst:
@@ -23,6 +27,7 @@ class VirtualWorker:
         self.stream = None \
             # type: Optional[Tuple[asyncio.StreamReader, asyncio.StreamWriter]]
         self.wr = wr
+        self.proto = None  # type: Any
 
     async def connect(self, host: str, port: int) -> None:
         await asyncio.sleep(1)
@@ -37,16 +42,42 @@ class VirtualWorker:
         await self.stream[1].drain()
 
     async def recv(self) -> Optional[Letter]:
+        if self.stream is None:
+            return None
         return await receving(self.stream[0])
 
     async def proto_exec(self) -> None:
-        letter = self.recv()
-        self.assert(letter is not None)
+        self.proto(self)
 
-        if letter
+    async def send(self, l: Letter) -> None:
+        assert(isinstance(l, CmdResponseLetter))
+        await self.wr.msgToPostManager(l)
 
-    async def send(self, msg: str) -> None:
-        pass
+
+async def proto_postElect(vir: VirtualWorker) -> None:
+    letter = await vir.recv()
+
+    assert(letter is not None)
+    if not isinstance(letter, CommandLetter):
+        return None
+
+    isListener = ""
+    type = letter.getType()
+    role = letter.content_("role")
+
+    if type != "post":
+        return None
+
+    if role == "L":
+        isListener = "true"
+    else:
+        isListener = "false"
+
+    response = CmdResponseLetter(
+        vir._ident, Letter.CmdResponse,
+        CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener}
+    )
+    await vir.send(response)
 
 
 class WorkerRoomTestCases(unittest.TestCase):
@@ -61,17 +92,35 @@ class WorkerRoomTestCases(unittest.TestCase):
         asyncio.run(doSetUp())
 
     def test_WorkerRoom_Activate(self) -> None:
+        # Setup
+        coro = None  # type: Any
         asyncio.set_event_loop(self.loop)
+        self.v_wr1.proto = proto_postElect
+        self.v_wr2.proto = proto_postElect
 
         # Exercise
-        async def doTest():
-            self.wr._lock = asyncio.Lock()
+        async def worker_run(w):
+            await w.connect("127.0.0.1", 30000)
+            while True:
+                await w.proto_exec()
 
-            await asyncio.gather(
+        async def doTest():
+            nonlocal coro
+
+            self.wr._lock = asyncio.Lock()
+            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(125)
+
+            coro = asyncio.gather(
                 self.wr.run(),
-                self.v_wr1.connect("127.0.0.1", 30000),
-                self.v_wr2.connect("127.0.0.1", 30000)
+                worker_run(self.v_wr1),
+                worker_run(self.v_wr2),
+                stop(coro, 4)
             )
+
+            try:
+                await coro
+            except asyncio.exceptions.CancelledError:
+                pass
 
         asyncio.run(doTest())
 
@@ -83,6 +132,18 @@ class WorkerRoomTestCases(unittest.TestCase):
         listener = self.wr.postListener()
         self.assertIsNotNone(listener)
         self.assertTrue(
-            listener.getIdent() == "w1" or \
+            listener.getIdent() == "w1" or
             listener.getIdent() == "w2"
         )
+
+    def test_WorkerRoom_Reconnect(self) -> None:
+        pass
+
+    def test_WorkerRoom_lisAddrUpdate(self) -> None:
+        pass
+
+    def test_WorkerRoom_LisLost(self) -> None:
+        pass
+
+    def test_WorkerRoom_WorkerLost(self) -> None:
+        pass
