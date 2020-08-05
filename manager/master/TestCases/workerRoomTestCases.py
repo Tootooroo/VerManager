@@ -8,6 +8,7 @@ from manager.basic.letter import Letter, PropLetter, receving, \
 from manager.master.workerRoom import WorkerRoom
 from typing import Any, Optional, Tuple
 from manager.basic.info import Info
+from manager.basic.observer import Subject
 
 async def stop(coro, delay):
     await asyncio.sleep(delay)
@@ -41,6 +42,13 @@ class VirtualWorker:
         )
         await self.stream[1].drain()
 
+    async def disconnect(self) -> None:
+        if self.stream is None:
+            return None
+        self.stream[1].close()
+
+        self.wr._eventQueue.put(self.ident)
+
     async def recv(self) -> Optional[Letter]:
         if self.stream is None:
             return None
@@ -52,6 +60,10 @@ class VirtualWorker:
     async def send(self, l: Letter) -> None:
         assert(isinstance(l, CmdResponseLetter))
         await self.wr.msgToPostManager(l)
+
+
+class EventListenerStub(Subject):
+    pass
 
 
 async def proto_postElect(vir: VirtualWorker) -> None:
@@ -80,6 +92,10 @@ async def proto_postElect(vir: VirtualWorker) -> None:
     await vir.send(response)
 
 
+def workerReconnAction_beforeRemoved(vir: VirtualWorker) -> None:
+    pass
+
+
 class WorkerRoomTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -87,14 +103,12 @@ class WorkerRoomTestCases(unittest.TestCase):
             self.wr = WorkerRoom("127.0.0.1", 30000, sInst())
             self.v_wr1 = VirtualWorker("w1", self.wr)
             self.v_wr2 = VirtualWorker("w2", self.wr)
-            self.loop = asyncio.get_running_loop()
 
         asyncio.run(doSetUp())
 
     def test_WorkerRoom_Activate(self) -> None:
         # Setup
         coro = None  # type: Any
-        asyncio.set_event_loop(self.loop)
         self.v_wr1.proto = proto_postElect
         self.v_wr2.proto = proto_postElect
 
@@ -119,6 +133,7 @@ class WorkerRoomTestCases(unittest.TestCase):
 
             try:
                 await coro
+
             except asyncio.exceptions.CancelledError:
                 pass
 
@@ -137,7 +152,23 @@ class WorkerRoomTestCases(unittest.TestCase):
         )
 
     def test_WorkerRoom_Reconnect(self) -> None:
-        pass
+        # Setup
+        coro = None  # type: Any
+        self.v_wr1.proto = proto_postElect
+        self.v_wr2.proto = proto_postElect
+
+        # Exercise
+        async def doTest():
+            nonlocal coro
+
+            self.wr._lock = asyncio.Lock()
+            self.wr._PManager._eProtocol.msgQueue = asyncio.Queue(128)
+
+            coro = asyncio.gather(
+                self.wr.run(),
+                workerReconnAction_beforeRemoved(self.v_wr1),
+                workerReconnAction_beforeRemoved(self.v_wr2)
+            )
 
     def test_WorkerRoom_lisAddrUpdate(self) -> None:
         pass

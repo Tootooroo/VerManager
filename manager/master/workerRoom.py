@@ -87,7 +87,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         if self._WAITING_INTERVAL == "":
             self._WAITING_INTERVAL = WorkerRoom.WAITING_INTERVAL
 
-        self._stableThres = self._WAITING_INTERVAL + 3
+        self._stableThres = self._WAITING_INTERVAL + 1
 
         self._isPManager_init = False
         self._pManager = PostManager([], RandomElectProtocol())
@@ -245,7 +245,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     # Caution: Calling of hooks is necessary while a worker's state is changed
     async def _maintain(self) -> None:
         while True:
-            print(self.postListener())
             await self._waiting_worker_update()
             await self._waiting_worker_processing(self._workers_waiting)
             await self._postProcessing()
@@ -305,12 +304,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         if len(workers) == 0:
             return None
 
-        outOfTime = list(
-            filter(
-                lambda w: w.waitCounter() > self._WAITING_INTERVAL,
-                workers_list
-            )
-        )
+        outOfTime = [w for w in workers_list
+                     if w.waitCounter() > self._WAITING_INTERVAL]
 
         await self._lock.acquire()
 
