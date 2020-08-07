@@ -934,12 +934,9 @@ async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Lette
     content, remain = b'', 2
 
     while remain > 0:
-        try:
-            chunk = await asyncio.wait_for(
-                reader.read(remain), timeout=timeout
-            )
-        except asyncio.exceptions.TimeoutError:
-            raise Exception
+        chunk = await asyncio.wait_for(
+            reader.read(remain), timeout=timeout
+        )
 
         if chunk == b'':
             raise Exception

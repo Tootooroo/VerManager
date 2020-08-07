@@ -25,6 +25,8 @@ class VirtualWorker:
             # type: Optional[Tuple[asyncio.StreamReader, asyncio.StreamWriter]]
         self.wr = wr
         self.proto = None  # type: Any
+        self.isLis = False
+        self.role = ""
 
     async def connect(self, host: str, port: int) -> None:
         await asyncio.sleep(1)
@@ -45,10 +47,10 @@ class VirtualWorker:
 
         await self.wr._eventQueue.put(self._ident)
 
-    async def recv(self) -> Optional[Letter]:
+    async def recv(self, timeout=None) -> Optional[Letter]:
         if self.stream is None:
             return None
-        return await receving(self.stream[0])
+        return await receving(self.stream[0], timeout=timeout)
 
     async def proto_exec(self) -> None:
         await self.proto(self)
@@ -63,7 +65,10 @@ class EventListenerStub(Subject):
 
 
 async def proto_postElect(vir: VirtualWorker) -> None:
-    letter = await vir.recv()
+    try:
+        letter = await vir.recv(timeout=1)
+    except asyncio.exceptions.TimeoutError:
+        return None
 
     assert(letter is not None)
     if not isinstance(letter, CommandLetter):
@@ -77,8 +82,11 @@ async def proto_postElect(vir: VirtualWorker) -> None:
         return None
 
     if role == "L":
+        vir.isLis = True
+        vir.role = "L"
         isListener = "true"
     else:
+        vir.role = "P"
         isListener = "false"
 
     response = CmdResponseLetter(
@@ -88,10 +96,33 @@ async def proto_postElect(vir: VirtualWorker) -> None:
     await vir.send(response)
 
 
+async def virInit(vir: VirtualWorker) -> None:
+    await vir.connect("127.0.0.1", 30000)
+
+    while True:
+        await vir.proto_exec()
+
+        if vir.role != "":
+            break
+
+
+async def proto_check_lisUpdate_command(vir: VirtualWorker) -> None:
+    await proto_postElect(vir)
+
+
 async def workerReconnAction_beforeRemoved(vir: VirtualWorker) -> None:
+    await virInit(vir)
+
     await vir.disconnect()
     await asyncio.sleep(2)
     await vir.connect("127.0.0.1", 30000)
+
+
+async def workerDisconnect(vir: VirtualWorker) -> None:
+    await virInit(vir)
+
+    if vir.isLis:
+        await vir.disconnect()
 
 
 class WorkerRoomTestCases(unittest.TestCase):
@@ -191,7 +222,38 @@ class WorkerRoomTestCases(unittest.TestCase):
         self.assertTrue("w2" in workers)
 
     def test_WorkerRoom_lisAddrUpdate(self) -> None:
-        pass
+        # Setup
+        coro = None  # type: Any
+        self.v_wr1.proto = proto_postElect
+        self.v_wr2.proto = proto_postElect
+
+        # Exercise
+        async def stop():
+            await asyncio.sleep(5)
+            coro.cancel()
+
+        async def doTest():
+            nonlocal coro
+
+            self.wr._lock = asyncio.Lock()
+            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(128)
+
+            coro = asyncio.gather(
+                stop(),
+                self.wr.run(),
+                workerDisconnect(self.v_wr1)
+            )
+
+            try:
+                await coro
+            except asyncio.exceptions.CancelledError:
+                pass
+
+        asyncio.run(doTest())
+
+        # Verify
+        workers = [w.getIdent() for w in self.wr.getWorkers()]
+        self.assertTrue("w1" not in workers or "w2" not in workers)
 
     def test_WorkerRoom_LisLost(self) -> None:
         pass
