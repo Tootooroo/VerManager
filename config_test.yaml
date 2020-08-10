@@ -13,7 +13,7 @@ PrivateToken: 4mU2joxotSkzTqLPhvgu
 
 TimeZone: +8:00
 
-WaitingInterval: 10
+WaitingInterval: 2
 
 BuildSet:
   Builds:

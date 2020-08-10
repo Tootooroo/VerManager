@@ -13,5 +13,7 @@ from manager.master.worker import WorkerTestCases
 from manager.basic.mmanager import MManagerTestCases
 from manager.master.postElection import PostElectTestCases
 from manager.master.postElectProtos import RandomElectProtosTest
-from manager.master.eventListener import EventListenerTestCases, EntryTestCases
+from manager.master.TestCases.eventListenerTestCases \
+    import EntryTestCases, EventListenerTestCases
 from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
+from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
