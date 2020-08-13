@@ -69,6 +69,7 @@ class MManager:
     def __init__(self):
         self._modules = {}  # type: Dict[ModuleName, Module]
         self._num = 0
+        self._looper = asyncio.get_running_loop()
 
     def isModuleExists(self, mName: ModuleName) -> bool:
         return mName in self._modules
@@ -127,6 +128,11 @@ class MManager:
             m = self._modules[mName]
             if isinstance(m, ModuleDaemon):
                 await m.start()
+
+    async def start_all(self) -> None:
+        for m in self._modules:
+            if isinstance(m, ModuleDaemon):
+                self._looper.create_task(m.start())
 
     async def stop(self, mName) -> None:
         if self.isModuleExists(mName):

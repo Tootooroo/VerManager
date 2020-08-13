@@ -730,13 +730,19 @@ class BinaryLetter(Letter):
 
         type_field = (1).to_bytes(BinaryLetter.TYPE_FIELD_LEN, "big")
         len_field = len(content).to_bytes(BinaryLetter.LENGTH_FIELD_LEN, "big")
-        tid_field = extend_bytes(BinaryLetter.TASK_ID_FIELD_LEN - len(tid),
-                                 tid.encode())
-        parent_field = extend_bytes(BinaryLetter.PARENT_FIELD_LEN -
-                                    len(parent), parent.encode())
-        name_field = extend_bytes(BinaryLetter.FILE_NAME_FIELD_LEN -
-                                  len(fileName), fileName.encode())
-        menu_field = extend_bytes(BinaryLetter.MENU_FIELD_LEN - len(menu), menu.encode())
+
+        tid_field = extend_bytes(
+            BinaryLetter.TASK_ID_FIELD_LEN - len(tid),
+            tid.encode())
+        parent_field = extend_bytes(
+            BinaryLetter.PARENT_FIELD_LEN -
+            len(parent), parent.encode())
+        name_field = extend_bytes(
+            BinaryLetter.FILE_NAME_FIELD_LEN -
+            len(fileName), fileName.encode())
+        menu_field = extend_bytes(
+            BinaryLetter.MENU_FIELD_LEN - len(menu),
+            menu.encode())
 
         # Safe here content must not str and must a bytes
         # | Type (2Bytes) 00001 :: Int | Length (4Bytes) :: Int

@@ -1,3 +1,25 @@
+# MIT License
+#
+# Copyright (c) 2020 Gcom
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 # EventHandlers.py
 
 import asyncio
@@ -10,7 +32,8 @@ import shutil
 from typing import List, Dict, Optional
 from collections import namedtuple
 
-from manager.master.eventListener import EventListener, letterLog
+from manager.master.eventListener \
+    import letterLog, Entry
 
 from manager.basic.type import Error
 from manager.basic.letter import Letter, \
@@ -52,26 +75,26 @@ class EVENT_HANDLER_TOOLS:
     }  # type: Dict[int, List[ActionInfo]]
 
     @classmethod
-    def action_init(self, eventListener: EventListener) -> None:
+    def action_init(self, env: Entry.EntryEnv) -> None:
         # Fin action install
         singletask_fin_action_info = ActionInfo(
             isMatch=lambda t: isinstance(t, SingleTask),
             execute=self._singletask_fin_action,
-            args=eventListener
+            args=env
         )
         self.install_action(Task.STATE_FINISHED, singletask_fin_action_info)
 
         posttask_fin_action_info = ActionInfo(
             isMatch=lambda t: isinstance(t, PostTask),
             execute=self._posttask_fin_action,
-            args=eventListener
+            args=env
         )
         self.install_action(Task.STATE_FINISHED, posttask_fin_action_info)
 
         task_common_fin_action_info = ActionInfo(
             isMatch=lambda t: True,
             execute=self._tasks_fin_action,
-            args=eventListener
+            args=env
         )
         self.install_action(Task.STATE_FINISHED, task_common_fin_action_info)
 
@@ -79,7 +102,7 @@ class EVENT_HANDLER_TOOLS:
         task_common_fail_action_info = ActionInfo(
             isMatch=lambda t: True,
             execute=self._tasks_fail_action,
-            args=eventListener
+            args=env
         )
         self.install_action(Task.STATE_FAILURE, task_common_fail_action_info)
 
@@ -136,14 +159,13 @@ class EVENT_HANDLER_TOOLS:
 
     @staticmethod
     async def _singletask_fin_action(
-            t: SingleTask, eventListener: EventListener) -> None:
+            t: SingleTask, env: Entry.EntryEnv) -> None:
 
         if t.getParent() is None:
-            await responseHandler_ResultStore(t, eventListener)
+            await responseHandler_ResultStore(t, env)
 
     @staticmethod
-    async def _posttask_fin_action(t: PostTask,
-                                   eventListener: EventListener) -> None:
+    async def _posttask_fin_action(t: PostTask, env: Entry.EntryEnv) -> None:
         super = t.getParent()
         assert(super is not None)
 
@@ -151,27 +173,26 @@ class EVENT_HANDLER_TOOLS:
         assert(extra is not None)
 
         if "Temporary" in extra:
-            await temporaryBuild_handling(t, eventListener)
+            await temporaryBuild_handling(t, env.eventListener)
         else:
-            await responseHandler_ResultStore(super, eventListener)
+            await responseHandler_ResultStore(super, env.eventListener)
 
         super.toFinState()
 
     @staticmethod
-    async def _tasks_fin_action(t: Task, eventListener: EventListener) -> None:
+    async def _tasks_fin_action(t: Task, env: Entry.EntryEnv) -> None:
         taskId = t.id()
         chooserSet = EVENT_HANDLER_TOOLS.chooserSet
         if taskId in chooserSet:
             del chooserSet[taskId]
 
     @staticmethod
-    async def _tasks_fail_action(t: Task,
-                                 eventListener: EventListener) -> None:
+    async def _tasks_fail_action(t: Task, env: Entry.EntryEnv) -> None:
 
         if isinstance(t, SingleTask) or isinstance(t, PostTask):
 
             if t.isAChild():
-                dispatcher = eventListener.getModule(DISPATCHER_M_NAME)  \
+                dispatcher = env.eventListener.getModule(DISPATCHER_M_NAME)\
                     # type: Dispatcher
 
                 assert(dispatcher is not None)
@@ -181,8 +202,8 @@ class EVENT_HANDLER_TOOLS:
                     await dispatcher.cancel(parent.id())
 
 
-async def responseHandler(eventListener: EventListener,
-                          letter: Letter) -> None:
+async def responseHandler(
+        env: Entry.EntryEnv, letter: Letter) -> None:
 
     if not isinstance(letter, ResponseLetter):
         return None
@@ -191,7 +212,7 @@ async def responseHandler(eventListener: EventListener,
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    wr = eventListener.getModule('WorkerRoom') \
+    wr = env.eventListener.getModule('WorkerRoom') \
         # type: Optional[WorkerRoom]
     assert(wr is not None)
 
@@ -216,10 +237,10 @@ async def copyFileInExecutor(src: str, dest: str) -> None:
                                src, dest)
 
 
-async def temporaryBuild_handling(task: Task,
-                                  eventListener:  EventListener) -> None:
+async def temporaryBuild_handling(
+        task: Task, env: Entry.EntryEnv) -> None:
 
-    logger = eventListener.getModule('Logger')
+    logger = env.eventListener.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
     seperator = pathSeperator()
@@ -243,10 +264,10 @@ async def temporaryBuild_handling(task: Task,
         Logger.putLog(logger, letterLog, str(e))
 
 
-async def responseHandler_ResultStore(task: Task,
-                                      eventListener:  EventListener) -> None:
+async def responseHandler_ResultStore(
+        task: Task, env: Entry.EntryEnv) -> None:
 
-    logger = eventListener.getModule('Logger')
+    logger = env.eventListener.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
     seperator = pathSeperator()
@@ -264,7 +285,7 @@ async def responseHandler_ResultStore(task: Task,
     extra = task.getExtra()
     chooser = chooserSet[taskId]
 
-    cfgs = eventListener.getModule(INFO_M_NAME)
+    cfgs = env.eventListener.getModule(INFO_M_NAME)
     resultDir = cfgs.getConfig("ResultDir")
 
     fileName = chooser.path().split(seperator)[-1]
@@ -297,7 +318,7 @@ async def responseHandler_ResultStore(task: Task,
     task.setData(url + "/data/" + fileName)
 
 
-async def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
+async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
 
     import traceback
 
@@ -315,7 +336,7 @@ async def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
             fileName = letter.getFileName()
             version = letter.getParent()
 
-            sto = eventListener.getModule(STORAGE_M_NAME)
+            sto = env.eventListener.getModule(STORAGE_M_NAME)
             chooser = sto.create(version, fileName)
             chooserSet[tid] = chooser
 
@@ -333,8 +354,8 @@ async def binaryHandler(eventListener: EventListener, letter: Letter) -> None:
         traceback.print_exc()
 
 
-async def logHandler(eventListener: EventListener, letter: Letter) -> None:
-    logger = eventListener.getModule(LOGGER_M_NAME)
+async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:
+    logger = env.eventListener.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
@@ -343,25 +364,21 @@ async def logHandler(eventListener: EventListener, letter: Letter) -> None:
         await Logger.putLog(logger, logId, logMsg)
 
 
-async def logRegisterhandler(eventListener: EventListener,
-                             letter: Letter) -> None:
-
-    logger = eventListener.getModule(LOGGER_M_NAME)
-
+async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
+    logger = env.eventListener.getModule(LOGGER_M_NAME)
     logId = letter.getHeader('logId')
     logger.log_register(logId)
 
 
-async def postHandler(eventListener: EventListener, letter: Letter) -> None:
+async def postHandler(env: Entry.EntryEnv, letter: Letter) -> None:
     if not isinstance(letter, CmdResponseLetter):
         return None
 
-    wr = eventListener.getModule(WORKER_ROOM_MOD_NAME)  # type:  WorkerRoom
+    wr = env.eventListener.getModule(WORKER_ROOM_MOD_NAME)  # type:  WorkerRoom
     await wr.msgToPostManager(letter)
 
 
-async def lisAddrUpdateHandler(eventListener: EventListener,
-                               letter: Letter) -> None:
+async def lisAddrUpdateHandler(env: Entry.EntryEnv, letter: Letter) -> None:
     """
     This handler does not to ensure that that last address
     is successfully sended to worker.
@@ -373,7 +390,7 @@ async def lisAddrUpdateHandler(eventListener: EventListener,
     if not isinstance(letter, ReqLetter):
         return None
 
-    wr = eventListener.getModule(WORKER_ROOM_MOD_NAME)  \
+    wr = env.eventListener.getModule(WORKER_ROOM_MOD_NAME)  \
         # type:  Optional[WorkerRoom]
 
     if wr is None:

@@ -1,20 +1,17 @@
 # EventListener
 
-import unittest
 import asyncio
 
 from django.utils import timezone
 
 from collections import namedtuple
-from typing import Callable, Any, Dict, List, Optional, cast, Coroutine
+from typing import Callable, Any, Dict, List, Optional, Coroutine
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.letter import Letter
 
 # Test imports
-from manager.basic.stubs.workerStup import WorkerStub
-from manager.basic.commands import Command
 from manager.basic.letter import CmdResponseLetter, HeartbeatLetter
 
 M_NAME = "EventListener"
@@ -230,6 +227,10 @@ class EventListener(ModuleDaemon, Subject, Observer):
         loop.create_task(entry.monitor())
 
     async def run(self) -> None:
+
+        # Entry environment initialization
+        entryEnv = Entry.EntryEnv(self, self.handlers)
+
         while True:
 
             if self.needStop():
@@ -247,7 +248,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
             if w.getIdent() in self._entries:
                 continue
 
-            entryEnv = Entry.EntryEnv(self, self.handlers)
             entry = Entry(w.getIdent(), w, entryEnv)
 
             self.addEntry(entry)

@@ -1,17 +1,39 @@
-# Server.py
+# MIT License
+#
+# Copyright (c) 2020 Gcom Tootooroo
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
 
-import manager.master.eventHandlers as EventHandler
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+import asyncio
+import manager.master.eventHandlers as EVENT_HANDLERS
 
 from typing import Optional, List
 from threading import Thread
 
-from manager.basic.type import State
+from manager.basic.type import State, Error
 from manager.basic.mmanager import MManager, Module
 from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
 from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME
-from manager.master.eventListener import EventListener, M_NAME as EVENT_M_NAME
+from manager.master.eventListener \
+    import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler
 from manager.master.logger import Logger
@@ -41,19 +63,27 @@ class ServerInst(Thread):
 
         self._configPath = cfgPath
 
-        self._mmanager = MManager()
+        self._mmanager = None  # type: Optional[MManager]
 
     def getModule(self, m: str) -> Optional[Module]:
+        if self._mmanager is None:
+            return None
         return self._mmanager.getModule(m)
 
     def addModule(self, mod: Module) -> State:
+        if self._mmanager is None:
+            return Error
         return self._mmanager.addModule(mod)
 
     def modules(self) -> List[Module]:
+        if self._mmanager is None:
+            return []
         return self._mmanager.getAllModules()
 
-    def run(self) -> None:
+    async def _execute(self) -> None:
         global predicates
+
+        self._mmanager = MManager()
 
         info = Info(self._configPath)
 
@@ -80,7 +110,10 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Req, lisAddrUpdateHandler)
         self.addModule(eventListener)
 
-        EventHandler.EVENT_HANDLER_TOOLS.action_init(eventListener)
+        # EventHandler init
+        env = Entry.EntryEnv(eventListener, eventListener.handlers)
+        EVENT_HANDLERS.EVENT_HANDLER_TOOLS \
+                      .action_init(env)
 
         logDir = info.getConfig('LogDir')
         logger = Logger(logDir)
@@ -119,3 +152,9 @@ class ServerInst(Thread):
         # Install log handler to logger
         for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:
             logger.handler_install(module, logger.listenTo)
+
+        await self._mmanager.start_all()
+
+    def run(self) -> None:
+        # Start this server instance
+        asyncio.run(self._execute())
