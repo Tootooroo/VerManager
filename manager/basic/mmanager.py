@@ -1,6 +1,7 @@
 # mmanager.py
 
 import unittest
+import asyncio
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict
@@ -69,7 +70,6 @@ class MManager:
     def __init__(self):
         self._modules = {}  # type: Dict[ModuleName, Module]
         self._num = 0
-        self._looper = asyncio.get_running_loop()
 
     def isModuleExists(self, mName: ModuleName) -> bool:
         return mName in self._modules
@@ -124,15 +124,19 @@ class MManager:
         return None
 
     async def start(self, mName) -> None:
+        loop = asyncio.get_running_loop()
+
         if self.isModuleExists(mName):
             m = self._modules[mName]
             if isinstance(m, ModuleDaemon):
-                await m.start()
+                loop.create_task(m.start())
 
     async def start_all(self) -> None:
+        loop = asyncio.get_running_loop()
+
         for m in self._modules:
             if isinstance(m, ModuleDaemon):
-                self._looper.create_task(m.start())
+                loop.create_task(m.start())
 
     async def stop(self, mName) -> None:
         if self.isModuleExists(mName):
