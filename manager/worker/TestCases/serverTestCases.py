@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
+import unittest
 from manager.worker.server import Server
 
 
@@ -29,3 +31,22 @@ class VirtualServer:
         self._ident = ident
         self._addr = addr
         self._port = port
+
+    async def conn_callback(
+            self,
+            r: asyncio.StreamReader,
+            w: asyncio.StreamWriter) -> None:
+
+        pass
+
+    async def listen(self) -> None:
+        server = await asyncio.start_server(None, self._addr, self._port)
+        async with server:
+            await server.serve_forever()
+
+
+class ServerTest(unittest.TestCase):
+
+    def test_connect(self) -> None:
+        # Setup
+        server = Server("127.0.0.1", "8888")

@@ -66,7 +66,6 @@ class Server(Module):
         global M_NAME
 
         Module.__init__(self, M_NAME)
-        self.info = info
 
         queueSize = info.getConfig('QUEUE_SIZE')
         self.q = asyncio.Queue(queueSize)  \
