@@ -78,36 +78,25 @@ class Receiver(ModuleDaemon):
     def listOfTasks_ident(self) -> List[str]:
         return list(self.inProcTasks.keys())
 
-    def run(self) -> None:
+    async def run(self) -> None:
 
         server = self.server
-        processor = self._cInst.getModule(PROCESSOR_M_NAME)
-
-        # Not Processor module
-        if not isinstance(processor, Processor):
-            raise Exception
 
         while True:
-
             if self._status == 1:
                 return None
 
             try:
                 reqLetter = server.waitLetter()
 
-                processor.recyle()
-
                 if isinstance(reqLetter, int):
-
                     if reqLetter == Server.SOCK_DISCONN:
                         continue
                     elif reqLetter == Server.SOCK_TIMEOUT:
                         continue
                     elif reqLetter == Server.SOCK_PARSE_ERROR:
                         continue
-
                 else:
-                    print(reqLetter.toString())
                     processor.proc(reqLetter)
 
             except Exception:

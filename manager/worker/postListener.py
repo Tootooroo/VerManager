@@ -32,14 +32,14 @@ import traceback
 import shutil
 
 from datetime import datetime
-from ..basic.util import spawnThread, sockKeepalive
-from ..basic.letter import Letter, BinaryLetter, MenuLetter, \
+from manager.basic.util import spawnThread, sockKeepalive
+from manager.basic.letter import Letter, BinaryLetter, MenuLetter, \
     ResponseLetter, PostTaskLetter, LogLetter, LogRegLetter, \
     receving, sending
-from ..basic.mmanager import ModuleDaemon, Module
-from ..basic.storage import Storage, StoChooser
-from ..basic.type import State, Ok, Error
-from ..basic.request import LastLisAddrRequire
+from manager.basic.mmanager import ModuleDaemon, Module
+from manager.basic.storage import Storage, StoChooser
+from manager.basic.type import State, Ok, Error
+from manager.basic.request import LastLisAddrRequire
 
 from .type import SEND_STATE, SEND_STATES
 

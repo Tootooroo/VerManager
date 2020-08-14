@@ -24,6 +24,7 @@
 
 import socket
 import time
+import asyncio
 
 from ..basic.mmanager import Module
 
@@ -68,10 +69,11 @@ class Server(Module):
         self.info = info
 
         queueSize = info.getConfig('QUEUE_SIZE')
-        self.q = Queue(queueSize)  # type: Queue[ResponseLetter]
+        self.q = asyncio.Queue(queueSize)  \
+            # type: asyncio.Queue[ResponseLetter]
 
         # Lock to protect socket while reconnecting
-        self._lock = Lock()
+        self._lock = asyncio.Lock()
 
         self._address = address
         self._port = port
@@ -86,6 +88,8 @@ class Server(Module):
         self._isStop = False
 
         self._cInst = cInst
+        self._reader = None  # type: Optional[asyncio.StreamReader]
+        self._writer = None  # type: Optional[asyncio.StreamWriter]
 
     def getStatus(self) -> int:
         return self._status
@@ -103,7 +107,7 @@ class Server(Module):
     def begin(self) -> None:
         self.connect()
 
-    def connect(self) -> State:
+    async def connect(self) -> State:
         info = self._cInst.getModule(INFO_M_NAME)
 
         self._proc = self._cInst.inProcTasks()
@@ -112,63 +116,40 @@ class Server(Module):
 
         self._max = info.getConfig('MAX_TASK_CAN_PROC')
 
-        return self._connect(self._max, self._proc)
+        return await self._connect(self._max, self._proc)
 
-    def _connect(self, max: int, proc: int, retry: int = 0) -> State:
-
-        if self._isStop:
-            return Error
-
+    async def _connect(self, max: int, proc: int, retry: int = 0) -> State:
         host = self._address
         port = self._port
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockKeepalive(sock, 10, 3)
-
-        retry += 1
-
-        while retry > 0:
-            retry -= 1
-
+        while retry >= 0:
             try:
-                sock.connect((host, port))
+                self._reader, self._writer = \
+                    await asyncio.open_connection(host, port)
                 break
-
-            except ConnectionRefusedError:
-                if retry > 0:
-                    continue
-                else:
-                    sock.close()
-                    return Error
-            except Exception:
-                sock.close()
+            except Exception as e:
                 return Error
 
-        sock.settimeout(1)
+            retry -= 1
 
-        propLetter = PropLetter(ident=self._workerName,
-                                max=str(max),
-                                proc=str(proc))
+        if self._reader is None or self._writer is None:
+            return Error
+
+        propLetter = PropLetter(
+            ident=self._workerName, max=str(max), proc=str(proc))
 
         try:
-            self._sending(sock, propLetter)
+            self._sending(self._writer, propLetter)
         except Exception:
             return Error
 
-        self.sock = sock
         self._status = Server.STATE_CONNECTED
-
         return Ok
 
-    def setSockTimeout(self, t: int) -> None:
-        self.sock.settimeout(1)
-
     def disconnect(self) -> None:
-        if hasattr(self, 'sock'):
-            self.sock.shutdown(socket.SHUT_RDWR)
-            self.sock.close()
-
-        self._status = Server.STATE_DISCONNECTED
+        if self._writer is not None:
+            self._writer.close()
+            self._status = Server.STATE_DISCONNECTED
 
     def _response_task_state(self, tid: str, state: str) -> None:
         response = ResponseLetter(self._cInst.getIdent(), tid, state)
@@ -190,8 +171,8 @@ class Server(Module):
                                          cmd_type, state, extra)
         self.transfer(cmd_response)
 
-    def bytesSend(self, l: BinaryLetter) -> None:
-        self.transfer(l)
+    def bytesSend(self, letter: BinaryLetter) -> None:
+        self.transfer(letter)
 
     def log_register(self, id: str) -> None:
         regLetter = LogRegLetter(self._cInst.getIdent(), id)
@@ -210,8 +191,8 @@ class Server(Module):
     # letter will first buffer into a queue
     # and Sender will deal
     # with letters in queue
-    def transfer(self, l) -> None:
-        self.q.put(l)
+    def transfer(self, letter) -> None:
+        self.q.put(letter)
 
     def transfer_step(self, timeout: int = None) -> SEND_STATE:
 
@@ -236,22 +217,23 @@ class Server(Module):
     def drop_all_messages(self) -> None:
         self.q.queue.clear()  # type:  ignore
 
-    def responseRetrive(self) -> Optional[Letter]:
+    async def responseRetrive(self, timeout=None) -> Optional[Letter]:
         try:
-            return self.q.get(timeout=1)
-        except Exception:
+            return await asyncio.wait_for(
+                self.q.get(), timeout=timeout)
+        except asyncio.exceptions.TimeoutError:
             return None
 
-    def reconnectUntil(self, interval: int = None) -> State:
+    async def reconnectUntil(self, interval: int = 1) -> State:
         ret = Error
 
         while ret == Error:
-            ret = self.reconnect()
-            time.sleep(interval)  # type:  ignore
+            ret = await self.reconnect()
+            await asyncio.sleep(interval)  # type:  ignore
 
         return ret
 
-    def reconnect(self) -> State:
+    async def reconnect(self) -> State:
         if self._status != Server.STATE_DISCONNECTED:
             return Error
 
@@ -263,7 +245,7 @@ class Server(Module):
     def isResponseInQ(self) -> bool:
         return not self.q.empty()
 
-    def _reconnectWrapper(self, retry: int = 0) -> int:
+    async def _reconnectWrapper(self, retry: int = 0) -> int:
         with self._lock:
             if self._status != Server.STATE_DISCONNECTED:
                 return Server.SOCK_OK
@@ -283,78 +265,30 @@ class Server(Module):
                 self.reconnectUntil(interval=1)
                 return Server.SOCK_OK
 
-    def _send(self, l: Letter, retry: int = 0) -> int:
+    def _send(self, letter: Letter, retry: int = 0) -> int:
+        jBytes = letter.toBytesWithLength()
 
-        while True:
-            try:
-                if isinstance(l, BinaryLetter):
-                    letter_bytes = l.binaryPack()
-                    assert(letter_bytes is not None)
+        if self._writer is None:
+            return Error
 
-                    Server._sending_bytes(self.sock, letter_bytes)
-                else:
-                    Server._sending(self.sock, l)
-                return Server.SOCK_OK
-            except socket.timeout:
-                return Server.SOCK_TIMEOUT
-            except BinaryLetter.FIELD_LENGTH_EXCEPTION:
-                return Server.SOCK_PARSE_ERROR
-            except Exception:
-                self._status = Server.STATE_DISCONNECTED
-                if self._reconnectWrapper(retry) == Server.SOCK_OK:
-                    continue
-                else:
-                    return Server.SOCK_DISCONN
+        Server._sending(self._writer, jBytes)
+        return Ok
 
-            return Server.SOCK_OK
+    def _send_bytes(self, b: bytes) -> int:
+        if self._writer is None:
+            return Error
+        Server._sending(self._writer, b)
+        return Ok
 
-    def _send_bytes(self, b: bytes, retry: int = 0) -> int:
-        try:
-            Server._sending_bytes(self.sock, b)
-            return Server.SOCK_OK
-        except socket.timeout:
-            return Server.SOCK_TIMEOUT
-        except Exception:
-            if self._reconnectWrapper(retry) == Server.SOCK_OK:
-                self._send_bytes(b, retry)
-                return Server.SOCK_OK
-
-            return Server.SOCK_DISCONN
-
-    def _recv(self, retry: int = 0) -> Union[int, Letter]:
-
-        while True:
-            try:
-                letter = Server._receving(self.sock)
-                if letter is None:
-                    return Server.SOCK_PARSE_ERROR
-                return letter
-
-            except socket.timeout:
-                return Server.SOCK_TIMEOUT
-
-            except Exception:
-                self._status = Server.STATE_DISCONNECTED
-                if self._reconnectWrapper(retry) == Server.SOCK_OK:
-                    continue
-                return Server.SOCK_DISCONN
+    async def _recv(self, retry: int = 0) -> Union[int, Letter]:
+        if self._reader is None:
+            return Error
+        return await Server._receving(self._reader)
 
     @staticmethod
-    def _receving(sock: socket.socket) -> Optional[Letter]:
-        return letter_receving(sock)
+    async def _receving(reader: asyncio.StreamReader) -> Optional[Letter]:
+        return await letter_receving(reader)
 
     @staticmethod
-    def _sending(sock: socket.socket, l: Letter) -> None:
-        jBytes = l.toBytesWithLength()
-        return Server._sending_bytes(sock, jBytes)
-
-    @staticmethod
-    def _sending_bytes(sock: socket.socket, bytesBuffer: bytes) -> None:
-        totalSent = 0
-        length = len(bytesBuffer)
-
-        while totalSent < length:
-            sent = sock.send(bytesBuffer[totalSent:])
-            if sent == 0:
-                raise DISCONN_EXCEPTION
-            totalSent += sent
+    def _sending(writer: asyncio.StreamWriter, bytesBuffer: bytes) -> None:
+        writer.write(bytesBuffer)
