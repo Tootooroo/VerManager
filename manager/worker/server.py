@@ -22,7 +22,6 @@
 
 # server.py
 
-import socket
 import time
 import asyncio
 
@@ -31,14 +30,11 @@ from ..basic.mmanager import Module
 from ..basic.letter import Letter, PropLetter, BinaryLetter, ResponseLetter, \
     receving as letter_receving, LogRegLetter, LogLetter, \
     CmdResponseLetter
-from ..basic.info import Info, M_NAME as INFO_M_NAME
+from ..basic.info import Info
 from ..basic.type import State, Ok, Error
-from ..basic.util import sockKeepalive
 from .type import SEND_STATES, SEND_STATE
 
-from typing import Any, Union, Optional, Dict
-from threading import Lock
-from queue import Queue, Empty
+from typing import Union, Optional, Dict
 
 M_NAME = "Server"
 
@@ -60,16 +56,15 @@ class Server(Module):
     SOCK_DISCONN = 2
     SOCK_PARSE_ERROR = 3
 
-    def __init__(self, address: str, port: int,
-                 info: Info, cInst: Any) -> None:
+    def __init__(self, address: str, port: int, info: Info) -> None:
 
         global M_NAME
 
         Module.__init__(self, M_NAME)
 
-        queueSize = info.getConfig('QUEUE_SIZE')
-        self.q = asyncio.Queue(queueSize)  \
-            # type: asyncio.Queue[ResponseLetter]
+        self.q = asyncio.Queue(
+            info.getConfig('QUEUE_SIZE')
+        )  # type: asyncio.Queue[ResponseLetter]
 
         # Lock to protect socket while reconnecting
         self._lock = asyncio.Lock()
@@ -77,6 +72,7 @@ class Server(Module):
         self._address = address
         self._port = port
 
+        self._workerName = ""
         self._max = 0
         self._proc = 0
 
@@ -86,7 +82,6 @@ class Server(Module):
         # should be closed and never rebuild in the future.
         self._isStop = False
 
-        self._cInst = cInst
         self._reader = None  # type: Optional[asyncio.StreamReader]
         self._writer = None  # type: Optional[asyncio.StreamWriter]
 
@@ -107,14 +102,6 @@ class Server(Module):
         self.connect()
 
     async def connect(self) -> State:
-        info = self._cInst.getModule(INFO_M_NAME)
-
-        self._proc = self._cInst.inProcTasks()
-        if self._proc is None:
-            self._proc = 0
-
-        self._max = info.getConfig('MAX_TASK_CAN_PROC')
-
         return await self._connect(self._max, self._proc)
 
     async def _connect(self, max: int, proc: int, retry: int = 0) -> State:
@@ -127,6 +114,7 @@ class Server(Module):
                     await asyncio.open_connection(host, port)
                 break
             except Exception as e:
+                print(e)
                 return Error
 
             retry -= 1
@@ -138,8 +126,9 @@ class Server(Module):
             ident=self._workerName, max=str(max), proc=str(proc))
 
         try:
-            self._sending(self._writer, propLetter)
-        except Exception:
+            self._send(propLetter)
+        except Exception as e:
+            print(e)
             return Error
 
         self._status = Server.STATE_CONNECTED
@@ -151,7 +140,7 @@ class Server(Module):
             self._status = Server.STATE_DISCONNECTED
 
     def _response_task_state(self, tid: str, state: str) -> None:
-        response = ResponseLetter(self._cInst.getIdent(), tid, state)
+        response = ResponseLetter(self._workerName, tid, state)
         self.transfer(response)
 
     def response_in_proc(self, tid: str) -> None:
@@ -166,19 +155,19 @@ class Server(Module):
     def control_response(self, cmd_type: str, state: str,
                          extra: Dict[str, str]) -> None:
 
-        cmd_response = CmdResponseLetter(self._cInst.getIdent(),
-                                         cmd_type, state, extra)
+        cmd_response = CmdResponseLetter(
+            self._workerName, cmd_type, state, extra)
         self.transfer(cmd_response)
 
     def bytesSend(self, letter: BinaryLetter) -> None:
         self.transfer(letter)
 
     def log_register(self, id: str) -> None:
-        regLetter = LogRegLetter(self._cInst.getIdent(), id)
+        regLetter = LogRegLetter(self._workerName, id)
         self.transfer(regLetter)
 
     def log(self, id: str, msg: str) -> None:
-        logLetter = LogLetter(self._cInst.getIdent(), id, msg)
+        logLetter = LogLetter(self._workerName, id, msg)
         self.transfer(logLetter)
 
     def waitLetter(self) -> Union[int, Letter]:
@@ -200,10 +189,7 @@ class Server(Module):
         if self._isStop or self._status != Server.STATE_TRANSFER:
             return SEND_STATES.UNAVAILABLE
 
-        try:
-            response = self.q.get_nowait()
-        except Empty:
-            return SEND_STATES.NO_DATA
+        response = self.q.get_nowait()
 
         if self._send(response, retry=1) == Server.SOCK_OK:
             return SEND_STATES.DATA_SENDED
@@ -213,8 +199,8 @@ class Server(Module):
 
         return SEND_STATES.UNAVAILABLE
 
-    def drop_all_messages(self) -> None:
-        self.q.queue.clear()  # type:  ignore
+    async def drop_all_messages(self) -> None:
+        await self.q.queue.clear()  # type:  ignore
 
     async def responseRetrive(self, timeout=None) -> Optional[Letter]:
         try:

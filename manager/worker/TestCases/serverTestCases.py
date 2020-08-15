@@ -22,31 +22,68 @@
 
 import asyncio
 import unittest
+
+from manager.basic.util import delayExec
+from manager.basic.letter import receving, PropLetter
 from manager.worker.server import Server
+from manager.basic.info import Info
+from manager.basic.virtuals.virtualServer import VirtualServer
 
 
-class VirtualServer:
+async def coroStop(coro):
+    await asyncio.sleep(2)
+    coro.cancel()
+
+
+class VirtServer(VirtualServer):
 
     def __init__(self, ident: str, addr: str, port: int) -> None:
-        self._ident = ident
-        self._addr = addr
-        self._port = port
+        VirtualServer.__init__(self, ident, addr, port)
+        self.callback = None
 
     async def conn_callback(
             self,
             r: asyncio.StreamReader,
             w: asyncio.StreamWriter) -> None:
 
-        pass
-
-    async def listen(self) -> None:
-        server = await asyncio.start_server(None, self._addr, self._port)
-        async with server:
-            await server.serve_forever()
+        await self.callback(r, w)
+        await self.stop()
 
 
-class ServerTest(unittest.TestCase):
+async def checkPropLetter(r, w):
+    letter = await receving(r)
+    if isinstance(letter, PropLetter):
+        max = letter.getMax()
+        proc = letter.getProc()
+
+        assert("0" == max)
+        assert("0" == proc)
+
+
+class ServerTestCases(unittest.TestCase):
+
+    async def setUp_coro(self) -> None:
+        info = Info("./config_test.yaml")
+        self.server = Server("127.0.0.1", 30000, info)
+        self.vir_server = VirtServer("Server", "127.0.0.1", 30000)
 
     def test_connect(self) -> None:
-        # Setup
-        server = Server("127.0.0.1", "8888")
+        # Exercise
+        async def testing() -> None:
+            await self.setUp_coro()
+            self.vir_server.callback = checkPropLetter
+
+            await asyncio.gather(
+                self.vir_server.start(),
+                delayExec(self.server.connect(), secs=1))
+
+        asyncio.run(testing())
+
+        # Verify
+        self.assertEqual(
+            Server.STATE_CONNECTED,
+            self.server.getStatus()
+        )
+
+    def test_heartbeat(self) -> None:
+        pass

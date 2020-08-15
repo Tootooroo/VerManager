@@ -25,6 +25,7 @@
 import platform
 import subprocess
 import socket
+import asyncio
 
 from threading import Thread
 from functools import reduce
@@ -142,3 +143,7 @@ def sockKeepalive(sock: socket.socket, timeout: int, intvl: int) -> None:
     else:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, timeout)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, intvl)
+
+async def delayExec(coro, secs=0):
+    await asyncio.sleep(secs)
+    await coro

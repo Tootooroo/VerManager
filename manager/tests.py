@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 # Create your tests here.
+"""
 #from manager.master.verControl import VerControlTestCases
 from manager.basic.letter import LetterTestCases
 #from manager.master.dispatcher import DispatcherUnitTest
@@ -39,3 +40,5 @@ from manager.master.TestCases.eventListenerTestCases \
     import EntryTestCases, EventListenerTestCases
 from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
+"""
+from manager.worker.TestCases.serverTestCases import ServerTestCases
