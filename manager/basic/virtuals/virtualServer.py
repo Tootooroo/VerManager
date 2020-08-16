@@ -20,52 +20,37 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# receiver.py
-
-from ..basic.mmanager import ModuleDaemon
-from .server import Server
-from ..basic.observer import Subject
+import abc
+import asyncio
+import typing
 
 
-M_NAME = "Recevier"
+class VirtualServer(abc.ABC):
 
+    def __init__(self, ident: str, addr: str, port: int) -> None:
+        self._ident = ident
+        self._addr = addr
+        self._port = port
+        self._coro = None  # type: typing.Any
 
-class Receiver(Subject, ModuleDaemon):
+    @abc.abstractmethod
+    async def conn_callback(
+            self,
+            r: asyncio.StreamReader,
+            w: asyncio.StreamWriter) -> None:
+        """ Callback of start_server """
 
-    def __init__(self, server: Server) -> None:
-        # Init as a ModuleDaemon
-        ModuleDaemon.__init__(self, M_NAME)
+    async def start(self) -> None:
+        server = await asyncio.start_server(
+            self.conn_callback, self._addr, self._port)
 
-        # Init as a Subject
-        Subject.__init__(self, M_NAME)
-        self.addType("Letter")
-
-        self._server = server
-        self._stop = False
+        self._coro = server.serve_forever()
+        try:
+            await self._coro
+        except Exception:
+            pass
 
     async def stop(self) -> None:
-        self._stop = True
-
-    def needStop(self) -> bool:
-        return self._stop
-
-    def status(self) -> int:
-        return self._stop
-
-    async def run(self) -> None:
-        server = self._server
-
-        while True:
-            if self._stop == 1:
-                return None
-
-            try:
-                letter = await server.waitLetter()
-
-                # notify to registered
-                self.notify("Letter", letter)
-
-            except (ConnectionError, BrokenPipeError, ConnectionResetError):
-                # Connection between server
-                # is not maintained by Receiver
-                continue
+        if self._coro is not None:
+            self._coro.throw(
+                asyncio.exceptions.CancelledError)

@@ -75,14 +75,17 @@ class Result:
         self.menuId = mid
 
 
+
+class ProcUnit:
+    pass
+
+
 class Processor(Module, Subject):
 
     NOTIFY_POST_LISTENER = "lis"
     NOTIFY_POST_PROVIDER = "pro"
 
     def __init__(self, info: Info, cInst: Any) -> None:
-        global M_NAME
-
         Module.__init__(self, M_NAME)
 
         Subject.__init__(self, M_NAME)
@@ -112,10 +115,10 @@ class Processor(Module, Subject):
         self._recyleInterrupt = False
         self._recyleInProcessing = False
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
     def logging(self, msg: str) -> None:
@@ -143,6 +146,9 @@ class Processor(Module, Subject):
     def setProcedure(self, procedure: Callable[[Server, Letter, Info],
                                                None]) -> None:
         self._procedure = procedure
+
+    async def run(self) -> None:
+        pass
 
     def proc(self, reqLetter: Letter) -> None:
 

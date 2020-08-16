@@ -967,7 +967,7 @@ async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Lette
         )
 
         if chunk == b'':
-            raise Exception
+            raise ConnectionError
 
         content += chunk
         remain = Letter.letterBytesRemain(content)

@@ -59,12 +59,9 @@ class Server(Module):
     def __init__(self, address: str, port: int, info: Info) -> None:
 
         global M_NAME
-
         Module.__init__(self, M_NAME)
 
-        self.q = asyncio.Queue(
-            info.getConfig('QUEUE_SIZE')
-        )  # type: asyncio.Queue[ResponseLetter]
+        self.q = asyncio.Queue(128)  # type: asyncio.Queue[ResponseLetter]
 
         # Lock to protect socket while reconnecting
         self._lock = asyncio.Lock()
@@ -139,39 +136,39 @@ class Server(Module):
             self._writer.close()
             self._status = Server.STATE_DISCONNECTED
 
-    def _response_task_state(self, tid: str, state: str) -> None:
+    async def _response_task_state(self, tid: str, state: str) -> None:
         response = ResponseLetter(self._workerName, tid, state)
         self.transfer(response)
 
-    def response_in_proc(self, tid: str) -> None:
+    async def response_in_proc(self, tid: str) -> None:
         self._response_task_state(tid, Letter.RESPONSE_STATE_IN_PROC)
 
-    def response_fin(self, tid: str) -> None:
+    async def response_fin(self, tid: str) -> None:
         self._response_task_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
-    def response_failure(self, tid: str) -> None:
+    async def response_failure(self, tid: str) -> None:
         self._response_task_state(tid, Letter.RESPONSE_STATE_FAILURE)
 
-    def control_response(self, cmd_type: str, state: str,
-                         extra: Dict[str, str]) -> None:
+    async def control_response(self, cmd_type: str, state: str,
+                               extra: Dict[str, str]) -> None:
 
         cmd_response = CmdResponseLetter(
             self._workerName, cmd_type, state, extra)
         self.transfer(cmd_response)
 
-    def bytesSend(self, letter: BinaryLetter) -> None:
+    async def bytesSend(self, letter: BinaryLetter) -> None:
         self.transfer(letter)
 
-    def log_register(self, id: str) -> None:
+    async def log_register(self, id: str) -> None:
         regLetter = LogRegLetter(self._workerName, id)
         self.transfer(regLetter)
 
-    def log(self, id: str, msg: str) -> None:
+    async def log(self, id: str, msg: str) -> None:
         logLetter = LogLetter(self._workerName, id, msg)
         self.transfer(logLetter)
 
-    def waitLetter(self) -> Union[int, Letter]:
-        return self._recv(5)
+    async def waitLetter(self) -> Union[int, Letter]:
+        return await self._recv(5)
 
     # Transfer a letter to server
     # calling of this method will not transfer
@@ -179,25 +176,26 @@ class Server(Module):
     # letter will first buffer into a queue
     # and Sender will deal
     # with letters in queue
-    def transfer(self, letter) -> None:
-        self.q.put(letter)
+    async def transfer(self, letter) -> None:
+        await self.q.put(letter)
 
-    def transfer_step(self, timeout: int = None) -> SEND_STATE:
-
+    async def transfer_step(self, timeout: int = None) -> None:
         # Server module is in stop state.
         # Not allow to transfer messages until authorized by master
         if self._isStop or self._status != Server.STATE_TRANSFER:
             return SEND_STATES.UNAVAILABLE
 
-        response = self.q.get_nowait()
+        try:
+            response = await self.q.get()
+            await self._do_transfer(response)
 
-        if self._send(response, retry=1) == Server.SOCK_OK:
-            return SEND_STATES.DATA_SENDED
-        else:
-            # Insert into head of the queue
-            self.q.queue.insert(0, response)  # type:  ignore
+        except (ConnectionResetError, BrokenPipeError) as e:
+            self.setStatus(Server.STATE_DISCONNECTED)
+            raise e
 
-        return SEND_STATES.UNAVAILABLE
+    async def _do_transfer(self, letter: Letter) -> None:
+        self._send(letter, retry=1)
+        await self.drain()
 
     async def drop_all_messages(self) -> None:
         await self.q.queue.clear()  # type:  ignore
@@ -223,32 +221,16 @@ class Server(Module):
             return Error
 
         try:
-            return self.connect()
+            return await self.connect()
         except Exception:
             return Error
 
     def isResponseInQ(self) -> bool:
         return not self.q.empty()
 
-    async def _reconnectWrapper(self, retry: int = 0) -> int:
-        with self._lock:
-            if self._status != Server.STATE_DISCONNECTED:
-                return Server.SOCK_OK
-
-            if retry >= 0:
-                while retry > 0:
-                    ret = self.reconnect()
-                    if ret == Ok:
-                        return Server.SOCK_OK
-                    retry -= 1
-
-                    # Retry interval is 5 seconds
-                    time.sleep(5)
-
-                return Server.SOCK_DISCONN
-            else:
-                self.reconnectUntil(interval=1)
-                return Server.SOCK_OK
+    async def drain(self) -> None:
+        if self._writer is not None:
+            await self._writer.drain()
 
     def _send(self, letter: Letter, retry: int = 0) -> int:
         jBytes = letter.toBytesWithLength()

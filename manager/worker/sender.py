@@ -25,18 +25,16 @@
 import time
 from datetime import datetime
 
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Coroutine
 
-from ..basic.mmanager import ModuleDaemon
-from ..basic.info import Info
-from ..basic.type import State, Error, Ok
+from manager.basic.observer import Subject
+from manager.basic.mmanager import ModuleDaemon
+from manager.basic.info import Info
+from manager.basic.type import State, Error, Ok
 from .type import SEND_STATE, SEND_STATES
 
-from threading import Condition
-
 M_NAME = "Sender"
-
-SendRtn_NoWait_NoExcep = Callable[[], State]
+SendRtn_NoWait_NoExcep = Callable[[], Coroutine[Any, Any, SEND_STATE]]
 
 
 class SEND_RTN:
@@ -57,9 +55,9 @@ class SEND_RTN:
     def rtn(self) -> SendRtn_NoWait_NoExcep:
         return self._rtn
 
-    def execute(self, time=None) -> SEND_STATE:
+    async def execute(self, time=None) -> SEND_STATE:
         if self._isAbleToSend():
-            ret = self._rtn()
+            ret = await self._rtn()
 
             self._able = \
                 ret is SEND_STATES.NO_DATA or \
@@ -74,26 +72,28 @@ class SEND_RTN:
             return False
 
 
-class Sender(ModuleDaemon):
+class Sender(Subject, ModuleDaemon):
 
     def __init__(self, info: Info, cInst: Any) -> None:
-        global M_NAME
         ModuleDaemon.__init__(self, M_NAME)
 
-        self.cond = Condition()
+        Subject.__init__(self, M_NAME)
+        self.addType("ServerLost")
 
-        self._status = 0
-
+        self._stop = False
         self._send_rtns = []  # type: List[SEND_RTN]
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
-    def stop(self) -> None:
-        self._status = 1
+    async def stop(self) -> None:
+        self._stop = True
+
+    def needStop(self) -> bool:
+        return self._stop
 
     def rtnRegister(self, rtn: SendRtn_NoWait_NoExcep) -> State:
         if rtn in self._send_rtns:
@@ -108,27 +108,31 @@ class Sender(ModuleDaemon):
 
         return Ok
 
-    def run(self) -> None:
-        cond = self.cond
+    def _isIdle(self, now, last):
+        return (now - last).seconds > 1
 
-        cond.acquire()
+    async def run(self) -> None:
 
         last = datetime.utcnow()
-        isIdle = lambda now, last: (now - last).seconds > 1
 
         while True:
-            if self._status == 1:
-                self._status = 2
-                cond.release()
-                return None
-
             now = datetime.utcnow()
 
+            if self.needStop():
+                return None
+
             for rtn in self._send_rtns:
-                ret = rtn.execute(now)
 
-                if ret == SEND_STATES.DATA_SENDED:
-                    last = now
+                try:
+                    ret = await rtn.execute(now)
+                    if ret == SEND_STATES.DATA_SENDED:
+                        last = now
 
-            if isIdle(now, last):
+                except (ConnectionError,
+                        BrokenPipeError,
+                        ConnectionResetError):
+
+                    self.notify("ServerLost", None)
+
+            if self._isIdle(now, last):
                 time.sleep(1)
