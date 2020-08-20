@@ -24,14 +24,41 @@
 import unittest
 import asyncio
 
-from manager.worker.processor import ProcUnit
+from manager.basic.letter import CommandLetter
+from manager.worker.procUnit import ProcUnit
+from manager.worker.cmdProcessor import CmdProcessor
+
+handled = False
 
 
-class ProcUnitMock(ProcUnit):
-    pass
+async def handler(unit: ProcUnit, letter: CommandLetter) -> None:
+    global handled
+
+    type = letter.getType()
+    if type == "H":
+        handled = True
 
 
-class ProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
+class CmdProcessorUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        pass
+        self.unit = CmdProcessor("Unit")
+
+    async def test_CmdProcessor_InstallCmdProc(self) -> None:
+        # Exercise
+        self.unit.cmd_proc_install("H", handler)
+
+        # Verify
+        self.assertTrue(True, self.unit.is_handler_exists("H"))
+
+    async def test_CmdProcessor_HandleCmd(self) -> None:
+        # Setup
+        letter = CommandLetter("H", {})
+        self.unit.cmd_proc_install("H", handler)
+
+        # Exercise
+        await self.unit.start()
+        await self.unit.proc(letter)
+
+        # Verify
+        self.assertTrue(handled)

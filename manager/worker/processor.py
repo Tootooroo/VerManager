@@ -30,6 +30,7 @@ import subprocess
 import queue
 import shutil
 import abc
+import asyncio
 
 from typing import Any, Optional, Callable, List, Dict, BinaryIO
 from multiprocessing import Pool, Manager
@@ -74,24 +75,6 @@ class Result:
         self.version = version
         self.isSuccess = isSuccess
         self.menuId = mid
-
-
-class ProcUnit(abc.ABC):
-
-    def __init__(self, ident: str) -> None:
-        self._unitIdent = ident
-
-    @abc.abstractmethod
-    def proc(self, letter: Letter) -> None:
-        """ Transfer a letter to ProcUnit to process. """
-
-    @abc.abstractmethod
-    def query(self, code: int) -> None:
-        """ Interface to query information within unit """
-
-    @abc.abstractmethod
-    def ctrl(self, code: int) -> None:
-        """ Interface to contrl proc unit """
 
 
 
