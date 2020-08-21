@@ -23,10 +23,15 @@
 
 import unittest
 import asyncio
+import typing
+import manager.worker.TestCases.misc as misc
 
 from manager.basic.letter import CommandLetter
-from manager.worker.procUnit import ProcUnit
+from manager.worker.procUnit import ProcUnit, \
+    PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 from manager.worker.cmdProcessor import CmdProcessor
+
+
 
 handled = False
 
@@ -37,6 +42,86 @@ async def handler(unit: ProcUnit, letter: CommandLetter) -> None:
     type = letter.getType()
     if type == "H":
         handled = True
+
+
+class ProcUnitMock(ProcUnit):
+
+    def __init__(self, ident: str) -> None:
+        ProcUnit.__init__(self, ident)
+
+        self.procLogic = None  # type: typing.Any
+        self.result = False
+        self.stop = False
+
+    async def run(self) -> None:
+        await self.procLogic(self)
+
+
+class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.pu = ProcUnitMock("Unit")
+
+    async def test_ProcUnit_ProcLogic(self) -> None:
+        # Setup
+        self.pu.procLogic = misc.procUnitMock_Logic
+        self.pu.start()
+
+        # Exercise
+        letter = CommandLetter("T", {})
+        await self.pu.proc(letter)
+
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertTrue(self.pu.result)
+
+    async def test_ProcUnit_HightOverLoad(self) -> None:
+        # Setup
+        self.pu.procLogic = misc.procUnitMock_BlockTheQueue
+        self.pu.start()
+
+        # Exercise
+        while True:
+            try:
+                await self.pu.proc(
+                    CommandLetter("HIGH", {}))
+            except PROC_UNIT_HIGHT_OVERLOAD:
+
+                # Verify
+                self.pu.stop = True
+                self.assertTrue(ProcUnit.STATE_OVERLOAD, self.pu.state())
+                self.assertTrue(self.pu._normal_space.full())
+
+                return
+
+        self.fail("No overload exception is raised")
+
+    async def test_ProcUnit_DenyState(self) -> None:
+        # Setup
+        self.pu.procLogic = misc.procUnitMock_BlockTheQueue
+        self.pu.start()
+
+        # Exercise
+        while True:
+            try:
+                await self.pu.proc(
+                    CommandLetter("DENY", {}))
+            except PROC_UNIT_HIGHT_OVERLOAD:
+                pass
+            except PROC_UNIT_IS_IN_DENY_MODE:
+                # Verify
+                self.pu.stop = True
+                self.assertTrue(ProcUnit.STATE_DENY, self.pu.state())
+                self.assertTrue(self.pu._normal_space.full())
+                self.assertTrue(self.pu._reserved_space.full())
+
+                return
+
+        self.fail("Not enter deny mode")
+
+    async def test_ProcUnit_Channel(self) -> None:
+        pass
 
 
 class CmdProcessorUnitTestCases(unittest.IsolatedAsyncioTestCase):

@@ -20,49 +20,33 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import typing
-
-from typing import Callable, Coroutine
-from manager.worker.procUnit import ProcUnit
+import asyncio
 from manager.basic.letter import Letter, CommandLetter
 
 
-CommandHandler = Callable[[ProcUnit, CommandLetter], Coroutine]
+# Things that used by ProcUnitTestCases
+async def procUnitMock_Logic(p):
+
+    try:
+        letter = await p.job_retrive(timeout=1)
+    except asyncio.exceptions.TimeoutError:
+        return None
+
+    if not isinstance(letter, CommandLetter):
+        return None
+
+    type = letter.getType()
+
+    if type == "T":
+        p.result = True
+    else:
+        p.result = False
 
 
-class CmdProcessor(ProcUnit):
+async def procUnitMock_BlockTheQueue(unit):
 
-    def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
-        self._hMap = {}  # type: typing.Dict[str, CommandHandler]
-
-    async def run(self) -> None:
-        pass
-
-    async def proc(self, letter: Letter) -> None:
-        if not isinstance(letter, CommandLetter):
-            raise CMD_PROCESSOR_WRONG_TYPE_LETTER()
-
-        type = letter.getType()
-
-        await self._hMap[type](self, letter)
-
-    async def query(self, code: int) -> None:
-        pass
-
-    async def ctrl(self, code: int) -> None:
-        pass
-
-    def cmd_proc_install(self, ident: str, handler: CommandHandler) -> None:
-        if self.is_handler_exists(ident):
+    while True:
+        if unit.stop is True:
             return None
-        self._hMap[ident] = handler
 
-    def is_handler_exists(self, ident: str) -> bool:
-        return ident in self._hMap
-
-
-
-
-class CMD_PROCESSOR_WRONG_TYPE_LETTER(Exception):
-    pass
+        await asyncio.sleep(1)

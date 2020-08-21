@@ -35,9 +35,11 @@ class ProcUnit(abc.ABC):
     STATE_STOP = 0
     # Ready to handle letter
     STATE_READY = 1
+    # Normal space is out of space
+    STATE_OVERLOAD = 2
     # DENY state means ProcUnit is unable
     # to accept any more jobs.
-    STATE_DENY = 2
+    STATE_DENY = 3
 
     def __init__(self, ident: str) -> None:
         self._unitIdent = ident
@@ -46,22 +48,20 @@ class ProcUnit(abc.ABC):
 
         self._install = False
 
-        # Queue to notify message to Processor
-        # which is call by ProcUnit.
-        # Will be initialized when install into Processor
-        self._notify_queue = None  # type: Optional[asyncio.Queue]
-
-        # Used by query method to generate message need by
-        # caller the type of content is depend on code param
-        # of query().
-        self._querySources = {}  # type: Dict[int, Callable]
-
-        # Similar to _querySources
-        self._ctrlHandlers = {}  # type: Dict[int, Callable]
-
-        self._letter_queue = asyncio.Queue(256)  # type: asyncio.Queue[Letter]
-        self._letter_reserved_space = asyncio.Queue(128)  \
+        self._normal_space = asyncio.Queue(256)  # type: asyncio.Queue[Letter]
+        self._reserved_space = asyncio.Queue(128)  \
             # type: asyncio.Queue[Letter]
+
+    def start(self) -> None:
+        # Setup state
+        self._state = self.STATE_READY
+
+        # Run ProcLogic in current loop
+        asyncio.get_running_loop().\
+            create_task(self.run())
+
+        # Reset ProcUnit's state to STATE_STOP
+        self._state = self.STATE_STOP
 
     @abc.abstractmethod
     async def run(self) -> None:
@@ -70,44 +70,51 @@ class ProcUnit(abc.ABC):
         handle letter receive from Processor
         """
 
-    @abc.abstractmethod
     async def proc(self, letter: Letter) -> None:
 
         try:
-            self._letter_queue.put_nowait(letter)
+            self._normal_space.put_nowait(letter)
 
         except asyncio.QueueFull:
-            if self._store_job_to_reserved_space(letter) is True:
-                raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
-            else:
-                raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
+            await self._store_job_to_reserved_space(letter)
+            raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
 
-    async def _store_job_to_reserved_space(self, letter: Letter) -> bool:
-        try:
-            self._letter_reserved_space.put_nowait(letter)
-            return True
-        except asyncio.QueueFull:
-            return False
+    async def job_retrive(self, timeout=None) -> Letter:
 
-    @abc.abstractmethod
-    async def query(self, code: int) -> None:
-        """ Interface to query information within unit """
+        # Flush letters from reserved space
+        # to normal space if there is any
+        # letters within reserved space
+        self._flush()
 
-    @abc.abstractmethod
-    async def ctrl(self, code: int) -> None:
-        """ Interface to contrl proc unit """
+        return await asyncio.wait_for(
+            self._normal_space.get(), timeout=timeout)
 
-    async def _notify(self, message: str, timeout: int = None) -> None:
-        if self._notify_queue is None:
+    def _flush(self) -> None:
+        reserved_empty = self._reserved_space.empty()
+        noSpace = self._normal_space.full()
+
+        if reserved_empty or noSpace:
             return None
 
-        try:
-            await asyncio.wait_for(
-                self._notify_queue.put(message),
-                timeout=timeout)
-        except asyncio.exceptions.TimeoutError:
-            pass
+        while True:
 
+            try:
+                self._normal_space.put_nowait(
+                    self._reserved_space.get_nowait())
+            except (asyncio.QueueEmpty, asyncio.QueueFull):
+                return None
+
+    async def _store_job_to_reserved_space(self, letter: Letter) -> None:
+        try:
+            self._reserved_space.put_nowait(letter)
+        except asyncio.QueueFull:
+            raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
+
+    async def _notify(self, message: Dict) -> None:
+        """ Notify informations of ProcUnit to Processor """
+
+    def state(self) -> int:
+        return self._state
 
 class PROC_UNIT_HIGHT_OVERLOAD(Exception):
 
