@@ -40,6 +40,7 @@ from manager.master.TestCases.eventListenerTestCases \
     import EntryTestCases, EventListenerTestCases
 from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
-"""
 from manager.worker.TestCases.serverTestCases import ServerTestCases
+"""
 from manager.worker.TestCases.procUnitTestCases import ProcUnitUnitTestCases
+from manager.worker.TestCases.processorTestCases import ProcessorTestCases

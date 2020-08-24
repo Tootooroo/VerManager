@@ -21,10 +21,16 @@
 # SOFTWARE.
 
 import asyncio
-from manager.basic.letter import Letter, CommandLetter
+import typing
+
+from manager.basic.letter import CommandLetter
+from manager.worker.procUnit import ProcUnit
 
 
 # Things that used by ProcUnitTestCases
+channel_data = {}  # type: typing.Dict
+
+
 async def procUnitMock_Logic(p):
 
     try:
@@ -50,3 +56,7 @@ async def procUnitMock_BlockTheQueue(unit):
             return None
 
         await asyncio.sleep(1)
+
+
+async def procUnitMock_NotifyChannel(unit: ProcUnit):
+    unit._notify(unit._basic_msg_gen())

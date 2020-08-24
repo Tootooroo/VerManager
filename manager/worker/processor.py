@@ -20,754 +20,177 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# processor.py
-
-import time
-import os
-import traceback
-import platform
-import subprocess
-import queue
-import shutil
 import abc
+import typing
 import asyncio
 
-from typing import Any, Optional, Callable, List, Dict, BinaryIO
-from multiprocessing import Pool, Manager
-from threading import Event, Lock
-
-from ..basic.letter import Letter, CommandLetter, NewLetter, PostTaskLetter, \
-    CmdResponseLetter, ResponseLetter, BinaryLetter, CancelLetter
-from ..basic.observer import Subject
-from ..basic.info import Info
-from ..basic.type import Ok, Error, State
-from ..basic.util import partition, packShellCommands, \
-    execute_shell, pathSeperator
-from ..basic.storage import M_NAME as STO_M_NAME
-from ..basic.mmanager import Module
-from .task import Task
-from .post import Post
-from .server import Server
-from .postListener import PostListener, PostProvider
-from ..basic.commands import PostConfigCmd, LisAddrUpdateCmd, ReWorkCommand
-from .server import M_NAME as SERVER_M_NAME
-from .postListener import M_NAME as POST_LISTENER_M_NAME
-from .postListener import M_NAME_Provider as POST_PROVIDER_M_NAME
-from .sender import M_NAME as SENDER_M_NAME
-from ..basic.commands import CMD_POST_TYPE, CMD_ACCEPT, CMD_ACCEPT_RST, \
-    CMD_LIS_ADDR_UPDATE, CMD_REWORK_TASK, CMD_CLEAN, CMD_LIS_LOST
-
-Procedure = Callable[[Server, Post, Letter, Info], None]
-CommandHandler = Callable[['Processor', CommandLetter, Info, Any], State]
-
-M_NAME = "Processor"
-LOG_ID = "Processor"
+from manager.worker.procUnit \
+    import ProcUnit, PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
+from manager.basic.mmanager import ModuleDaemon
+from manager.basic.letter import Letter, CommandLetter
 
 
-class Result:
+class Dispatcher:
 
-    def __init__(self, tid: str, mid: str,
-                 filePath: str, needPost: str,
-                 version: str, isSuccess: bool) -> None:
-        self.tid = tid
-        self.path = filePath
-        self.needPost = needPost
-        self.version = version
-        self.isSuccess = isSuccess
-        self.menuId = mid
+    def __init__(self) -> None:
+        self._units = {}  # type: typing.Dict[str, ProcUnit]
+
+    def addUnit(self, type: str, unit: ProcUnit) -> None:
+        if type in self._units:
+            return None
+        self._units[type] = unit
+
+    def dispatch(self, cl: Letter) -> None:
+        type = cl.__name__  # type: ignore
+
+        if type not in self._units:
+            raise PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE(type)
+
+        # These two exception will be dealt by UnitMaintainer.
+        # Dispatcher is focus on work of dispatch.
+        try:
+            self._units[type].proc(cl)
+        except (PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE):
+            pass
 
 
+class Channel:
+
+    def __init__(self) -> None:
+        self._channels = {}  # type: typing.Dict
+
+    def addChannel(self, ident: str) -> None:
+        if ident in self._channels:
+            raise PROCESSOR_UNIT_CHANNEL_EXISTS()
+        self._channels[ident] = {}
+
+    def getChannel(self, ident: str) -> typing.Optional[typing.Dict]:
+        if ident not in self._channels:
+            return None
+        return self._channels[ident]
+
+    def isChannelExists(self, uid: str) -> bool:
+        return uid in self._channels
 
 
-class Processor(Module, Subject):
+class ChannelReceiver(abc.ABC):
 
-    NOTIFY_POST_LISTENER = "lis"
-    NOTIFY_POST_PROVIDER = "pro"
+    def __init__(self) -> None:
+        self.channel_data = {}  # type: typing.Dict[str, typing.Dict]
 
-    def __init__(self, info: Info, cInst: Any) -> None:
-        Module.__init__(self, M_NAME)
+    def addTrack(self, uid: str, msgSrc: typing.Dict) -> None:
+        if uid in self.channel_data:
+            return None
+        self.channel_data[uid] = msgSrc
 
-        Subject.__init__(self, M_NAME)
-        self.addType(Processor.NOTIFY_POST_LISTENER)
-        self.addType(Processor.NOTIFY_POST_PROVIDER)
-
-        self._max = int(info.getConfig('MAX_TASK_CAN_PROC'))
-        self._numOfTasksInProc = 0
-        self._cInst = cInst
-        self._poolSize = int(info.getConfig('PROCESS_POOL_SIZE'))
-        self._pool = Pool(self._poolSize)
-        self._info = info
-
-        self._procedure = None  # type:  Optional[Callable]
-
-        # (tid, parent, result)
-        self._allTasks = []  # type:  List[Task]
-        self._result_lock = Lock()
-
-        # Query purpose
-        self._allTasks_dict = {}  # type:  Dict[str, Task]
-
-        self._manager = Manager()
-        # Collections of event used to stop building processing.
-        self._shell_events = {}  # type:  Dict[str, Event]
-
-        self._recyleInterrupt = False
-        self._recyleInProcessing = False
-
-    async def begin(self) -> None:
+    def last(self, uid: str) -> typing.Optional[typing.Dict]:
+        if uid in self.channel_data:
+            return self.channel_data[uid]
         return None
 
-    async def cleanup(self) -> None:
-        return None
+    def msgLen(self, uid: str) -> int:
+        if uid in self.channel_data:
+            return len(self.channel_data[uid])
+        return 0
 
-    def logging(self, msg: str) -> None:
-        global LOG_ID
+    @abc.abstractmethod
+    def update(self, uid: str) -> None:
+        """ Be called while infor is updated """
 
-        if not hasattr(self, 'server'):
-            self.server = self._cInst.getModule(SERVER_M_NAME)
 
-            if self.server is None:
-                return None
+class UnitMaintainer(ChannelReceiver):
 
-            self.server.log_register(LOG_ID)
+    def __init__(self, ucontainer: typing.Dict) -> None:
+        ChannelReceiver.__init__(self)
+        self._states = {}  # type: typing.Dict[str, int]
+        self._units = ucontainer
 
-        self.server.log(LOG_ID, msg)
+    def update(self, uid: str) -> None:
+        info = self.last(uid)
+        if info is None:
+            return None
+        self._maintain(uid, info)
 
-    def maxTasksAbleToProc(self) -> int:
-        return self._max
+    def addTrack(self, uid: str, msgSrc: typing.Dict) -> None:
+        ChannelReceiver.addTrack(self, uid, msgSrc)
 
-    def tasksInProc(self) -> int:
-        return self._numOfTasksInProc
+        # Update _states
+        info = self.last(uid)
+        if info is not None:
+            self._states[uid] = info['state']
 
-    def poolSize(self) -> int:
-        return self._poolSize
+    def _maintain(self, uid: str, info: typing.Dict) -> None:
+        state = info['state']
 
-    def setProcedure(self, procedure: Callable[[Server, Letter, Info],
-                                               None]) -> None:
-        self._procedure = procedure
+        # Fixme: Should also to notify master what happened.
+        if state == ProcUnit.STATE_OVERLOAD:
+            self._states[uid] = ProcUnit.STATE_OVERLOAD
+        elif state == ProcUnit.STATE_DENY:
+            self._states[uid] = ProcUnit.STATE_DENY
+        elif state == ProcUnit.STATE_STOP:
+            # Restart the ProcUnit
+            unit = self._units[uid]
+            asyncio.get_running_loop()\
+                   .create_task(self.unitRestart(unit))
+            self._states[uid] = ProcUnit.STATE_STOP
+
+    @staticmethod
+    async def unitRestart(unit: ProcUnit) -> None:
+        # Prevent exhaust resources in some cases
+        await asyncio.sleep(10)
+        unit.start()
+
+
+class Processor(ModuleDaemon):
+
+    NAME = "Processor"
+    CMDHandler = typing.Callable[[CommandLetter], typing.Coroutine]
+
+    def __init__(self) -> None:
+        ModuleDaemon.__init__(self, self.NAME)
+
+        self._unit_container = {}  # type: typing.Dict[str, ProcUnit]
+        self._maintainer = UnitMaintainer(self._unit_container)
+        self._channel = Channel()
+        self._t = None  # type: typing.Optional[asyncio.Task]
+        self._reqQ = asyncio.Queue(256)  # type: asyncio.Queue
+
+    def req(self, cl: CommandLetter) -> None:
+        self._reqQ.put_nowait(cl)
+
+    def install_unit(self, unit: ProcUnit) -> None:
+        uid = unit.ident()
+        if uid in self._unit_container:
+            raise PROCESSOR_UNIT_ALREADY_EXISTS(uid)
+        self._unit_container[uid] = unit
 
     async def run(self) -> None:
         pass
 
-    def proc(self, reqLetter: Letter) -> None:
+    def register(self, uid: str, comp: ChannelReceiver) -> None:
+        if self._channel.isChannelExists(uid):
+            msgSrc = self._channel.getChannel(uid)
+            if msgSrc is not None:
+                comp.addTrack(uid, msgSrc)
 
-        # fixme:  need to deal with exception of command or
-        #        newtask
-        if isinstance(reqLetter, CommandLetter):
-            self.proc_command(reqLetter)
-        elif isinstance(reqLetter, NewLetter):
-            self.proc_newtask(reqLetter)
-        elif isinstance(reqLetter, PostTaskLetter):
-            self.proc_post(reqLetter)
-        elif isinstance(reqLetter, CancelLetter):
-            self.proc_cancel(reqLetter)
 
-    def proc_cancel(self, letter: CancelLetter) -> State:
-        ident = letter.getIdent()
-        type = letter.getType()
+class PROCESSOR_UNIT_ALREADY_EXISTS(Exception):
 
-        if type == CancelLetter.TYPE_SINGLE:
-            if ident in self._shell_events:
-                self.stop_task(ident)
-            else:
-                return Error
+    def __init__(self, uid: str) -> None:
+        self.uid = uid
 
-        elif type == CancelLetter.TYPE_POST:
-            post_listener = self._cInst.getModule(POST_LISTENER_M_NAME) \
-                # type:  Optional[PostListener]
+    def __str__(self) -> str:
+        return "Unit " + self.uid + " is already exists"
 
-            if post_listener is not None:
-                post_listener.postRemove(ident)
 
-        return Ok
+class PROCESSOR_UNIT_CHANNEL_EXISTS(Exception):
+    pass
 
-    @staticmethod
-    def do_proc(reqLetter:  NewLetter, info:  Info,
-                stop: Event, path: str) -> Result:
 
-        try:
-            extra = reqLetter.getExtra()
-            building_cmds = extra['cmds']
-            result_path = extra['resultPath']
-            needPost = reqLetter.needPost()
-            menuId = reqLetter.getMenu()
+class PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE(Exception):
 
-            tid = reqLetter.getTid()
+    def __init__(self, type: str) -> None:
+        self.type = type
 
-            if platform.system() == "Windows":
-                result_path = result_path.replace("/", "\\")
-
-        except Exception:
-            traceback.print_exc()
-
-        # rocessing
-        try:
-            repo_url = info.getConfig("REPO_URL")
-            projName = info.getConfig("PROJECT_NAME")
-            revision = reqLetter.getContent('sn')
-            version = reqLetter.getContent('vsn')
-
-            result = Result(tid, menuId, result_path, needPost, version, False)
-
-            commands = [
-                # Go into project root
-                "cd " + projName,
-                # Fetch from server
-                "git fetch",
-                # Checkout the version
-                "git checkout -f " + revision
-            ] + building_cmds
-
-            if not os.path.exists(projName):
-                commands = ["git clone -b master " + repo_url] + commands
-
-            # Pack all building commands into a single string
-            # so all of them will be executed in the same shell
-            # environment.
-            cmds_str = packShellCommands(commands)
-
-            # Run building commands
-            handle = execute_shell(cmds_str)
-            if handle is None:
-                return result
-
-            while True:
-                try:
-                    if stop.is_set():
-                        handle.terminate()
-                        return result
-
-                    returncode = handle.wait(1)
-                except subprocess.TimeoutExpired:
-                    continue
-
-                if returncode != 0 and returncode != 128:
-                    return result
-                else:
-                    # Store generated file into Storage
-                    shutil.copy(projName + pathSeperator() + result_path, path)
-
-                    break
-
-        except Exception:
-            traceback.print_exc()
-            return result
-
-        result.isSuccess = True
-        return result
-
-    def proc_post(self, postTaskLetter: PostTaskLetter) -> State:
-        listener = self._cInst.getModule(POST_LISTENER_M_NAME) \
-            # type:  PostListener
-
-        # This worker is not a listener
-        if listener is None:
-            return Error
-
-        listener.postAppend(postTaskLetter)
-
-        return Ok
-
-    def proc_command(self, cmdLetter: CommandLetter) -> State:
-
-        type = cmdLetter.getHeader('type')
-
-        if type not in cmdHandlers:
-            return Error
-
-        handler = cmdHandlers[type]
-
-        return handler(self, cmdLetter, self._info, self._cInst)
-
-    @staticmethod
-    def command_clean(p: 'Processor', cmdLetter: CommandLetter,
-                      info: Info, cInst: Any) -> State:
-        pass
-
-    @staticmethod
-    def command_rework_due_lis_lost(p: 'Processor', cmdLetter: CommandLetter,
-                                    info: Info, cInst: Any) -> State:
-
-        command = ReWorkCommand.fromLetter(cmdLetter)
-        if command is None:
-            return Error
-
-        tids = command.tids()
-
-        # Interrupt the in transfered task
-        p.recyle_interrupt()
-
-        # Wait task exit
-        while p.isRecyleInProcessing():
-            time.sleep(0.01)
-
-        # clean provider
-        pr = cInst.getModule(POST_PROVIDER_M_NAME)
-        if pr is None:
-            return Error
-        else:
-            pr.removeAllStuffs()
-
-        for tid in tids:
-            t = p.getTask(tid)
-
-            # This task doesn't exists
-            # which means the task is failure so
-            # the task is removed.
-            if t is None:
-                return Error
-
-            if t.state() >= Task.STATE_TRANSFER:
-
-                t.fileClose()
-
-                # Set task's state to In-Proc so it will be
-                # dealt by Recyle()
-                t.toProcState()
-
-        # Unblock recyle()
-        p.recyle_stop_interrupte()
-
-        return Ok
-
-    @staticmethod
-    def post_config(p: 'Processor', cmdLetter: CommandLetter,
-                    info: Info, cInst: Any) -> State:
-
-        cmd = PostConfigCmd.fromLetter(cmdLetter)
-
-        if cmd is None:
-            return Error
-
-        (address, port) = cmd.address()
-
-        role = cmd.role()
-
-        if role is PostConfigCmd.ROLE_LISTENER:
-            return Processor._postListener_config(p, address,
-                                                  port, info, cInst)
-        elif role is PostConfigCmd.ROLE_PROVIDER:
-            return Processor._postProvider_config(p, address,
-                                                  port, info, cInst)
-
-        return Error
-
-    @staticmethod
-    def lisAddrUpdate(p:  'Processor', cmdLetter: CommandLetter,
-                      info: Info, cInst: Any) -> State:
-
-        cmd = LisAddrUpdateCmd.fromLetter(cmdLetter)
-        if cmd is None:
-            return Error
-
-        address = cmd.address()
-
-        # PostListener update
-        if cInst.isModuleExists(POST_LISTENER_M_NAME):
-            p.notify(Processor.NOTIFY_POST_LISTENER, address)
-
-        # PostProvider update
-        if cInst.isModuleExists(POST_PROVIDER_M_NAME):
-            p.notify(Processor.NOTIFY_POST_PROVIDER, address)
-
-        return Ok
-
-    @staticmethod
-    def command_lis_lost(p: 'Processor', cmdLetter: CommandLetter,
-                         info: Info, cInst: Any) -> State:
-        """
-        The listener is lost from master. Re-elect will begin soon
-        close connection between PostProvier and PostListener.
-        """
-        pr = cInst.getModule(POST_PROVIDER_M_NAME)
-        if pr is None:
-            return Ok
-        else:
-            pr.disconnect()
-
-        return Ok
-
-    @staticmethod
-    def accepted_command(p:  'Processor', cmdLetter: CommandLetter,
-                         info: Info, cInst: Any) -> State:
-        """
-        Worker has been accepted by master so worker is
-        able to transfer messages to master.
-        """
-        server = cInst.getModule(SERVER_M_NAME)
-        if server is None:
-            return Error
-
-        server.setStatus(Server.STATE_TRANSFER)
-        return Ok
-
-    @staticmethod
-    def accepted_reset_command(p: 'Processor', cmdLetter: CommandLetter,
-                               info: Info, cInst: Any) -> State:
-        """
-        Worker should be reset itself before it transfer any data to master.
-        """
-        # Reset worker's status
-        #
-        # First cancel all tasks in processing
-        global M_NAME
-
-        p.stop_all_tasks()
-        p.drop_all_results()
-        p.recyle_interrupt()
-
-        # Wait until recyle is stoped
-        while p.isRecyleInProcessing():
-            time.sleep(0.01)
-
-        p.recyle_stop_interrupte()
-
-        # Cleanup PostListener
-        pl = cInst.getModule(POST_LISTENER_M_NAME)
-        if pl is not None:
-            pl.postRemoveAll()
-
-        # Cleanup PostProvider
-        pr = cInst.getModule(POST_PROVIDER_M_NAME)
-        if pr is not None:
-            pr.removeAllStuffs()
-
-        # Cleanup Server
-        server = cInst.getModule(SERVER_M_NAME)
-        server.drop_all_messages()
-
-        # Set to accept state
-        return Processor.accepted_command(p, cmdLetter, info, cInst)
-
-    @staticmethod
-    def _postListener_config(p: 'Processor', address: str,
-                             port: int, info: Info, cInst: Any) -> State:
-
-        if not cInst.isModuleExists(POST_LISTENER_M_NAME):
-            pl = PostListener(address, port, cInst)
-            pl.start()
-
-            p.subscribe(Processor.NOTIFY_POST_LISTENER, pl)
-            pl.handler_install(M_NAME, pl.address_update)
-
-            cInst.addModule(pl)
-        else:
-            # A PostListener is already exists on this worker
-            # so need to create a new one. But the address
-            # used by the listener may out of date. Need
-            # to notify a new address to the PostListener.
-            p.notify(Processor.NOTIFY_POST_LISTENER, address)
-
-        # Resposne to configuration command
-        server = cInst.getModule(SERVER_M_NAME)
-        server.control_response(CMD_POST_TYPE,
-                                CmdResponseLetter.STATE_SUCCESS,
-                                extra={"isListener": "true"})
-        return Ok
-
-    @staticmethod
-    def _postProvider_config(p: 'Processor', address: str, port: int,
-                             info: Info, cInst: Any) -> State:
-
-        sender = cInst.getModule(SENDER_M_NAME)
-        if cInst.isModuleExists(POST_PROVIDER_M_NAME):
-            p.notify(Processor.NOTIFY_POST_PROVIDER, address)
-        else:
-            provider = PostProvider(address, port, cInst)
-
-            # PostConfigCmd will send from master to the worker
-            # which role is listener and workers
-            # that role is provider at the same
-            # time so command to provider may arrived before command
-            # to listener arrived. Give retry chance here to make sure
-            # provider is able to connect to listener.
-            retry = 3
-
-            while retry > 0:
-                if provider.connectToListener() is Ok:
-                    break
-                time.sleep(1)
-
-            sender.rtnRegister(provider.provide_step)
-
-            p.subscribe(Processor.NOTIFY_POST_PROVIDER, provider)
-            provider.handler_install(M_NAME, provider.address_update)
-
-            cInst.addModule(provider)
-
-        # Response to configuraton command
-        server = cInst.getModule(SERVER_M_NAME)
-        server.control_response(CMD_POST_TYPE, CmdResponseLetter.STATE_SUCCESS,
-                                extra={"isListener": "false"})
-        return Ok
-
-    def stop_task(self, taskId: str) -> None:
-        if taskId in self._shell_events:
-            self._shell_events[taskId].set()
-
-    def stop_all_tasks(self) -> None:
-        for taskId in self._shell_events:
-            self._shell_events[taskId].set()
-
-    def drop_all_results(self) -> None:
-        with self._result_lock:
-            self._allTasks = []
-            self._allTasks_dict = {}
-
-    def recyle_lock(self) -> None:
-        self._result_lock.acquire()
-
-    def recyle_unlock(self) -> None:
-        self._result_lock.release()
-
-    def recyle_interrupt(self) -> None:
-        self._recyleInterrupt = True
-
-    def recyle_stop_interrupte(self) -> None:
-        self._recyleInterrupt = False
-
-    def proc_newtask(self, reqLetter: NewLetter) -> State:
-        if not self.isAbleToProc():
-            return Error
-
-        tid = reqLetter.getHeader('tid')
-        if tid in self._shell_events:
-            return Error
-
-        version = reqLetter.getContent('vsn')
-
-        if self.isReqInProc(tid, version):
-            t = self.getTask(tid)
-            assert(t is not None)
-
-            t.fileClose()
-            if t.state() == Task.STATE_DONE:
-                self.inProcCounterInc()
-                t.toProcState()
-
-            return Error
-
-        s = self._cInst.getModule(SERVER_M_NAME)
-
-        # Notify master this task is change into in_processing state
-        s.response_in_proc(tid)
-
-        event = self._manager.Event()
-        self._shell_events[tid] = event
-
-        # Create a file in storage this file will be
-        # overwrite by generated file if task successed.
-        storage = self._cInst.getModule(STO_M_NAME)
-        assert(storage is not None)
-
-        resultPath = reqLetter.getExtra()['resultPath']
-        fileName = resultPath.split(pathSeperator())[-1]
-        sto = storage.create(version, fileName)
-
-        res = self._pool.apply_async(
-            Processor.do_proc, (reqLetter, self._info, event, sto._path)
-        )
-
-        t = Task(tid, version, res, sto._path)
-
-        # Changed task's state to Proc so it can be dealt by
-        # recyle() onece it's ready.
-        t.toProcState()
-
-        self.addTask(t)
-        self.inProcCounterInc()
-
-        return Ok
-
-    # Remove tasks from processor and return
-    # the number of request finished
-    def recyle(self) -> int:
-
-        self._recyleInProcessing = True
-
-        filter_f = lambda t:  t.isReady() and \
-            (t.state() == Task.STATE_PROC or t.state() == Task.STATE_TRANSFER)
-
-        with self._result_lock:
-            (readies, not_readies) = partition(self._allTasks, filter_f)
-
-        for t in readies:
-
-            if self._recyleInterrupt:
-                break
-
-            t.toTransferState()
-
-            tid = t.tid()
-            version = t.version()
-
-            if tid in self._shell_events:
-                del self._shell_events[tid]
-
-            result = t.result()  # type:  Result
-            version = result.version
-            tid = result.tid
-            needPost = result.needPost
-
-            # Build path to result
-            fileName = result.path.split(pathSeperator())[-1]
-
-            storage = self._cInst.getModule(STO_M_NAME)
-            assert(storage is not None)
-
-            file = storage.getFile(version, fileName)
-
-            # Task is already be cleaned.
-            if file is None:
-                self.removeTask(tid)
-                continue
-
-            path = file.path()
-
-            menu = result.menuId
-
-            response = ResponseLetter(ident=self._cInst.getIdent(), tid=tid,
-                                      state=Letter.RESPONSE_STATE_FINISHED)
-            server = self._cInst.getModule(SERVER_M_NAME)
-            provider = self._cInst.getModule(POST_PROVIDER_M_NAME)
-
-            # Task is failure clean the task
-            if result.isSuccess is False:
-                # Tell to master this task is failed.
-                server.response_failure(tid)
-                t.toDoneState()
-
-                # Delete file correspond to this task
-                storage = self._cInst.getModule(STO_M_NAME)
-                assert(storage is not None)
-                storage.delete(version, path.split(pathSeperator())[-1])
-
-                # Remove the task from Processor
-                self.removeTask(t.tid())
-                self.inProcCounterDec()
-            else:
-                # Transfer Binary
-                if needPost == "false":
-                    try:
-                        # Tasks that no post can not be interrupted.
-                        if self._transBinaryTo(tid, t.file(),
-                                               t.outputFileName,
-                                               lambda l:  server.bytesSend(l)) == 0:
-                            server.response_fin(tid)
-                            t.toDoneState()
-
-                            self.inProcCounterDec()
-                        else:
-                            break
-                    except BinaryLetter.FIELD_LENGTH_EXCEPTION:
-                        response.setState(Letter.RESPONSE_STATE_FAILURE)
-                else:
-                    if provider is None:
-                        server.response_failure(tid)
-                    else:
-                        try:
-                            # Transfer generated file to PostListener or master
-                            ret = self._transBinaryTo(tid, t.file(),
-                                                      t.outputFileName,
-                                                      lambda l:  provider.provide(l, timeout = 2),
-                                                      mid=menu,
-                                                      parent=version)
-
-                            # Transfer done
-                            if ret == 0:
-                                # Notify to master
-                                server.response_fin(tid)
-                                t.toDoneState()
-
-                                # descreaseh InProc counter
-                                self.inProcCounterDec()
-                            else:
-                                # Transfer is interrupted
-                                # it's state remain in transfered
-                                break
-
-                        except BinaryLetter.FIELD_LENGTH_EXCEPTION:
-                            response.setState(Letter.RESPONSE_STATE_FAILURE)
-                        except FileNotFoundError:
-                            response.setState(Letter.RESPONSE_STATE_FAILURE)
-
-        self._recyleInProcessing = False
-
-        return len(readies)
-
-    # 0:  Normal
-    # 1:  Be interrupted
-    def _transBinaryTo(self, tid: str,
-                       f_desc: BinaryIO,
-                       fileName:  str,
-                       transferRtn: Callable[[BinaryLetter], Any],
-                       mid: str = "", parent: str = "") -> int:
-
-        for line in f_desc:
-            binLetter = BinaryLetter(tid=tid, bStr=line, menu=mid,
-                                     fileName=fileName, parent=parent)
-            try:
-                transferRtn(binLetter)
-            except queue.Full:
-                # Recover
-                f_desc.seek(-len(line), 1)
-
-                return 1
-
-            if self._recyleInterrupt:
-                return 1
-
-        # Terminated binary letter
-        binLetter_last = BinaryLetter(tid=tid, bStr=b"", menu=mid,
-                                      fileName=fileName, parent=parent)
-        transferRtn(binLetter_last)
-
-        return 0
-
-    def isRecyleInProcessing(self) -> bool:
-        return self._recyleInProcessing
-
-    def isReqInProc(self, tid: str, parent: str = "") -> bool:
-        return tid in self._allTasks_dict
-
-    def isAbleToProc(self) -> bool:
-        return self.tasksInProc() < self.maxTasksAbleToProc()
-
-    def getTask(self, tid) -> Optional[Task]:
-        if tid in self._allTasks_dict:
-            return self._allTasks_dict[tid]
-        return None
-
-    def addTask(self, t: Task) -> None:
-        tid = t.tid()
-
-        if tid in self._allTasks_dict:
-            return None
-
-        self._allTasks_dict[tid] = t
-        self._allTasks.append(t)
-
-    def removeTask(self, tid: str) -> None:
-
-        if tid not in self._allTasks_dict:
-            return None
-
-        del self._allTasks_dict[tid]
-        self._allTasks = [t for t in self._allTasks if t.tid() != tid]
-
-    def inProcCounterInc(self) -> None:
-        self._numOfTasksInProc += 1
-
-    def inProcCounterDec(self) -> None:
-        self._numOfTasksInProc -= 1
-
-
-cmdHandlers = {
-    CMD_POST_TYPE:        Processor.post_config,
-    CMD_ACCEPT:           Processor.accepted_command,
-    CMD_ACCEPT_RST:       Processor.accepted_reset_command,
-    CMD_LIS_ADDR_UPDATE:  Processor.lisAddrUpdate,
-    CMD_REWORK_TASK:      Processor.command_rework_due_lis_lost,
-    CMD_CLEAN:            Processor.command_clean,
-    CMD_LIS_LOST:         Processor.command_lis_lost
-}  # type:  Dict[str, CommandHandler]
+    def __str__(self) -> str:
+        return "Dispatcher can't find a unit to process type: " + self.type

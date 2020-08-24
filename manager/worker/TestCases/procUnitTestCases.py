@@ -24,12 +24,11 @@
 import unittest
 import asyncio
 import typing
-import manager.worker.TestCases.misc as misc
+import manager.worker.TestCases.misc.procunit as misc
 
 from manager.basic.letter import CommandLetter
 from manager.worker.procUnit import ProcUnit, \
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
-from manager.worker.cmdProcessor import CmdProcessor
 
 
 
@@ -52,6 +51,7 @@ class ProcUnitMock(ProcUnit):
         self.procLogic = None  # type: typing.Any
         self.result = False
         self.stop = False
+        self.channel_data = {}  # type: typing.Dict
 
     async def run(self) -> None:
         await self.procLogic(self)
@@ -65,9 +65,9 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_ProcUnit_ProcLogic(self) -> None:
         # Setup
         self.pu.procLogic = misc.procUnitMock_Logic
-        self.pu.start()
 
         # Exercise
+        self.pu.start()
         letter = CommandLetter("T", {})
         await self.pu.proc(letter)
 
@@ -79,9 +79,9 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_ProcUnit_HightOverLoad(self) -> None:
         # Setup
         self.pu.procLogic = misc.procUnitMock_BlockTheQueue
-        self.pu.start()
 
         # Exercise
+        self.pu.start()
         while True:
             try:
                 await self.pu.proc(
@@ -100,9 +100,9 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_ProcUnit_DenyState(self) -> None:
         # Setup
         self.pu.procLogic = misc.procUnitMock_BlockTheQueue
-        self.pu.start()
 
         # Exercise
+        self.pu.start()
         while True:
             try:
                 await self.pu.proc(
@@ -121,29 +121,15 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
         self.fail("Not enter deny mode")
 
     async def test_ProcUnit_Channel(self) -> None:
-        pass
-
-
-class CmdProcessorUnitTestCases(unittest.IsolatedAsyncioTestCase):
-
-    async def asyncSetUp(self) -> None:
-        self.unit = CmdProcessor("Unit")
-
-    async def test_CmdProcessor_InstallCmdProc(self) -> None:
-        # Exercise
-        self.unit.cmd_proc_install("H", handler)
-
-        # Verify
-        self.assertTrue(True, self.unit.is_handler_exists("H"))
-
-    async def test_CmdProcessor_HandleCmd(self) -> None:
         # Setup
-        letter = CommandLetter("H", {})
-        self.unit.cmd_proc_install("H", handler)
+        self.pu.procLogic = misc.procUnitMock_NotifyChannel
 
         # Exercise
-        await self.unit.start()
-        await self.unit.proc(letter)
+        self.pu.start()
+        await asyncio.sleep(0.1)
 
         # Verify
-        self.assertTrue(handled)
+        self.assertTrue(len(self.pu._info) == 3)
+        self.assertTrue(self.pu._info['ident'] == "Unit")
+        self.assertLess(self.pu._info['uptime'], 60)
+        self.assertEqual(ProcUnit.STATE_STOP, self.pu._info['state'])

@@ -22,8 +22,9 @@
 
 import abc
 import asyncio
+import datetime
 
-from typing import Optional, Dict, Callable
+from typing import Dict, Any, Optional
 from manager.basic.letter import Letter
 
 
@@ -52,16 +53,28 @@ class ProcUnit(abc.ABC):
         self._reserved_space = asyncio.Queue(128)  \
             # type: asyncio.Queue[Letter]
 
+        self._start_at = datetime.datetime.utcnow()
+        self._info = {}  # type: Dict[str, Any]
+        self._t = None  # type: Optional[asyncio.Task]
+
+    def ident(self) -> str:
+        return self._unitIdent
+
     def start(self) -> None:
         # Setup state
         self._state = self.STATE_READY
 
         # Run ProcLogic in current loop
-        asyncio.get_running_loop().\
-            create_task(self.run())
+        loop = asyncio.get_running_loop()
+        self._t = loop.create_task(self.run())
 
         # Reset ProcUnit's state to STATE_STOP
         self._state = self.STATE_STOP
+
+    def stop(self) -> None:
+        if self._t is not None:
+            self._t.cancel()
+            self._t = None
 
     @abc.abstractmethod
     async def run(self) -> None:
@@ -110,11 +123,23 @@ class ProcUnit(abc.ABC):
         except asyncio.QueueFull:
             raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
 
-    async def _notify(self, message: Dict) -> None:
-        """ Notify informations of ProcUnit to Processor """
+    def _basic_msg_gen(self) -> Dict:
+        return {
+            'ident': self._unitIdent,
+            'uptime': (datetime.datetime.utcnow() - self._start_at).seconds,
+            'state': self._state
+        }
+
+    def _notify(self, message: Dict) -> None:
+        for idx in message:
+            self._info[idx] = message[idx]
 
     def state(self) -> int:
         return self._state
+
+    def setChannel(self, channel: Dict) -> None:
+        self._info = channel
+
 
 class PROC_UNIT_HIGHT_OVERLOAD(Exception):
 
