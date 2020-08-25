@@ -30,6 +30,15 @@ class ProcessorMock(Processor):
     def __init__(self) -> None:
         Processor.__init__(self)
 
+    async def begin(self) -> None:
+        return None
+
+    async def cleanup(self) -> None:
+        return None
+
+    async def run(self) -> None:
+        pass
+
 
 def command_handler(cl: CommandLetter) -> None:
     return None

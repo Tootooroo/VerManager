@@ -24,6 +24,7 @@ import abc
 import typing
 import asyncio
 
+import manager.basic.commands as CMDS
 from manager.worker.procUnit \
     import ProcUnit, PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 from manager.basic.mmanager import ModuleDaemon
@@ -54,15 +55,25 @@ class Dispatcher:
             pass
 
 
+class Output:
+
+    def __init__(self) -> None:
+        self.outputQ = asyncio.Queue(256)  # type: asyncio.Queue
+
+
 class Channel:
 
     def __init__(self) -> None:
         self._channels = {}  # type: typing.Dict
 
-    def addChannel(self, ident: str) -> None:
+    def addChannel(self, ident: str) -> typing.Dict:
         if ident in self._channels:
             raise PROCESSOR_UNIT_CHANNEL_EXISTS()
-        self._channels[ident] = {}
+
+        new_channel = {}  # type: typing.Dict
+        self._channels[ident] = new_channel
+
+        return new_channel
 
     def getChannel(self, ident: str) -> typing.Optional[typing.Dict]:
         if ident not in self._channels:
@@ -153,10 +164,18 @@ class Processor(ModuleDaemon):
         self._maintainer = UnitMaintainer(self._unit_container)
         self._channel = Channel()
         self._t = None  # type: typing.Optional[asyncio.Task]
-        self._reqQ = asyncio.Queue(256)  # type: asyncio.Queue
+        self._dispatcher = Dispatcher()
+        self._reqQ = asyncio.Queue(256)  # type: asyncio.Queue[Letter]
+        self._output = Output()
 
-    def req(self, cl: CommandLetter) -> None:
-        self._reqQ.put_nowait(cl)
+    async def begin(self) -> None:
+        return None
+
+    async def cleanup(self) -> None:
+        return None
+
+    def req(self, letter: Letter) -> None:
+        self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
         uid = unit.ident()
@@ -164,14 +183,56 @@ class Processor(ModuleDaemon):
             raise PROCESSOR_UNIT_ALREADY_EXISTS(uid)
         self._unit_container[uid] = unit
 
+        # Setup channel for unit
+        channel = self._channel.addChannel('uid')
+        unit.setChannel(channel)
+
+        # Setup output space for unit
+        unit.setOutput(self._output.outputQ)
+
     async def run(self) -> None:
-        pass
+        letter = await self._reqQ.get()
+
+        # Deal with CommandLetter
+        if isinstance(letter, CommandLetter):
+            await self.CMD_Proc(letter)
+        else:
+            # If not a CommandLetter then dispatch to
+            # ProcUnit
+            self._dispatcher.dispatch(letter)
 
     def register(self, uid: str, comp: ChannelReceiver) -> None:
         if self._channel.isChannelExists(uid):
             msgSrc = self._channel.getChannel(uid)
             if msgSrc is not None:
                 comp.addTrack(uid, msgSrc)
+
+    #################################################
+    # Section of methods that for command deal with.#
+    #################################################
+
+    # CMD process entry
+    async def CMD_Proc(self, cl: CommandLetter) -> None:
+        type = cl.getType().upper()
+
+        h = self.CMD_MATCH(type)
+        if h is None:
+            return None
+
+        await h(self, cl)
+
+    def CMD_MATCH(self, type) -> typing.Optional[typing.Callable]:
+        try:
+            return getattr(self, 'CMD_H_'+type)
+        except AttributeError:
+            return None
+
+    async def CMD_H_ACCEPT(self, cl: CommandLetter) -> None:
+        """ Master is accept this worker """
+        return None
+
+    async def CMD_H_ACCEPT_RST(self, cl: CommandLetter) -> None:
+        return None
 
 
 class PROCESSOR_UNIT_ALREADY_EXISTS(Exception):

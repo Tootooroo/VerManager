@@ -53,6 +53,11 @@ class ProcUnit(abc.ABC):
         self._reserved_space = asyncio.Queue(128)  \
             # type: asyncio.Queue[Letter]
 
+        # Queue that hold letter generate by ProcUnit
+        # should be transfered to master.
+        # Will be setup while install into Processor.
+        self._output_space = None  # type: Optional[asyncio.Queue]
+
         self._start_at = datetime.datetime.utcnow()
         self._info = {}  # type: Dict[str, Any]
         self._t = None  # type: Optional[asyncio.Task]
@@ -139,6 +144,9 @@ class ProcUnit(abc.ABC):
 
     def setChannel(self, channel: Dict) -> None:
         self._info = channel
+
+    def setOutput(self, space: asyncio.Queue) -> None:
+        self._output_space = space
 
 
 class PROC_UNIT_HIGHT_OVERLOAD(Exception):

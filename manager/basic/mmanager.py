@@ -37,27 +37,23 @@ class Daemon(ABC):
     def __init__(self) -> None:
         self.daemon = True
         self.alive = False
+        self._t = None  # type: Optional[asyncio.Task]
 
     def is_alive(self) -> bool:
         return self.alive
 
-    @abstractmethod
     async def stop(self) -> None:
-        """ Method to stop Daemon """
-
-    @abstractmethod
-    def needStop(self) -> bool:
-        """
-        Daemon use this method to confirm whether
-        stop is need.
-        """
+        if self._t is not None:
+            self._t.cancel()
+            self._t = None
 
     @abstractmethod
     async def run(self) -> None:
         """ An asyncio method that do jobs """
 
     async def start(self) -> None:
-        await self.run()
+        loop = asyncio.get_running_loop()
+        self._t = loop.create_task(self.run())
 
 
 class Module(ABC):
