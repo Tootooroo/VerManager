@@ -31,7 +31,6 @@ from manager.worker.procUnit import ProcUnit, \
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 
 
-
 handled = False
 
 
@@ -50,11 +49,14 @@ class ProcUnitMock(ProcUnit):
 
         self.procLogic = None  # type: typing.Any
         self.result = False
-        self.stop = False
+        self._stop = False
         self.channel_data = {}  # type: typing.Dict
 
     async def run(self) -> None:
         await self.procLogic(self)
+
+    async def reset(self) -> None:
+        return None
 
 
 class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
@@ -89,7 +91,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
             except PROC_UNIT_HIGHT_OVERLOAD:
 
                 # Verify
-                self.pu.stop = True
+                self.pu._stop = True
                 self.assertTrue(ProcUnit.STATE_OVERLOAD, self.pu.state())
                 self.assertTrue(self.pu._normal_space.full())
 
@@ -111,7 +113,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
                 pass
             except PROC_UNIT_IS_IN_DENY_MODE:
                 # Verify
-                self.pu.stop = True
+                self.pu._stop = True
                 self.assertTrue(ProcUnit.STATE_DENY, self.pu.state())
                 self.assertTrue(self.pu._normal_space.full())
                 self.assertTrue(self.pu._reserved_space.full())
@@ -119,17 +121,3 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
                 return
 
         self.fail("Not enter deny mode")
-
-    async def test_ProcUnit_Channel(self) -> None:
-        # Setup
-        self.pu.procLogic = misc.procUnitMock_NotifyChannel
-
-        # Exercise
-        self.pu.start()
-        await asyncio.sleep(0.1)
-
-        # Verify
-        self.assertTrue(len(self.pu._info) == 3)
-        self.assertTrue(self.pu._info['ident'] == "Unit")
-        self.assertLess(self.pu._info['uptime'], 60)
-        self.assertEqual(ProcUnit.STATE_STOP, self.pu._info['state'])

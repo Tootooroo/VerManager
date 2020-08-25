@@ -59,4 +59,4 @@ async def procUnitMock_BlockTheQueue(unit):
 
 
 async def procUnitMock_NotifyChannel(unit: ProcUnit):
-    unit._notify(unit._basic_msg_gen())
+    unit._notify()

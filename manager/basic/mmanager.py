@@ -42,7 +42,7 @@ class Daemon(ABC):
     def is_alive(self) -> bool:
         return self.alive
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         if self._t is not None:
             self._t.cancel()
             self._t = None
@@ -51,7 +51,7 @@ class Daemon(ABC):
     async def run(self) -> None:
         """ An asyncio method that do jobs """
 
-    async def start(self) -> None:
+    def start(self) -> None:
         loop = asyncio.get_running_loop()
         self._t = loop.create_task(self.run())
 

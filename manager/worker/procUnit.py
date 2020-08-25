@@ -24,8 +24,9 @@ import abc
 import asyncio
 import datetime
 
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 from manager.basic.letter import Letter
+from .proc_common import Output, ChannelEntry
 
 
 class ProcUnit(abc.ABC):
@@ -56,14 +57,21 @@ class ProcUnit(abc.ABC):
         # Queue that hold letter generate by ProcUnit
         # should be transfered to master.
         # Will be setup while install into Processor.
-        self._output_space = None  # type: Optional[asyncio.Queue]
+        self._output_space = None  # type: Any
 
         self._start_at = datetime.datetime.utcnow()
-        self._info = {}  # type: Dict[str, Any]
+        self._channel = None  # type: Optional[ChannelEntry]
         self._t = None  # type: Optional[asyncio.Task]
 
     def ident(self) -> str:
         return self._unitIdent
+
+    async def _run_noexcep(self) -> None:
+        try:
+            await self.run()
+        except Exception:
+            self._state = self.STATE_STOP
+            self._channel.update('state', self.STATE_STOP)
 
     def start(self) -> None:
         # Setup state
@@ -71,15 +79,14 @@ class ProcUnit(abc.ABC):
 
         # Run ProcLogic in current loop
         loop = asyncio.get_running_loop()
-        self._t = loop.create_task(self.run())
-
-        # Reset ProcUnit's state to STATE_STOP
-        self._state = self.STATE_STOP
+        self._t = loop.create_task(self._run_noexcep())
 
     def stop(self) -> None:
         if self._t is not None:
             self._t.cancel()
             self._t = None
+
+        self._state = self.STATE_STOP
 
     @abc.abstractmethod
     async def run(self) -> None:
@@ -128,25 +135,34 @@ class ProcUnit(abc.ABC):
         except asyncio.QueueFull:
             raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
 
-    def _basic_msg_gen(self) -> Dict:
-        return {
-            'ident': self._unitIdent,
-            'uptime': (datetime.datetime.utcnow() - self._start_at).seconds,
-            'state': self._state
-        }
+    def msg_gen(self) -> None:
+        if self._channel is None:
+            return
 
-    def _notify(self, message: Dict) -> None:
-        for idx in message:
-            self._info[idx] = message[idx]
+        self._channel.update('state', self._state)
+        self._channel.update('ident', self._unitIdent)
+        self._channel.update('failureCount', 0)
+
+        uptime = (datetime.datetime.utcnow() - self._start_at).seconds
+        self._channel.update('uptime', uptime)
+
+    def _notify(self) -> None:
+        if self._channel is None:
+            return None
+        self._channel.push()
 
     def state(self) -> int:
         return self._state
 
-    def setChannel(self, channel: Dict) -> None:
-        self._info = channel
+    def setChannel(self, channel: ChannelEntry) -> None:
+        self._channel = channel
 
-    def setOutput(self, space: asyncio.Queue) -> None:
+    def setOutput(self, space: Output) -> None:
         self._output_space = space
+
+    @abc.abstractmethod
+    async def reset(self) -> None:
+        """ Reset ProcUnit's status to initial state """
 
 
 class PROC_UNIT_HIGHT_OVERLOAD(Exception):

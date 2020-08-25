@@ -41,23 +41,24 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         self.sut.start()
-        await asyncio.sleep(0.1)
-
         self.sut.req(cmdLetter1)
         self.sut.req(cmdLetter2)
+
+        await asyncio.sleep(0.1)
 
         self.sut.stop()
 
         # Verify
-        self.assertTrue(self.sut.cmdDone)
+        self.assertTrue(self.sut.cmd1Done)
+        self.assertTrue(self.sut.cmd2Done)
 
     async def test_Processor_LoadProcUnit(self) -> None:
         # Setup
         unit1 = misc.ProcUnitStub("Unit1")
         unit2 = misc.ProcUnitStub("Unit2")
 
-        self.sut.install_unit("Unit1", unit1)
-        self.sut.install_unit("Unit2", unit2)
+        self.sut.install_unit(unit1)
+        self.sut.install_unit(unit2)
 
         # Exercise
         self.sut.start()
@@ -82,16 +83,17 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
         # components
         self.sut.install_unit(unit1)
         self.sut.install_unit(unit2)
-        self.sut.register(component1)
-        self.sut.register(component2)
+        self.sut.register("Unit1", component1)
+        self.sut.register("Unit2", component2)
 
         self.sut.start()
         await asyncio.sleep(0.1)
 
         # Verify
-        self.assertTrue(10, component1.msgLen("Unit1"))
-        self.assertTrue(10, component2.msgLen("Unit2"))
+        self.assertEqual(10, component1.msgLen())
+        self.assertEqual(10, component2.msgLen())
 
+    @unittest.skip("")
     async def test_Processor_ChannelWithExcept(self) -> None:
         """ Pushing message should worke well after ProcUnit restart """
         # Setup
@@ -119,15 +121,16 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_Processor_ProcUnitExcept(self) -> None:
         # Setup
         unit1 = misc.ProcUnitStub_Except("Unit")
+        self.sut._maintainer.setRestartDelay(1)
 
         # Exercise
         # If a ProcUnit is throw an exception
         # Processor should restart this ProcUnit
         # and record it.
-        self.sut.install_unit("Unit", unit1)
+        self.sut.install_unit(unit1)
         self.sut.start()
+        await asyncio.sleep(1)
 
         # Verify
         info = self.sut.unitInfo("Unit")
-
         self.assertGreater(1, info['failureCount'])
