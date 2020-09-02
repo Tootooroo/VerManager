@@ -21,48 +21,9 @@
 # SOFTWARE.
 
 import asyncio
-import typing
-
-from manager.basic.letter import CommandLetter
-from manager.worker.procUnit import ProcUnit
-from manager.worker.proc_common import Output
 
 
-# Things that used by ProcUnitTestCases
-channel_data = {}  # type: typing.Dict
+class Connector:
 
-
-async def procUnitMock_Logic(p):
-
-    try:
-        letter = await p.job_retrive(timeout=1)
-    except asyncio.exceptions.TimeoutError:
-        return None
-
-    if not isinstance(letter, CommandLetter):
-        return None
-
-    type = letter.getType()
-
-    if type == "T":
-        p.result = True
-    else:
-        p.result = False
-
-
-async def procUnitMock_BlockTheQueue(unit):
-
-    while True:
-        await asyncio.sleep(1)
-
-
-async def procUnitMock_NotifyChannel(unit: ProcUnit):
-    unit._notify()
-
-
-async def logic_send_packet(unit: ProcUnit):
-    output = unit._output_space
-    if output is None:
-        return
-
-    output.put_nowait(CommandLetter("Reply", {}))
+    def __init__(self) -> None:
+        pass

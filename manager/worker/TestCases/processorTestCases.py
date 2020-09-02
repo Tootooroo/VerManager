@@ -93,30 +93,8 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(10, component1.msgLen())
         self.assertEqual(10, component2.msgLen())
 
-    @unittest.skip("")
-    async def test_Processor_ChannelWithExcept(self) -> None:
-        """ Pushing message should worke well after ProcUnit restart """
-        # Setup
-        unit1 = misc.ProcUnitStub_Except("Unit1")
-        unit2 = misc.ProcUnitStub_Except("Unit2")
-        component1 = misc.CompChannel()
-        component2 = misc.CompChannel()
-
-        # Exercise
-
-        # Each of units will push 10 messages to
-        # components
-        self.sut.install_unit(unit1)
-        self.sut.install_unit(unit2)
-        self.sut.register(component1)
-        self.sut.register(component2)
-
-        self.sut.start()
-        await asyncio.sleep(0.1)
-
-        # Verify
-        self.assertTrue(10, component1.msgLen("Unit1"))
-        self.assertTrue(10, component2.msgLen("Unit2"))
+    async def test_Processor_Output(self) -> None:
+        pass
 
     async def test_Processor_ProcUnitExcept(self) -> None:
         # Setup
@@ -125,8 +103,7 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         # If a ProcUnit is throw an exception
-        # Processor should restart this ProcUnit
-        # and record it.
+        # Processor sho
         self.sut.install_unit(unit1)
         self.sut.start()
         await asyncio.sleep(1)

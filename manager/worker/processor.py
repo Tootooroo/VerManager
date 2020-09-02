@@ -103,7 +103,7 @@ class Processor(ModuleDaemon):
         return self._channel.getChannelData(uid)
 
     #################################################
-    # Section of methods that for command deal with.#
+    # Section of methods that for command deal with #
     #################################################
     async def CMD_Proc(self, cl: CommandLetter) -> None:
         """ Command process entry """

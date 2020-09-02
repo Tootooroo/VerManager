@@ -60,13 +60,13 @@ class Output:
         await asyncio.wait_for(
             self._outputQ.put(letter), timeout=timeout)
 
-    def get_nowait(self) -> None:
+    def get_nowait(self) -> typing.Any:
         if self.isReady():
             return self._outputQ.get_nowait()
         else:
             raise PROCESSOR_OUTPUT_STOP()
 
-    async def get(self, timeout=None) -> None:
+    async def get(self, timeout=None) -> typing.Any:
         if self.isReady():
             return await asyncio.wait_for(
                 self._outputQ.get(), timeout=timeout)

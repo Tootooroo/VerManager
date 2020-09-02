@@ -24,7 +24,7 @@ import abc
 import asyncio
 import datetime
 
-from typing import Any, Optional
+from typing import Optional
 from manager.basic.letter import Letter
 from .proc_common import Output, ChannelEntry
 
@@ -42,6 +42,8 @@ class ProcUnit(abc.ABC):
     # DENY state means ProcUnit is unable
     # to accept any more jobs.
     STATE_DENY = 3
+    # A ProcUnit is stop cause of exception
+    STATE_EXCEP = 4
 
     def __init__(self, ident: str) -> None:
         self._unitIdent = ident
@@ -57,7 +59,7 @@ class ProcUnit(abc.ABC):
         # Queue that hold letter generate by ProcUnit
         # should be transfered to master.
         # Will be setup while install into Processor.
-        self._output_space = None  # type: Any
+        self._output_space = None  # type: Optional[Output]
 
         self._start_at = datetime.datetime.utcnow()
         self._channel = None  # type: Optional[ChannelEntry]
@@ -70,7 +72,12 @@ class ProcUnit(abc.ABC):
         try:
             await self.run()
         except Exception:
-            self._state = self.STATE_STOP
+            self._state = self.STATE_EXCEP
+            return
+
+        self._state = self.STATE_STOP
+
+        if self._channel is not None:
             self._channel.update('state', self.STATE_STOP)
 
     def start(self) -> None:
@@ -163,6 +170,20 @@ class ProcUnit(abc.ABC):
     @abc.abstractmethod
     async def reset(self) -> None:
         """ Reset ProcUnit's status to initial state """
+
+    def _send(self, letter: Letter) -> None:
+        if self._output_space is None:
+            raise PROC_UNIT_NO_OUTPUT_SPACE(self._unitIdent)
+        self._output_space.put_nowait(letter)
+
+
+class PROC_UNIT_NO_OUTPUT_SPACE(Exception):
+
+    def __init__(self, unit_ident:str) -> None:
+        self.unit_ident = unit_ident
+
+    def __str__(self) -> str:
+        return "ProcUnit " + self.unit_ident + "'s output space is not seted"
 
 
 class PROC_UNIT_HIGHT_OVERLOAD(Exception):

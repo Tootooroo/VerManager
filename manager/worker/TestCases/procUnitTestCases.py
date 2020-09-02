@@ -29,6 +29,7 @@ import manager.worker.TestCases.misc.procunit as misc
 from manager.basic.letter import CommandLetter
 from manager.worker.procUnit import ProcUnit, \
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
+from manager.worker.proc_common import Output
 
 
 handled = False
@@ -77,6 +78,18 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertTrue(self.pu.result)
+        self.assertEqual(ProcUnit.STATE_STOP, self.pu.state())
+
+    async def test_ProcUnit_Stop(self) -> None:
+        # Setup
+        self.pu.procLogic = misc.procUnitMock_Logic
+
+        # Exercise
+        self.pu.start()
+        self.pu.stop()
+
+        # Verify
+        self.assertEqual(ProcUnit.STATE_STOP, self.pu.state())
 
     async def test_ProcUnit_HightOverLoad(self) -> None:
         # Setup
@@ -121,3 +134,26 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
                 return
 
         self.fail("Not enter deny mode")
+
+    async def test_ProcUnit_Output(self) -> None:
+        # Setup
+        output = Output()
+        self.pu.procLogic = misc.logic_send_packet
+        self.pu.setOutput(output)
+
+        # Exercise
+        output.ready()
+        self.pu.start()
+        await asyncio.sleep(0.1)
+
+        # Verify
+        try:
+            letter = self.pu._output_space.get_nowait()  # type: ignore
+            type = letter.getType()
+
+            success = True
+        except asyncio.QueueEmpty:
+            success = False
+
+        self.assertTrue(success)
+        self.assertEqual("Reply", type)
