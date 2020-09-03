@@ -22,29 +22,31 @@
 
 import asyncio
 import typing
-
-from collections import namedtuple
-
-
-class Linker:
-
-    Link = namedtuple('Link', "reader writer")
-
-    def __init__(self) -> None:
-        self._links = {}  # type: typing.Dict[str, Linker.Link]
-
-    async def new_link(self, linkid: str,
-                       host: str = "",
-                       port: int = 0) -> None:
-
-        reader, writer = await asyncio.open_connection(host, port)
-        self._links[linkid] = Linker.Link(reader, writer)
-
-    def exists(self, linkid: str) -> bool:
-        return linkid in self._links
+from manager.basic.letter import receving
 
 
-class Connector:
+class VirtualServer:
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, host: str, port: int) -> None:
+        self._host = host
+        self._port = port
+        self.buff = []  # type: typing.List
+
+    async def run(self) -> None:
+        server = await asyncio.start_server(
+            self.handle, self._host, self._port)
+
+        async with server:
+            await server.serve_forever()
+
+    def start(self) -> None:
+        loop = asyncio.get_running_loop()
+        loop.create_task(self.run())
+
+    async def handle(self,
+                     r: asyncio.StreamReader,
+                     w: asyncio.StreamWriter) -> None:
+        while True:
+
+            letter = await receving(r)
+            self.buff.append(letter)

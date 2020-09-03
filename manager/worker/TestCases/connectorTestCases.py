@@ -20,31 +20,38 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 import asyncio
-import typing
+import unittest
+import  manager.worker.TestCases.misc.linker as misc
 
-from collections import namedtuple
-
-
-class Linker:
-
-    Link = namedtuple('Link', "reader writer")
-
-    def __init__(self) -> None:
-        self._links = {}  # type: typing.Dict[str, Linker.Link]
-
-    async def new_link(self, linkid: str,
-                       host: str = "",
-                       port: int = 0) -> None:
-
-        reader, writer = await asyncio.open_connection(host, port)
-        self._links[linkid] = Linker.Link(reader, writer)
-
-    def exists(self, linkid: str) -> bool:
-        return linkid in self._links
+from manager.worker.connector import Linker
 
 
-class Connector:
 
-    def __init__(self) -> None:
-        pass
+class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.linker = Linker()
+
+    async def test_Linker_NewLink_Connect(self) -> None:
+        # Setup
+        vir_server = misc.VirtualServer("127.0.0.1", 8888)
+        vir_server.start()
+        await asyncio.sleep(0.1)
+
+        # Exercise
+        await self.linker.new_link("Server", "127.0.0.1", 8888)
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertTrue(self.linker.exists("Server"))
+
+    async def test_Linker_NewLink_Accept(self) -> None:
+        # Setup
+        vir_worker = misc.VirtualWorker("127.0.0.1", 8889)
+        vir_worker.start()
+        await asyncio.sleep(0.1)
+
+        # Exercise
+        await self.linker.new_listen("lis1", "127.0.0.1", 8889)
