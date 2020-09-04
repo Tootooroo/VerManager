@@ -924,6 +924,7 @@ class HeartbeatLetter(Letter):
 
         return HeartbeatLetter(header['ident'], header['seq'])
 
+
 validityMethods = {
     Letter.NewTask        :  newTaskLetterValidity,
     Letter.Response       :  responseLetterValidity,

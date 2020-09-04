@@ -24,24 +24,64 @@ import asyncio
 import typing
 
 from collections import namedtuple
+from manager.basic.letter import receving, HeartbeatLetter
+
+
+Link = namedtuple('Link', "reader writer")
 
 
 class Linker:
 
-    Link = namedtuple('Link', "reader writer")
-
     def __init__(self) -> None:
-        self._links = {}  # type: typing.Dict[str, Linker.Link]
+        self._links = {}  # type: typing.Dict[str, Link]
+        self._lis = {}  # type: typing.Dict[str, typing.Any]
+        self._queue = asyncio.Queue(256)  # type: asyncio.Queue
+        self._manage_queue = asyncio.Queue(256)  # type: asyncio.Queue
 
     async def new_link(self, linkid: str,
                        host: str = "",
                        port: int = 0) -> None:
 
         reader, writer = await asyncio.open_connection(host, port)
-        self._links[linkid] = Linker.Link(reader, writer)
+        self._links[linkid] = Link(reader, writer)
+
+    async def new_listen(self, lisId: str,
+                         host: str = "",
+                         port: int = 0) -> None:
+
+        server = await asyncio.start_server(self._lis_handle, host, port)
+        self._lis[lisId] = server
+
+        asyncio.get_running_loop().\
+            create_task(server.serve_forever())
+
+    async def _lis_handle(self, reader: asyncio.StreamReader,
+                          writer: asyncio.StreamWriter) -> None:
+        # Link init
+        first_heart_beat = await receving(reader)
+
+        if not isinstance(first_heart_beat, HeartbeatLetter):
+            return
+
+        ident = first_heart_beat.getIdent()
+        if ident in self._links:
+            return
+
+        self._links[ident] = Link(reader, writer)
+
+        while True:
+            letter = await receving(reader)
+
+            if isinstance(letter, HeartbeatLetter):
+                await self._manage_queue.put(letter)
+            else:
+                self._queue.put(letter)
 
     def exists(self, linkid: str) -> bool:
         return linkid in self._links
+
+    async def run(self) -> None:
+        pass
 
 
 class Connector:

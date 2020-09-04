@@ -20,17 +20,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import abc
 import asyncio
 import typing
-from manager.basic.letter import receving
+from .virtualmachine import VirtualMachine
+from manager.basic.letter import receving, HeartbeatLetter
 
 
-class VirtualServer:
+class VirtualServer(VirtualMachine):
 
     def __init__(self, host: str, port: int) -> None:
-        self._host = host
-        self._port = port
-        self.buff = []  # type: typing.List
+        VirtualMachine.__init__(self, "", host, port)
 
     async def run(self) -> None:
         server = await asyncio.start_server(
@@ -39,10 +39,6 @@ class VirtualServer:
         async with server:
             await server.serve_forever()
 
-    def start(self) -> None:
-        loop = asyncio.get_running_loop()
-        loop.create_task(self.run())
-
     async def handle(self,
                      r: asyncio.StreamReader,
                      w: asyncio.StreamWriter) -> None:
@@ -50,3 +46,23 @@ class VirtualServer:
 
             letter = await receving(r)
             self.buff.append(letter)
+
+
+class VirtualWorker(VirtualMachine):
+
+    async def run(self) -> None:
+        r, w = await asyncio.open_connection(self._host, self._port)
+        w.write(
+            HeartbeatLetter(self._ident, 0).toBytesWithLength())
+        while True:
+            await asyncio.sleep(10)
+
+
+class VirtualWorker_Heartbeat(VirtualMachine):
+
+    async def run(self) -> None:
+        r, w = await asyncio.open_connection(self._host, self._port)
+        w.write(
+            HeartbeatLetter(self._ident, 0).toBytesWithLength())
+
+        while True:

@@ -23,10 +23,9 @@
 
 import asyncio
 import unittest
-import  manager.worker.TestCases.misc.linker as misc
+import manager.worker.TestCases.misc.linker as misc
 
 from manager.worker.connector import Linker
-
 
 
 class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
@@ -35,6 +34,10 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         self.linker = Linker()
 
     async def test_Linker_NewLink_Connect(self) -> None:
+        """
+        Linker try to open a connection to VirtualServer.
+        If success a link should be spawned.
+        """
         # Setup
         vir_server = misc.VirtualServer("127.0.0.1", 8888)
         vir_server.start()
@@ -48,10 +51,26 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.linker.exists("Server"))
 
     async def test_Linker_NewLink_Accept(self) -> None:
+        """
+        Linker listen on 8889 and VirtualWworker will
+        connect to it. There should be a link exists.
+        """
+
         # Setup
-        vir_worker = misc.VirtualWorker("127.0.0.1", 8889)
-        vir_worker.start()
-        await asyncio.sleep(0.1)
+        vir_worker = misc.VirtualWorker("VirtualWorker", "127.0.0.1", 8889)
 
         # Exercise
         await self.linker.new_listen("lis1", "127.0.0.1", 8889)
+        await asyncio.sleep(0.1)
+        vir_worker.start()
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertTrue(self.linker.exists("VirtualWorker"))
+
+    async def test_Linker_Heartbeat(self) -> None:
+        """
+        Maintain a link between a VirtualWorker and Linker
+        """
+
+        # Setup
