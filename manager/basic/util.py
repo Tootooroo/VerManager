@@ -144,6 +144,17 @@ def sockKeepalive(sock: socket.socket, timeout: int, intvl: int) -> None:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, timeout)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, intvl)
 
+
 async def delayExec(coro, secs=0):
     await asyncio.sleep(secs)
     await coro
+
+
+async def loop_forever_async(f: Callable) -> None:
+    while True:
+        await f()
+
+
+def loop_forever(f: Callable) -> None:
+    while True:
+        f()

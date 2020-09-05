@@ -68,9 +68,40 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertTrue(self.linker.exists("VirtualWorker"))
 
-    async def test_Linker_Heartbeat(self) -> None:
+    async def test_Linker_Heartbeat_PASSIVE(self) -> None:
         """
         Maintain a link between a VirtualWorker and Linker
         """
 
         # Setup
+        vir_worker = misc.VirtualWorker_Heartbeat_ACTIVE(
+            "Worker", "127.0.0.1", 8899)
+
+        # Exercise
+        self.linker.start()
+        await self.linker.new_listen("lis1", "127.0.0.1", 8899)
+        await asyncio.sleep(0.1)
+
+        vir_worker.start()
+        await asyncio.sleep(3)
+
+        # Verify
+        self.assertGreater(vir_worker._hbCount, 1)
+
+    async def test_Linker_Heartbeat_Active(self) -> None:
+        """ Maintain a linke of a passive """
+
+        # Setup
+        vir_worker = misc.VirtualWorker_Heartbeat_Passive("Worker",
+                                                          "127.0.0.1", 8810)
+
+        # Exercise
+        vir_worker.start()
+        await asyncio.sleep(3)
+
+        self.linker.start()
+        await self.linker.new_link("Worker", "127.0.0.1", 8810)
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertGreater(vir_worker._hbCount, 1)

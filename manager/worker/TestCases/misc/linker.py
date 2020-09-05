@@ -24,7 +24,7 @@ import abc
 import asyncio
 import typing
 from .virtualmachine import VirtualMachine
-from manager.basic.letter import receving, HeartbeatLetter
+from manager.basic.letter import receving, sending, HeartbeatLetter
 
 
 class VirtualServer(VirtualMachine):
@@ -58,11 +58,43 @@ class VirtualWorker(VirtualMachine):
             await asyncio.sleep(10)
 
 
-class VirtualWorker_Heartbeat(VirtualMachine):
+class VirtualWorker_Heartbeat_ACTIVE(VirtualMachine):
+
+    def __init__(self, ident: str, host: str, port: int) -> None:
+        VirtualMachine.__init__(self, ident, host, port)
+        self._hbCount = 0
 
     async def run(self) -> None:
         r, w = await asyncio.open_connection(self._host, self._port)
-        w.write(
-            HeartbeatLetter(self._ident, 0).toBytesWithLength())
 
         while True:
+            await sending(w, HeartbeatLetter(self._ident, self._hbCount))
+            heartbeat = await receving(r)
+
+            if isinstance(heartbeat, HeartbeatLetter):
+                self._hbCount += 1
+                await asyncio.sleep(2)
+
+
+class VirtualWorker_Heartbeat_Passive(VirtualMachine):
+
+    def __init__(self, ident: str, host: str, port: int) -> None:
+        VirtualMachine.__init__(self, ident, host, port)
+        self._hbCount = 0
+
+    async def _handle(self,
+                      reader: asyncio.StreamReader,
+                      writer: asyncio.StreamWriter) -> None:
+
+        while True:
+            heartbeat = await receving(reader)
+
+            if isinstance(heartbeat, HeartbeatLetter):
+                self._hbCount += 1
+                await sending(writer, heartbeat)
+
+    async def run(self) -> None:
+        server = await asyncio.start_server(self._handle, self._host, self._port)
+
+        async with server:
+            await server.serve_forever()
