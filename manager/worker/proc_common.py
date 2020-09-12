@@ -66,7 +66,7 @@ class Output:
         else:
             raise PROCESSOR_OUTPUT_STOP()
 
-    async def get(self, timeout=None) -> typing.Any:
+    async def get(self, timeout=None) -> Letter:
         if self.isReady():
             return await asyncio.wait_for(
                 self._outputQ.get(), timeout=timeout)

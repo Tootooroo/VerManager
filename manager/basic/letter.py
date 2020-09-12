@@ -926,36 +926,36 @@ class HeartbeatLetter(Letter):
 
 
 validityMethods = {
-    Letter.NewTask        :  newTaskLetterValidity,
-    Letter.Response       :  responseLetterValidity,
-    Letter.PropertyNotify :  propertyLetterValidity,
-    Letter.BinaryFile     :  binaryLetterValidity,
-    Letter.Log            :  logLetterValidity,
-    Letter.LogRegister    :  logRegisterLetterValidity,
-    Letter.NewMenu        :  lambda letter:   True,
-    Letter.Command        :  lambda letter:   True,
-    Letter.CmdResponse    :  lambda letter:   True,
-    Letter.Post           :  lambda letter:   True,
-    Letter.TaskCancel     :  lambda letter:   True,
-    Letter.Req            :  lambda letter:   True,
-    Letter.Heartbeat      :  lambda letter:   True,
-} # type:   Dict[str, Callable]
+    Letter.NewTask:         newTaskLetterValidity,
+    Letter.Response:        responseLetterValidity,
+    Letter.PropertyNotify:  propertyLetterValidity,
+    Letter.BinaryFile:      binaryLetterValidity,
+    Letter.Log:             logLetterValidity,
+    Letter.LogRegister:     logRegisterLetterValidity,
+    Letter.NewMenu:         lambda letter: True,
+    Letter.Command:         lambda letter: True,
+    Letter.CmdResponse:     lambda letter: True,
+    Letter.Post:            lambda letter: True,
+    Letter.TaskCancel:      lambda letter: True,
+    Letter.Req:             lambda letter: True,
+    Letter.Heartbeat:       lambda letter: True,
+}  # type:   Dict[str, Callable]
 
 parseMethods = {
-    Letter.NewTask        :  NewLetter,
-    Letter.Response       :  ResponseLetter,
-    Letter.PropertyNotify :  PropLetter,
-    Letter.BinaryFile     :  BinaryLetter,
-    Letter.Log            :  LogLetter,
-    Letter.LogRegister    :  LogRegLetter,
-    Letter.NewMenu        :  MenuLetter,
-    Letter.Command        :  CommandLetter,
-    Letter.CmdResponse    :  CmdResponseLetter,
-    Letter.Post           :  PostTaskLetter,
-    Letter.TaskCancel     :  CancelLetter,
-    Letter.Req            :  ReqLetter,
-    Letter.Heartbeat      :  HeartbeatLetter
-} # type:   Any
+    Letter.NewTask:          NewLetter,
+    Letter.Response:         ResponseLetter,
+    Letter.PropertyNotify:   PropLetter,
+    Letter.BinaryFile:       BinaryLetter,
+    Letter.Log:              LogLetter,
+    Letter.LogRegister:      LogRegLetter,
+    Letter.NewMenu:          MenuLetter,
+    Letter.Command:          CommandLetter,
+    Letter.CmdResponse:      CmdResponseLetter,
+    Letter.Post:             PostTaskLetter,
+    Letter.TaskCancel:       CancelLetter,
+    Letter.Req:              ReqLetter,
+    Letter.Heartbeat:        HeartbeatLetter
+}  # type: Any
 
 
 # Function to receive a letter from a socket

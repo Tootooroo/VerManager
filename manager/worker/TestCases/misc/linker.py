@@ -24,7 +24,8 @@ import abc
 import asyncio
 import typing
 from .virtualmachine import VirtualMachine
-from manager.basic.letter import receving, sending, HeartbeatLetter
+from manager.basic.letter import receving, sending, HeartbeatLetter,\
+    CommandLetter
 
 
 class VirtualServer(VirtualMachine):
@@ -81,20 +82,71 @@ class VirtualWorker_Heartbeat_Passive(VirtualMachine):
     def __init__(self, ident: str, host: str, port: int) -> None:
         VirtualMachine.__init__(self, ident, host, port)
         self._hbCount = 0
+        self.reader = None  # type: typing.Optional[asyncio.StreamReader]
+        self.writer = None  # type: typing.Optional[asyncio.StreamWriter]
 
     async def _handle(self,
                       reader: asyncio.StreamReader,
                       writer: asyncio.StreamWriter) -> None:
 
-        while True:
-            heartbeat = await receving(reader)
+        self.reader = reader  # type: ignore
+        self.writer = writer  # type: ignore
 
-            if isinstance(heartbeat, HeartbeatLetter):
-                self._hbCount += 1
-                await sending(writer, heartbeat)
+        while True:
+            try:
+                heartbeat = await receving(reader)
+                if isinstance(heartbeat, HeartbeatLetter):
+                    self._hbCount += 1
+                    await sending(writer, heartbeat)
+            except Exception:
+                break
 
     async def run(self) -> None:
         server = await asyncio.start_server(self._handle, self._host, self._port)
 
         async with server:
             await server.serve_forever()
+
+
+class VirtualWorker_AutoDisconnect(VirtualWorker_Heartbeat_Passive):
+
+    def __init__(self, ident: str, host: str, port: int) -> None:
+        VirtualWorker_Heartbeat_Passive.__init__(self, ident, host, port)
+        self._reconn_count = 0
+
+    async def run(self) -> None:
+        await asyncio.gather(
+            VirtualWorker_Heartbeat_Passive.run(self),
+            self.job()
+        )
+
+    async def job(self) -> None:
+        while True:
+            if self.writer is None:
+                await asyncio.sleep(0.1)
+                continue
+
+            await asyncio.sleep(3)
+            self.writer.close()
+
+            if not self.writer.is_closing():
+                self._reconn_count += 1
+
+
+class VirtualWorker_SendCommand(VirtualMachine):
+
+    async def run(self) -> None:
+        r, w = await asyncio.open_connection(self._host, self._port)
+
+        await sending(w, HeartbeatLetter(self._ident, 0))
+        await sending(w, CommandLetter("Test", {}))
+
+        await asyncio.sleep(10)
+
+
+def msg_callback(self, q: asyncio.Queue) -> typing.Callable:
+
+    async def cb(letter) -> None:
+        await q.put(letter)
+
+    return cb

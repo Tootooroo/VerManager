@@ -100,8 +100,50 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(3)
 
         self.linker.start()
+        self.linker._hostname = "abc"
         await self.linker.new_link("Worker", "127.0.0.1", 8810)
         await asyncio.sleep(0.1)
 
         # Verify
         self.assertGreater(vir_worker._hbCount, 1)
+
+    async def test_Linker_Msg_Callback_Passive(self) -> None:
+        """
+        Linker send letter to outer world via message_callback
+        """
+
+        # Setup
+        q = asyncio.Queue(10)  # type: asyncio.Queue
+        self.linker.msg_callback = misc.msg_callback(self, q)
+        vir_worker = misc.VirtualWorker_SendCommand("Worker", "127.0.0.1", 8811)
+
+        # Exercise
+        self.linker.start()
+        await self.linker.new_listen("lis1", "127.0.0.1", 8811)
+        await asyncio.sleep(0.1)
+
+        vir_worker.start()
+        await asyncio.sleep(3)
+
+        # Verify
+        self.assertGreater(q.qsize(), 0)
+
+    @unittest.skip("")
+    async def test_Linker_Active_Link_Rebuild(self) -> None:
+        """ Link rebuild """
+
+        # Setup
+        vir_worker = misc.VirtualWorker_AutoDisconnect(
+            "Worker", "127.0.0.1", 9999)
+
+        # Exercise
+        vir_worker.start()
+        await asyncio.sleep(0.1)
+
+        self.linker.start()
+        self.linker._hostname = "Name"
+        await self.linker.new_link("lid", "127.0.0.1", 9999)
+        await asyncio.sleep(10)
+
+        # Verify
+        self.assertGreater(vir_worker._reconn_count, 0)
