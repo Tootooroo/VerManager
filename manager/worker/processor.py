@@ -54,6 +54,9 @@ class Processor(ModuleDaemon):
     async def cleanup(self) -> None:
         return None
 
+    def setup_output(self, q: asyncio.Queue) -> None:
+        self._output.setQueue(q)
+
     def req(self, letter: Letter) -> None:
         self._reqQ.put_nowait(letter)
 

@@ -128,7 +128,6 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertGreater(q.qsize(), 0)
 
-    @unittest.skip("")
     async def test_Linker_Active_Link_Rebuild(self) -> None:
         """ Link rebuild """
 

@@ -22,6 +22,8 @@
 
 import asyncio
 import typing
+
+from manager.basic.mmanager import ModuleDaemon
 from manager.basic.util import delayExec
 from manager.basic.letter import receving, sending, HeartbeatLetter, Letter
 
@@ -104,7 +106,6 @@ class Linker:
             await sending(writer, first_heart_beat)
 
             heartbeat = await receving(reader, timeout=3)
-            print(heartbeat)
         except Exception:
             self._link_rebuild_helper(linkid)
 
@@ -124,7 +125,7 @@ class Linker:
 
             try:
                 letter = await receving(reader)
-            except (ConnectionResetError, BrokenPipeError):
+            except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 self._link_rebuild_helper(linkid)
                 break
 
@@ -139,8 +140,7 @@ class Linker:
         link = self._links[linkid]
         link.state = Link.RECONNECTING
 
-        self._loop.create_task(
-            delayExec(self.rebuild_link(link), secs=1))
+        self._loop.create_task(self.rebuild_link(link))
 
     def delete_link(self, linkid: str) -> None:
         self._links[linkid].state = Link.REMOVED
@@ -233,10 +233,17 @@ class Linker:
         await sending(link.writer, hb)
 
 
-class Connector:
+class Connector(ModuleDaemon):
 
     def __init__(self) -> None:
         self._linker = Linker()
+        self._letter_Q = asyncio.Queue(128)  # type: asyncio.Queue[Letter]
+
+    async def begin(self) -> None:
+        return
+
+    async def cleanup(self) -> None:
+        return
 
     def listen(self, lisId: str, host: str, port: int) -> None:
         self._linker.new_listen(lisId, host, port)
@@ -244,22 +251,30 @@ class Connector:
     def open_connection(self, linkId, host: str, port: int) -> None:
         self._linker.new_link(linkId, host, port)
 
+    def close(self, linkId: str) -> None:
+        self._linker.delete_link(linkId)
+
     def set_msg_callback(self, cb: typing.Callable) -> None:
         self._linker.msg_callback = cb
 
-    def init(self) -> None:
+    def queue(self) -> typing.Optional[asyncio.Queue]:
+        return self._letter_Q
+
+    async def run(self) -> None:
         # msg_callback of linker must be setup before
         # start otherwise another component is unable
         # to get letter from connector.
         assert(self._linker.msg_callback is not None)
         self._linker.start()
 
-    async def sendLetter(self, letter: Letter) -> None:
-        linkid = letter.getHeader('linkid')
-        if linkid == "":
-            return
+        while True:
+            letter = await self._letter_Q.get()
+            linkid = letter.getHeader('linkid')
 
-        await self._linker.sendLetter(linkid, letter)
+            try:
+                await self._linker.sendLetter(linkid, letter)
+            except LINK_NOT_EXISTS:
+                continue
 
 
 class LINK_MSG_CALLBACK_NOT_EXISTS(Exception):

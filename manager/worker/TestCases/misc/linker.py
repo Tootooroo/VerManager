@@ -126,8 +126,8 @@ class VirtualWorker_AutoDisconnect(VirtualWorker_Heartbeat_Passive):
                 await asyncio.sleep(0.1)
                 continue
 
-            await asyncio.sleep(3)
             self.writer.close()
+            await asyncio.sleep(3)
 
             if not self.writer.is_closing():
                 self._reconn_count += 1
@@ -150,3 +150,19 @@ def msg_callback(self, q: asyncio.Queue) -> typing.Callable:
         await q.put(letter)
 
     return cb
+
+
+class VirtualSender(VirtualMachine):
+
+    def __init__(self, ident, q) -> None:
+        VirtualMachine.__init__(self, ident, "", 0)
+        self.q = q
+
+    async def run(self) -> None:
+        while True:
+
+            letter = CommandLetter("Send", {})
+            letter.setHeader("linkid", "link")
+            await self.q.put(letter)
+
+            await asyncio.sleep(0.5)

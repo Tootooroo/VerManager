@@ -138,6 +138,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_ProcUnit_Output(self) -> None:
         # Setup
         output = Output()
+        output.setQueue(asyncio.Queue(10))
         self.pu.procLogic = misc.logic_send_packet
         self.pu.setOutput(output)
 

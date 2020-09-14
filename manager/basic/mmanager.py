@@ -132,7 +132,7 @@ class MManager:
             await m.cleanup()
 
             if isinstance(m, ModuleDaemon):
-                await m.stop()
+                m.stop()
 
             del self._modules[mName]
             self._num -= 1
@@ -142,25 +142,21 @@ class MManager:
         return None
 
     async def start(self, mName) -> None:
-        loop = asyncio.get_running_loop()
-
         if self.isModuleExists(mName):
             m = self._modules[mName]
             if isinstance(m, ModuleDaemon):
-                loop.create_task(m.start())
+                m.start()
 
     async def start_all(self) -> None:
-        loop = asyncio.get_running_loop()
-
         for m in self._modules:
             if isinstance(m, ModuleDaemon):
-                loop.create_task(m.start())
+                m.start()
 
     async def stop(self, mName) -> None:
         if self.isModuleExists(mName):
             m = self._modules[mName]
             if isinstance(m, ModuleDaemon):
-                await m.stop()
+                m.stop()
 
     def allDaemons(self) -> List:
         all = []
@@ -174,15 +170,12 @@ class MManager:
 
         for mod in allMods:
             if isinstance(mod, ModuleDaemon):
-                await mod.stop()
+                mod.stop()
 
             await mod.cleanup()
 
 
 # TestCases
-import asyncio
-
-
 class ModuleExample(Module):
 
     def __init__(self, name: str) -> None:
@@ -195,6 +188,7 @@ class ModuleExample(Module):
 
     async def cleanup(self):
         self.running = False
+
 
 class DaemonExample(ModuleDaemon):
 
@@ -211,7 +205,7 @@ class DaemonExample(ModuleDaemon):
     async def cleanup(self) -> None:
         self.running = False
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         self.stoped = True
 
     def needStop(self) -> bool:
@@ -219,6 +213,7 @@ class DaemonExample(ModuleDaemon):
 
     async def run(self) -> None:
         self.done = True
+
 
 class MManagerTestCases(unittest.TestCase):
 

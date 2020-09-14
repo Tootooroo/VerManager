@@ -23,10 +23,21 @@
 import abc
 import asyncio
 import datetime
+import manager.worker.configs as configs
 
-from typing import Optional
+from typing import Optional, cast, Dict
 from manager.basic.letter import Letter
 from .proc_common import Output, ChannelEntry
+
+# Need by JobProcUnit
+import platform
+import os
+import subprocess
+import shutil
+from manager.basic.util import packShellCommands, execute_shell,\
+    pathSeperator
+from manager.basic.letter import NewLetter, ResponseLetter,\
+    BinaryLetter
 
 
 class ProcUnit(abc.ABC):
@@ -202,3 +213,120 @@ class PROC_UNIT_IS_IN_DENY_MODE(Exception):
 
     def __str__(self) -> str:
         return 'ProcUnit ' + self.unit_ident + ' is deny jobs'
+
+
+# Concrete ProcUnits
+
+class JobProcUnit(ProcUnit):
+    """ ProcUnit to process job from server """
+
+    def __init__(self, ident: str) -> None:
+        ProcUnit.__init__(self, ident)
+        self._config = configs.config
+        self._job_refs = {}  # type: Dict[str, subprocess.Popen]
+
+    async def _do_job(self, job: NewLetter) -> None:
+        extra = job.getExtra()
+        needPost = job.needPost()
+        tid = job.getTid()
+        cmds = extra['cmds']
+
+        repo_url = self._config.getconfig("REPO_URL")
+        projName = self._config.getConfig("PROJECT_NAME")
+        revision = job.getContent('sn')
+
+        commands = [
+            # Go into project root
+            "cd " + projName,
+            # Fetch from server
+            "git fetch",
+            # Checkout the version
+            "git checkout -f " + revision
+        ] + cmds
+
+        if not os.path.exists(projName):
+            commands = ["git clone -b master " + repo_url] + commands
+
+        # Pack all building commands into a single string
+        # so all of them will be executed in the same shell
+        # environment.
+        cmds_str = packShellCommands(commands)
+
+        # notify job state
+        self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
+
+        # Doing the job
+        job_ref = execute_shell(cmds_str)
+        if job_ref is None:
+            # Job failed need to notify master
+            self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+            return
+
+        # If already exists then cover
+        # the old one with the new.
+        self._job_refs[tid] = job_ref
+
+        # Wait for the job
+        while True:
+            ret_code = job_ref.wait()
+
+            # Error code handle
+            if ret_code != 0:
+                if ret_code != 128:
+                    self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+
+        # Transfer job result to Target destination
+        # if the job need a post-processing then send
+        # to Poster as a PostProvider otherwise to Master.
+        if needPost == 'True':
+            self._job_result_result_transfer("Poster", job)
+        else:
+            self._job_result_result_transfer("Master", job)
+
+        # Cleanup
+        shutil.rmtree(projName)
+
+    async def _job_result_result_transfer(self, target: str,
+                                          job: NewLetter) -> None:
+
+        assert(self._output_space is not None)
+
+        extra = job.getExtra()
+        tid = job.getTid()
+        result_path = extra['resultPath']
+        version = job.getContent('vsn')
+        mid = job.getMenu()
+        fileName = result_path.split(pathSeperator())[-1]
+
+        result_file = open(result_path, "rb")
+
+        for line in result_file:
+            line_bin = BinaryLetter(
+                tid=tid, bStr=line, menu=mid,
+                parent=version, fileName=fileName)
+            line_bin.setHeader("linkid", target)
+
+            self._output_space.put(line_bin)
+
+        end_bin = BinaryLetter(tid=tid, bStr=b"", menu=mid,
+                               parent=version, fileName=fileName)
+        end_bin.setHeader("linkid", target)
+        self._output_space.put(end_bin)
+
+    async def _notify_job_state(self, tid: str, state: str) -> None:
+        self._output_space.put(  # type: ignore
+            ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state))
+
+    async def run(self) -> None:
+
+        assert(self._config is not None)
+        assert(self._output_space is not None)
+        assert(self._channel is not None)
+
+        while True:
+            job = cast(NewLetter, await self.job_retrive())
+
+            if not isinstance(job, NewLetter):
+                continue
+
+            self._do_job(job)

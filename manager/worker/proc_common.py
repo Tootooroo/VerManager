@@ -38,7 +38,7 @@ class Output:
     STATE_STOP = 1
 
     def __init__(self) -> None:
-        self._outputQ = asyncio.Queue(256)  # type: asyncio.Queue
+        self._outputQ = None  # type: typing.Optional[asyncio.Queue]
         self._state = self.STATE_READY
 
     def state(self) -> int:
@@ -53,20 +53,27 @@ class Output:
     def setState(self, state: int) -> None:
         self._state = state
 
+    def setQueue(self, q: asyncio.Queue) -> None:
+        self._outputQ = q
+
     def put_nowait(self, letter: Letter) -> None:
+        assert(self._outputQ is not None)
         self._outputQ.put_nowait(letter)
 
     async def put(self, letter: Letter, timeout=None) -> None:
+        assert(self._outputQ is not None)
         await asyncio.wait_for(
             self._outputQ.put(letter), timeout=timeout)
 
     def get_nowait(self) -> typing.Any:
+        assert(self._outputQ is not None)
         if self.isReady():
             return self._outputQ.get_nowait()
         else:
             raise PROCESSOR_OUTPUT_STOP()
 
     async def get(self, timeout=None) -> Letter:
+        assert(self._outputQ is not None)
         if self.isReady():
             return await asyncio.wait_for(
                 self._outputQ.get(), timeout=timeout)
