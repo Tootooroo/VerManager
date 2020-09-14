@@ -190,7 +190,7 @@ class ProcUnit(abc.ABC):
 
 class PROC_UNIT_NO_OUTPUT_SPACE(Exception):
 
-    def __init__(self, unit_ident:str) -> None:
+    def __init__(self, unit_ident: str) -> None:
         self.unit_ident = unit_ident
 
     def __str__(self) -> str:
@@ -224,6 +224,9 @@ class JobProcUnit(ProcUnit):
         ProcUnit.__init__(self, ident)
         self._config = configs.config
         self._job_refs = {}  # type: Dict[str, subprocess.Popen]
+
+    async def reset(self) -> None:
+        return
 
     async def _do_job(self, job: NewLetter) -> None:
         extra = job.getExtra()

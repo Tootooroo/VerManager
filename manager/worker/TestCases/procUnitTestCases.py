@@ -27,7 +27,7 @@ import typing
 import manager.worker.TestCases.misc.procunit as misc
 
 from manager.basic.letter import CommandLetter
-from manager.worker.procUnit import ProcUnit, \
+from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 from manager.worker.proc_common import Output
 
@@ -158,3 +158,14 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(success)
         self.assertEqual("Reply", type)
+
+
+class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.sut = JobProcUnit("JobUnit")
+        self.sut
+
+    async def test_JobProcUnit_JobProc(self) -> None:
+        # Exercise
+        self.sut
