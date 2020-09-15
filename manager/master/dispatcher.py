@@ -22,6 +22,7 @@
 
 import traceback
 import asyncio
+import unittest
 
 from typing import Any, List, Optional, Callable, Dict, Tuple
 from functools import reduce
@@ -76,7 +77,7 @@ class WaitArea:
     def enqueue(self, t: Any, timeout=None) -> None:
         try:
             q = self._space_map[type(t).__name__]
-            q.put(t, timeout = timeout)
+            q.put(t, timeout=timeout)
 
             self._num_of_tasks += 1
 
@@ -177,12 +178,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
     async def cleanup(self) -> None:
         return None
-
-    def needStop(self) -> bool:
-        return self._stop
-
-    async def stop(self) -> None:
-        self._stop = True
 
     def _dispatch_logging(self, msg: str) -> None:
         self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
@@ -303,6 +298,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # a build or BuildSet. If not bind just to
             # bind one with it.
             info = self._sInst.getModule(INFO_M_NAME)  # type: Info
+
             try:
                 build = Build(task.vsn, info.getConfig("Build"))
                 if isinstance(build, Build):
@@ -350,10 +346,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     # in queue which name is taskWait
     async def _dispatching(self) -> None:
         while True:
-
-            if self.needStop():
-                return None
-
             await asyncio.sleep(1)
 
             if self.taskEvent.wait(timeout=0):
@@ -380,13 +372,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         while True:
             await asyncio.sleep(1)
 
-            if self.needStop():
-                return None
-
             # For a task that refs reduce
             # to 0 do aging instance otherwise wait 1 min
             tasks_outdated = [t for t in self._taskTracker.tasks()
-                            if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 10]
+                              if t.refs == 0 or
+                              (datetime.utcnow() - t.last()).seconds > 10]
 
             self._dispatch_logging("Outdate tasks:" + str(
                 [t.id() for t in tasks_outdated]
@@ -405,7 +395,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                             " is in processing/Prepare. Abort to remove")
                         continue
                     else:
-                        # Need to check that is this task dependen on another task
+                        # Need to check that is this
+                        # task dependen on another task
                         deps = t.dependedBy()
 
                         for dep in deps:
@@ -415,8 +406,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                             if isPrepare or isInProc:
                                 self._dispatch_logging(
-                                    "Task " + ident +
-                                    " is remain cause it depend on another tasks"
+                                    "Task " + ident + " is remain"
+                                    "cause it depend on another tasks"
                                 )
                                 continue
 
@@ -654,6 +645,7 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
 def theListener(workers: List[Worker]) -> List[Worker]:
     return list(filter(lambda w: w.role == Role_Listener, workers))
 
+
 condChooser = {
     'SingleTask': viaOverhead,
     'PostTask': theListener
@@ -661,8 +653,6 @@ condChooser = {
 
 
 # UnitTest
-import unittest
-
 class DispatcherUnitTest(unittest.TestCase):
 
     def test_waitarea(self) -> None:

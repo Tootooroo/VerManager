@@ -94,6 +94,10 @@ class ChannelEntry:
         self.info = {}  # type: typing.Dict[str, typing.Any]
         self._recvers = []  # type: typing.List[ChannelReceiver]
 
+    async def update_and_notify(self, key: str, val: typing.Any) -> None:
+        self.update(key, val)
+        await self.push()
+
     def update(self, key: str, val: typing.Any) -> None:
         self.info[key] = val
 

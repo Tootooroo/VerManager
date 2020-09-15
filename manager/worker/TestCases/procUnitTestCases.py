@@ -25,11 +25,14 @@ import unittest
 import asyncio
 import typing
 import manager.worker.TestCases.misc.procunit as misc
+import manager.worker.configs as configs
 
-from manager.basic.letter import CommandLetter
+from manager.basic.info import Info
+from manager.basic.letter import CommandLetter, NewLetter,\
+    BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
-from manager.worker.proc_common import Output
+from manager.worker.proc_common import Output, ChannelEntry
 
 
 handled = False
@@ -163,9 +166,36 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
+
+        configs.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
+                              "TestCases/misc/jobprocunit_config.yaml")
+
         self.sut = JobProcUnit("JobUnit")
-        self.sut
+        self.queue = asyncio.Queue(10)  # type: asyncio.Queue
+
+        output = Output()
+        output.setQueue(self.queue)
+        self.sut.setOutput(output)
+
+        self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
     async def test_JobProcUnit_JobProc(self) -> None:
+        # Setup
+        self.sut.start()
+
         # Exercise
-        self.sut
+        job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["echo Doing...", "echo job > job_result"],
+                         'resultPath': "./job_result"})
+        await self.sut._normal_space.put(job)
+
+        # Verify
+
+        while True:
+            letter = await asyncio.wait_for(self.queue.get(), timeout=3)
+
+            if not isinstance(letter, BinaryLetter):
+                continue
+
+            self.assertEqual(b'job\n', letter.getContent('bytes'))
+            break

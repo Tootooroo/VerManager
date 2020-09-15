@@ -229,12 +229,14 @@ class JobProcUnit(ProcUnit):
         return
 
     async def _do_job(self, job: NewLetter) -> None:
+        assert(self._config is not None)
+
         extra = job.getExtra()
         needPost = job.needPost()
         tid = job.getTid()
         cmds = extra['cmds']
 
-        repo_url = self._config.getconfig("REPO_URL")
+        repo_url = self._config.getConfig("REPO_URL")
         projName = self._config.getConfig("PROJECT_NAME")
         revision = job.getContent('sn')
 
@@ -256,13 +258,13 @@ class JobProcUnit(ProcUnit):
         cmds_str = packShellCommands(commands)
 
         # notify job state
-        self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
+        await self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
 
         # Doing the job
         job_ref = execute_shell(cmds_str)
         if job_ref is None:
             # Job failed need to notify master
-            self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+            await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             return
 
         # If already exists then cover
@@ -276,15 +278,19 @@ class JobProcUnit(ProcUnit):
             # Error code handle
             if ret_code != 0:
                 if ret_code != 128:
-                    self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+                    await self._notify_job_state(
+                        tid, Letter.RESPONSE_STATE_FAILURE)
+                break
+            else:
+                break
 
         # Transfer job result to Target destination
         # if the job need a post-processing then send
         # to Poster as a PostProvider otherwise to Master.
         if needPost == 'True':
-            self._job_result_result_transfer("Poster", job)
+            await self._job_result_result_transfer("Poster", job)
         else:
-            self._job_result_result_transfer("Master", job)
+            await self._job_result_result_transfer("Master", job)
 
         # Cleanup
         shutil.rmtree(projName)
@@ -309,15 +315,16 @@ class JobProcUnit(ProcUnit):
                 parent=version, fileName=fileName)
             line_bin.setHeader("linkid", target)
 
-            self._output_space.put(line_bin)
+            await self._output_space.put(line_bin)
 
         end_bin = BinaryLetter(tid=tid, bStr=b"", menu=mid,
                                parent=version, fileName=fileName)
         end_bin.setHeader("linkid", target)
-        self._output_space.put(end_bin)
+        await self._output_space.put(end_bin)
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
-        self._output_space.put(  # type: ignore
+        assert(self._config is not None)
+        await self._output_space.put(  # type: ignore
             ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state))
 
     async def run(self) -> None:
@@ -332,4 +339,20 @@ class JobProcUnit(ProcUnit):
             if not isinstance(job, NewLetter):
                 continue
 
-            self._do_job(job)
+            # Notify components who intrest JobProcUnit
+            # is working.
+            await self._channel.update_and_notify('isProcessing', 'true')
+
+            await self._do_job(job)
+
+
+class PostProcUnit(ProcUnit):
+
+    def __init__(self, ident: str) -> None:
+        ProcUnit.__init__(self, ident)
+
+    async def reset(self) -> None:
+        return
+
+    async def run(self) -> None:
+        pass
