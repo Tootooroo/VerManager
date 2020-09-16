@@ -190,7 +190,6 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         await self.sut._normal_space.put(job)
 
         # Verify
-
         while True:
             letter = await asyncio.wait_for(self.queue.get(), timeout=3)
 

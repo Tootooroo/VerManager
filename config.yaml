@@ -56,31 +56,14 @@ BuildSet:
       output:
         - .\BSP\config\image\8900_ctrl.rar
 
-  Posts:
-    GL5610_link:
-      group:
-        - GL5610
-        - GL5610-v3
-      cmd:
-        - rar x 5610gpon.rar
-        - rar x 5610gpon_v3.rar
-        - link_hybrid_gl5610.bat
-      output:
-        - ./pack
-
-    GL8900_link:
-      group:
-        - GL8900_line
-        - GL8900_ctrl
-      cmd:
-        - rar x 8900_line.rar
-        - rar x 8900_ctrl.rar
-        - link_image_gl89.bat
-      output:
-        - ./pack
-
   Merge:
     cmd:
+      - rar x 8900_line.rar
+      - rar x 8900_ctrl.rar
+      - link_image_gl89.bat
+      - rar x 5610gpon.rar
+      - rar x 5610gpon_v3.rar
+      - link_hybrid_gl5610.bat
       - rar a -r <version> pack
     output:
       - ./<version>.rar

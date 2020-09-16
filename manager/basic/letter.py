@@ -325,13 +325,12 @@ class NewLetter(Letter):
     def __init__(self, tid: str, sn: str,
                  vsn: str, datetime: str,
                  extra: Dict,
-                 menu: str = "",
                  parent: str = "",
                  needPost: str = "") -> None:
         Letter.__init__(
             self,
             Letter.NewTask,
-            {"tid": tid, "parent": parent, "needPost": needPost, "menu": menu},
+            {"tid": tid, "parent": parent, "needPost": needPost},
             {"sn": sn, "vsn": vsn, "datetime": datetime, "extra": extra}
         )
 
@@ -348,7 +347,6 @@ class NewLetter(Letter):
             sn=content['sn'],
             vsn=content['vsn'],
             datetime=content['datetime'],
-            menu=header['menu'],
             parent=header['parent'],
             extra=content['extra'],
             needPost=header['needPost'])
@@ -361,9 +359,6 @@ class NewLetter(Letter):
 
     def needPost(self) -> str:
         return self.getHeader('needPost')
-
-    def getMenu(self) -> str:
-        return self.getHeader('menu')
 
     def getSN(self) -> str:
         return self.getContent('sn')
@@ -490,12 +485,13 @@ class CmdResponseLetter(Letter):
 
 class PostTaskLetter(Letter):
 
-    def __init__(self, ident: str, ver: str, cmds: List[str], output: str,
-                 menus: Dict, frags: List) -> None:
+    def __init__(self, ident: str, ver: str,
+                 cmds: List[str], output: str,
+                 frags: List) -> None:
 
         Letter.__init__(self, Letter.Post,
                         {"ident": ident, "version": ver, "output": output},
-                        {"cmds": cmds, "Menus": menus, "Fragments": frags})
+                        {"cmds": cmds, "Fragments": frags})
 
     @staticmethod
     def parse(s: bytes) -> Optional['PostTaskLetter']:
@@ -506,7 +502,6 @@ class PostTaskLetter(Letter):
 
         return PostTaskLetter(header['ident'], header['version'],
                               content['cmds'], header['output'],
-                              menus=content['Menus'],
                               frags=content['Fragments'])
 
     def getIdent(self) -> str:
@@ -529,69 +524,8 @@ class PostTaskLetter(Letter):
 
         frags.append(fragId)
 
-    def addMenu(self, menu: 'MenuLetter') -> None:
-        mid = menu.getMenuId()
-
-        menus = self.getContent('Menus')
-
-        if mid in menus:
-            return None
-
-        menus[mid] = {"mid": mid, "cmds": menu.getCmds(),
-                      "depends": menu.getDepends(),
-                      "output": menu.getOutput()}
-
-    def getMenu(self, mid: str) -> 'MenuLetter':
-        theMenu = self.getContent('Menus')[mid]
-
-        return MenuLetter(self.getVersion(), mid, theMenu['cmds'],
-                          theMenu['depends'],
-                          theMenu['output'])
-
-    def menus(self) -> List[str]:
-        return list(self.getContent("Menus").keys())
-
     def frags(self) -> List[str]:
         return self.getContent("Fragments")
-
-
-class MenuLetter(Letter):
-
-    def __init__(self, ver:  str, mid:  str, cmds:  List[str],
-                 depends:  List[str], output:  str) -> None:
-
-        Letter.__init__(self, Letter.NewMenu,
-                        {"mid":  mid, "version":  ver},
-                        {
-                            "cmds":  cmds, "depends":
-                            depends, "output":  output
-                        })
-
-    @staticmethod
-    def parse(s:  bytes) -> Optional['MenuLetter']:
-        (type_, header, content) = bytesDivide(s)
-
-        if type_ != Letter.NewMenu:
-            return None
-
-        return MenuLetter(header['version'], header['mid'],
-                          content['cmds'], content['depends'],
-                          content['output'])
-
-    def getVersion(self) -> str:
-        return self.getHeader("version")
-
-    def getMenuId(self) -> str:
-        return self.getHeader('mid')
-
-    def getCmds(self) -> List[str]:
-        return self.getContent('cmds')
-
-    def getDepends(self) -> List[str]:
-        return self.getContent('depends')
-
-    def getOutput(self) -> str:
-        return self.getContent('output')
 
 
 class ResponseLetter(Letter):
@@ -948,7 +882,6 @@ parseMethods = {
     Letter.BinaryFile:       BinaryLetter,
     Letter.Log:              LogLetter,
     Letter.LogRegister:      LogRegLetter,
-    Letter.NewMenu:          MenuLetter,
     Letter.Command:          CommandLetter,
     Letter.CmdResponse:      CmdResponseLetter,
     Letter.Post:             PostTaskLetter,
@@ -995,9 +928,8 @@ class LetterTestCases(unittest.TestCase):
         # Setup
         dateStr = str(datetime.utcnow())
         newLetter = NewLetter("newLetter", "sn_1", "vsn_1",
-                              datetime=dateStr, menu="Menu",
-                              parent="123456", needPost="true",
-                              extra={})
+                              datetime=dateStr, parent="123456",
+                              needPost="true", extra={})
         # Exercise
         newLetter = cast(NewLetter, Letter.parse(newLetter.toBytesWithLength()))
 
@@ -1007,7 +939,6 @@ class LetterTestCases(unittest.TestCase):
         self.assertEqual("vsn_1", newLetter.getVSN())
         self.assertEqual(dateStr, newLetter.getDatetime())
         self.assertEqual('true', newLetter.needPost())
-        self.assertEqual('Menu', newLetter.getMenu())
         self.assertEqual('123456', newLetter.getParent())
 
     def test_ResponseLetter_Parse(self) -> None:
@@ -1043,23 +974,6 @@ class LetterTestCases(unittest.TestCase):
         self.assertEqual("menu", binary_parsed.getMenu())
         self.assertEqual("123456", binary_parsed.getParent())
         self.assertEqual("rar", binary_parsed.getFileName())
-
-    def test_MenuLetter_Parse(self) -> None:
-        # Setup
-        menuLetter = MenuLetter("version", "mid_1", ["cd /home/test", "touch test.py"],
-                                ["file1", "file2"], "/home/test/test.py")
-        menuBytes = menuLetter.toBytesWithLength()
-
-        # Exercise
-        menuLetter_parsed = cast(MenuLetter, Letter.parse(menuBytes))
-
-        # Verify
-        self.assertIsNotNone(menuLetter_parsed)
-        self.assertEqual("version", menuLetter_parsed.getVersion())
-        self.assertEqual("mid_1", menuLetter_parsed.getMenuId())
-        self.assertEqual(["cd /home/test", "touch test.py"], menuLetter_parsed.getCmds())
-        self.assertEqual(["file1", "file2"], menuLetter_parsed.getDepends())
-        self.assertEqual("/home/test/test.py", menuLetter_parsed.getOutput())
 
     def test_CommandLetter_Parse(self) -> None:
         # Setup

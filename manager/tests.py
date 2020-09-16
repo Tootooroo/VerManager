@@ -29,7 +29,6 @@ from manager.basic.info import InfoTestCases
 from manager.master.logger import LoggerTestCases
 from manager.basic.storage import StorageTestCases
 from manager.master.build import BuildTestCases
-from manager.master.task import TaskTestCases
 from manager.basic.observer import ObTestCases
 from manager.worker.postListener import PostListenerTestCases
 from manager.master.worker import WorkerTestCases
@@ -42,6 +41,7 @@ from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
 from manager.worker.TestCases.serverTestCases import ServerTestCases
 """
+from manager.master.task import TaskTestCases
 from manager.worker.TestCases.procUnitTestCases import ProcUnitUnitTestCases, \
     JobProcUnitTestCases
 from manager.worker.TestCases.processorTestCases import ProcessorTestCases

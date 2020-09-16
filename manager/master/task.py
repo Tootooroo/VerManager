@@ -20,8 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# task.py
-
+import unittest
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, \
     BinaryIO, Union, Any, Tuple, Callable
@@ -36,7 +35,13 @@ from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
 from datetime import datetime
 from threading import Lock
 
-from manager.master.build import Build, Post, Merge
+from manager.master.build import Build, Merge
+
+# Need by test
+from manager.basic.info import Info
+from manager.master.build import Build, BuildSet
+
+
 
 TaskState = int
 
@@ -265,34 +270,14 @@ class SuperTask(Task):
         return self._children
 
     def getChild(self, ident: str) -> Optional[Task]:
-        maybe_the_child = list(filter(lambda w:  w.id() == ident,
-                                      self._children))
+        maybe_the_child = list(filter(
+            lambda w:  w.id() == ident, self._children))
 
         count = len(maybe_the_child)
         if count == 1:
             return maybe_the_child[0]
 
         return None
-
-    def getGroupOf(self, tid: str) -> Optional[List[Task]]:
-        group = []  # type:  List[Task]
-
-        builds = self._buildSet.belongTo(tid)
-        if builds is None:
-            return None
-
-        builds_list = builds[1]
-
-        for b in builds_list:
-            ident = self.getVSN() + "__" + b.getIdent()
-            child = self.getChild(ident)
-
-            if child is None:
-                return None
-
-            group.append(child)
-
-        return group
 
     # For SuperTask isBindWithBuild should always return True
     def isBindWithBuild(self) -> bool:
@@ -396,36 +381,20 @@ class SuperTask(Task):
                 raise TASK_FORMAT_ERROR
 
             st.setParent(self)
-
-            group = self._buildSet.belongTo(build.getIdent())
-            if group is not None:
-                st.setGroup(group[0])
-
             children.append(st)
 
         # Build frags
         allBuilds_ident = list(map(lambda b:  b.getIdent(),
                                    self._buildSet.getBuilds()))
-        predicate = lambda ident:  self._buildSet.belongTo(ident) is None
-        frags = [prefix(ident) for ident in allBuilds_ident
-                 if predicate(ident)]
+        frags = [prefix(ident) for ident in allBuilds_ident]
 
-        # Get posts from BuildSet and attach version to member's id.
-        posts = self._buildSet.getPosts()
-        for post in posts:
-            if varPairs != []:
-                post.varAssign(varPairs)
-
-            members = post.getMembers()
-            members = list(map(lambda member:  prefix(member), members))
-            post.setMembers(members)
-
+        # Build merge
         merge = self._buildSet.getMerge()
         if varPairs != []:
             merge.varAssign(varPairs)
 
         pt = PostTask(PostTask.genIdent(self.vsn),
-                      self.vsn, posts, frags, merge)
+                      self.vsn, frags, merge)
 
         if pt.isValid() is False:
             raise TASK_FORMAT_ERROR
@@ -450,19 +419,12 @@ class SingleTask(Task):
         self.type = SingleTask.Type
         self._build = build
         self._parent = None  # type:  Optional[SuperTask]
-        self._postGroup = None  # type:  Optional[str]
 
     def setParent(self, parent: SuperTask) -> None:
         self._parent = parent
 
     def getParent(self) -> Optional[SuperTask]:
         return self._parent
-
-    def setGroup(self, group: str) -> None:
-        self._postGroup = group
-
-    def getGroup(self) -> Optional[str]:
-        return self._postGroup
 
     def isAChild(self) -> bool:
         return self._parent is not None
@@ -483,8 +445,8 @@ class SingleTask(Task):
             post = self._parent.getPostTask()
             if post is not None:
                 return [self._parent, post]
-
-        return []
+        else:
+            return []
 
     def toLetter(self) -> NewLetter:
 
@@ -498,15 +460,9 @@ class SingleTask(Task):
             parent_ident = ""
             needPost = "false"
 
-        menu = ""
-
-        if self._postGroup is not None:
-            menu = self._postGroup
-
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
                          parent=parent_ident,
                          extra=extra,
-                         menu=menu,
                          needPost=needPost)
 
     def isBindWithBuild(self) -> bool:
@@ -518,12 +474,11 @@ class PostTask(Task):
     Type = 3
 
     def __init__(self, ident: str, version: str,
-                 groups: List[Post], frags: List[str], merge: Merge) -> None:
+                 frags: List[str], merge: Merge) -> None:
 
         Task.__init__(self, ident, "", version)
 
         self.type = PostTask.Type
-        self._postGroups = groups
         self._frags = frags
         self._merge = merge
         self._parent = None  # type:  Optional[SuperTask]
@@ -537,12 +492,6 @@ class PostTask(Task):
 
     def getParent(self) -> Optional[SuperTask]:
         return self._parent
-
-    def getGroups(self) -> List[Post]:
-        return self._postGroups
-
-    def setGroups(self, groups: List[Post]) -> None:
-        self._postGroups = groups
 
     def isAChild(self) -> bool:
         return self._parent is not None
@@ -569,21 +518,9 @@ class PostTask(Task):
         return []
 
     def toLetter(self) -> PostTaskLetter:
-
-        version = self.vsn
-        posts = self._postGroups
-        menuLetters = list(map(lambda p:  p.toMenuLetter(version), posts))
-
-        postTaskLetter = PostTaskLetter(self.vsn+"__Post",
-                                        self.vsn,
-                                        self._merge.getCmds(),
-                                        self._merge.getOutput(),
-                                        frags=self._frags,
-                                        menus={})
-        for menuLetter in menuLetters:
-            postTaskLetter.addMenu(menuLetter)
-
-        return postTaskLetter
+        return PostTaskLetter(
+            self.vsn+"__Post", self.vsn, self._merge.getCmds(),
+            self._merge.getOutput(), frags=self._frags)
 
 
 # Every task in TaskGroup must be unique in the TaskGroup
@@ -709,81 +646,16 @@ class TaskGroup:
 
 
 # TestCases
-import unittest
-
 class TaskTestCases(unittest.TestCase):
 
-    def test_task(self):
-        from manager.basic.info import Info
-        from manager.master.build import Build, BuildSet
-        from manager.master.task import Task, SuperTask, SingleTask, PostTask
-        from manager.basic.letter import MenuLetter
-
+    def setUp(self) -> None:
         info = Info("./config_test.yaml")
-
         buildSet = info.getConfig('BuildSet')
+        self.bs = BuildSet(buildSet)
 
-        bs = BuildSet(buildSet)
-
+    def test_SuperTask_Children(self):
         # Create a taks object
-        t = SuperTask("VersionToto", "ABC", "VersionToto", bs, {})
-
-        # Get a group which GL5610 reside in
-        groupOfGL5610 = t.getGroupOf("GL5610")
-
-        # GL5610-v2 should in this group
-        GL5610_v2 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v2", groupOfGL5610))
-        self.assertTrue(len(GL5610_v2) == 1)
-        # Check the parent of GL5610-v2
-        self.assertTrue(GL5610_v2[0].isAChild() and GL5610_v2[0].getParent().id() == "VersionToto")
-
-        # GL5610-v3 should in this group too
-        GL5610_v3 = list(filter(lambda t: t.id() == "VersionToto__GL5610-v3", groupOfGL5610))
-        self.assertTrue(len(GL5610_v3) == 1)
-        # Check the parent of GL5610-v3
-        self.assertTrue(GL5610_v3[0].isAChild() and GL5610_v3[0].getParent().id() == "VersionToto")
-
-        # Get group which GL8900 reside in
-        groupOfGL8900 = t.getGroupOf("GL8900")
-        self.assertTrue(len(groupOfGL8900) == 1)
-        # Check the parent of GL8900
-        self.assertTrue(groupOfGL8900[0].id() == "VersionToto__GL8900",
-                        groupOfGL8900[0].getParent().id() == "VersionToto")
-
-        # Posts
-        pt = t.getPostTask()
-        pt_ident = PostTask.genIdent("VersionToto")
-        self.assertEqual(pt_ident, pt.id())
-        postLetter = pt.toLetter()
-
-        deps = [t.id() for t in pt.dependence()]
-        deps_ = ["VersionToto__GL5610-v2", "VersionToto__GL5610-v3",
-                 "VersionToto__GL5610", "VersionToto__GL8900"]
-        self.assertEqual(4, len(deps))
-        self.assertEqual(deps_.sort(), deps.sort())
-
-        self.assertEqual([], postLetter.frags())
-        menus = postLetter.menus()
-        self.assertTrue("P1" in menus)
-        self.assertTrue("P2" in menus)
-
-        # Menu GL5610 check
-        menu_GL5610 = postLetter.getMenu("P1")
-        depends = menu_GL5610.getDepends()
-        self.assertTrue("VersionToto__GL5610" in depends)
-        self.assertTrue("VersionToto__GL5610-v2" in depends)
-        self.assertTrue("VersionToto__GL5610-v3" in depends)
-
-        cmds = menu_GL5610.getCmds()
-        self.assertEqual(["cat ll ll2 ll3 VersionToto  > post"], cmds)
-
-        # Menu GL8900 check
-        menu_GL8900 = postLetter.getMenu("P2")
-        depends_89 = menu_GL8900.getDepends()
-        self.assertTrue("VersionToto__GL8900" in depends_89)
-
-        cmds = menu_GL8900.getCmds()
-        self.assertEqual(["cat ll4 VersionToto  > post_gl8900", "echo 8900 VersionToto  >> post_gl8900"], cmds)
+        t = SuperTask("VersionToto", "ABC", "VersionToto", self.bs, {})
 
         # Get children of the task
         children = [child.id() for child in t.getChildren()]
@@ -794,29 +666,5 @@ class TaskTestCases(unittest.TestCase):
         self.assertTrue("VersionToto__GL5610-v3" in children)
         self.assertTrue("VersionToto__GL8900" in children)
 
-        # Convert child to letter
-        # Format
-        # header  : '{"ident":"...", "tid":"...", "needPost":"true/false"}'
-        # content : '{"sn":"...", "vsn":"...", "datetime":"...",
-        #             "extra":{"resultPath":"...", "cmds":"..."} }"
-        v2Letter = GL5610_v2[0].toLetter()
-
-        v2Tid = v2Letter.getHeader("tid")
-        self.assertEqual("VersionToto__GL5610-v2", v2Tid)
-
-        v2NeedPost = v2Letter.getHeader("needPost")
-        self.assertEqual("true", v2NeedPost)
-
-        v2SN = v2Letter.getContent("sn")
-        self.assertEqual("ABC", v2SN)
-
-        v2VSN = v2Letter.getContent("vsn")
-        self.assertEqual("VersionToto", v2VSN)
-
-        extra = v2Letter.getContent("extra")
-
-        resultPath = extra['resultPath']
-        cmds = extra['cmds']
-
-        self.assertEqual("./ll2", resultPath)
-        self.assertEqual(['echo ll2 VersionToto  > ll2'], cmds)
+    def test_SingleTask_ToLetter(self) -> None:
+        pass

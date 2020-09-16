@@ -41,26 +41,6 @@ BuildSet:
         output:
         - ./ll4
 
-  Posts:
-    P1:
-      group:
-        - GL5610
-        - GL5610-v2
-        - GL5610-v3
-      cmd:
-        - cat ll ll2 ll3 <version> <datetime> > post
-      output:
-        - ./post
-
-    P2:
-      group:
-        - GL8900
-      cmd:
-        - cat ll4 <version> <datetime> > post_gl8900
-        - echo 8900 <version> <datetime> >> post_gl8900
-      output:
-        - ./post_gl8900
-
   Merge:
     cmd:
       - cat * <version> <datetime> > <version>total

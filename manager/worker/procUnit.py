@@ -299,26 +299,23 @@ class JobProcUnit(ProcUnit):
                                           job: NewLetter) -> None:
 
         assert(self._output_space is not None)
-
         extra = job.getExtra()
         tid = job.getTid()
         result_path = extra['resultPath']
         version = job.getContent('vsn')
-        mid = job.getMenu()
         fileName = result_path.split(pathSeperator())[-1]
 
         result_file = open(result_path, "rb")
-
         for line in result_file:
             line_bin = BinaryLetter(
-                tid=tid, bStr=line, menu=mid,
-                parent=version, fileName=fileName)
+                tid=tid, bStr=line, parent=version,
+                fileName=fileName)
             line_bin.setHeader("linkid", target)
 
             await self._output_space.put(line_bin)
 
-        end_bin = BinaryLetter(tid=tid, bStr=b"", menu=mid,
-                               parent=version, fileName=fileName)
+        end_bin = BinaryLetter(
+            tid=tid, bStr=b"", parent=version, fileName=fileName)
         end_bin.setHeader("linkid", target)
         await self._output_space.put(end_bin)
 

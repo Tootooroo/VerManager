@@ -20,12 +20,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
-from typing import Dict, List, Optional, Tuple
+import unittest
 from functools import reduce
-from manager.basic.letter import MenuLetter
+from typing import Dict, List, Optional, Tuple
+
 
 MAX_LENGTH_OF_COMMAND = 1024
+
 
 class BUILD_FORMAT_WRONG(Exception):
     pass
@@ -70,43 +71,6 @@ class Build:
         self._output = [reduce(f, varPairs, output) for output in self._output]
 
 
-class Post:
-
-    def __init__(self, ident: str, members: List[str], build: Build) -> None:
-        self._ident = ident
-        self._build = build
-        self._members = members
-
-    def getIdent(self) -> str:
-        return self._ident
-
-    def getMembers(self) -> List[str]:
-        return self._members
-
-    def setMembers(self, members: List[str]) -> None:
-        self._members = members
-
-    def getBuild(self) -> Build:
-        return self._build
-
-    def getCmds(self) -> List[str]:
-        return self._build.getCmd()
-
-    def varAssign(self, varPairs: List[Tuple[str, str]]) -> None:
-        self._build.varAssign(varPairs)
-
-    def setCmds(self, cmds: List[str]) -> None:
-        self._build.setCmd(cmds)
-
-    def toMenuLetter(self, version: str) -> MenuLetter:
-        cmds = self._build.getCmd()
-        output = self._build.getOutput()
-        mLetter = MenuLetter(version, self._ident, cmds,
-                             self._members, output)
-
-        return mLetter
-
-
 class Merge:
 
     def __init__(self, build: Build) -> None:
@@ -132,25 +96,13 @@ class BuildSet:
             raise BUILD_FORMAT_WRONG
 
         self._builds = BuildSet._split(buildSet)
-        self._postBelong = {} # type:  Dict[str, Tuple[str, List[Build]]]
-        self._posts = {} # type:  Dict[str, Post]
 
         merge = buildSet['Merge']
         mergeBuild = Build("merge", {"cmd": merge['cmd'], "output": merge['output']})
         self._merge = Merge(mergeBuild)
 
-        self._buildPosts(buildSet)
-
-    def belongTo(self, bId) -> Optional[Tuple[str, List[Build]]]:
-        if not bId in self._postBelong:
-            return None
-        return self._postBelong[bId]
-
     def getMerge(self) -> Merge:
         return self._merge
-
-    def getPosts(self) -> List[Post]:
-        return list(self._posts.values())
 
     def getBuilds(self) -> List[Build]:
         return list(self._builds.values())
@@ -168,7 +120,7 @@ class BuildSet:
     def isValid(buildSet: Dict) -> bool:
 
         # First, to check the valid of builds of buildSet
-        if not 'Builds' in buildSet:
+        if 'Builds' not in buildSet:
             return False
 
         builds = buildSet['Builds']
@@ -176,18 +128,23 @@ class BuildSet:
             return False
 
         values = list(builds.values())
-        isBuildsValid = not False in list(map(lambda build:  Build.isValid(build), values))
+        isBuildsValid = False not in \
+            list(map(lambda build:  Build.isValid(build), values))
 
         if not isBuildsValid:
             return False
 
         # Then to check the valid of post of buildSet if exists
-        if not 'Posts' in buildSet:
+        if 'Posts' not in buildSet:
             return True
 
         posts = list(buildSet['Posts'].values())
-        postCheck = lambda post:  'group' in post and 'cmd' in post and 'output' in post
-        isPostsValid = False not in list(map(postCheck, posts))
+
+        postCheck = lambda post:  'group' in post and 'cmd' \
+            in post and 'output' in post
+        isPostsValid = False not in list(
+            map(postCheck,
+                posts))
 
         return isPostsValid
 
@@ -201,32 +158,8 @@ class BuildSet:
 
         return builds
 
-    def _buildPosts(self, buildSet: Dict) -> None:
-        postGroups = buildSet['Posts']
-
-        # Build a dict to store post and their post build
-        for pId in postGroups:
-            post = postGroups[pId]
-
-            build = Build(pId, {"cmd": post['cmd'], "output": post['output']})
-            self._posts[pId] = Post(pId, post['group'], build)
-
-        # Build a dict to store relation among builds.
-        for pId in postGroups:
-            group = postGroups[pId]['group']
-
-            for bId in group:
-                buildsOfGroup = list(map(lambda bId:  self._builds[bId],
-                                         group))
-                self._postBelong[bId] = (pId, buildsOfGroup)
-
-
 
 # TestCases
-import unittest
-from manager.basic.info import Info
-from functools import reduce
-
 class BuildTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
