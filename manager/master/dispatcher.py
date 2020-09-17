@@ -799,9 +799,6 @@ class DispatcherUnitTest(unittest.TestCase):
             def needStop(self) -> bool:
                 return False
 
-            async def stop(self) -> None:
-                return None
-
         class Inst:
 
             def getModule(self, name: str) -> Any:

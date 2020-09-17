@@ -43,6 +43,6 @@ from manager.worker.TestCases.serverTestCases import ServerTestCases
 """
 from manager.master.task import TaskTestCases
 from manager.worker.TestCases.procUnitTestCases import ProcUnitUnitTestCases, \
-    JobProcUnitTestCases
+    JobProcUnitTestCases, PostProcUnitTestCases
 from manager.worker.TestCases.processorTestCases import ProcessorTestCases
 from manager.worker.TestCases.connectorTestCases import LinkerTestCases

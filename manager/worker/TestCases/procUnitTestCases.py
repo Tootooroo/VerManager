@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
+import os
 import unittest
 import asyncio
 import typing
@@ -31,7 +31,8 @@ from manager.basic.info import Info
 from manager.basic.letter import CommandLetter, NewLetter,\
     BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
-    PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
+    PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE,\
+    PostProcUnit, PostTaskLetter
 from manager.worker.proc_common import Output, ChannelEntry
 
 
@@ -166,7 +167,6 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-
         configs.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
                               "TestCases/misc/jobprocunit_config.yaml")
 
@@ -179,6 +179,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
+    @unittest.skip("")
     async def test_JobProcUnit_JobProc(self) -> None:
         # Setup
         self.sut.start()
@@ -198,3 +199,55 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(b'job\n', letter.getContent('bytes'))
             break
+
+
+class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        configs.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
+                              "TestCases/misc/jobprocunit_config.yaml")
+        self.sut = PostProcUnit("PostProcUnit")
+        self.queue = asyncio.Queue(10)  # type: asyncio.Queue
+
+        output = Output()
+        output.setQueue(self.queue)
+        self.sut.setOutput(output)
+
+        self.sut.setChannel(ChannelEntry("JobProcUnit"))
+
+    async def test_PostProcUnit_Do(self) -> None:
+        # Setup
+        self.sut.start()
+
+        # Exercise
+
+        # Put a PostTaskLetter
+        await self.sut._normal_space.put(
+            PostTaskLetter("Version_123456", "Version", ["cat file1 file2 > file3"], "file3",
+                           ["Version_file1", "Version_file2"])
+        )
+
+        # Transfer file1 to PostProcUnit
+        await self.sut._normal_space.put(
+            BinaryLetter("Version_file1", b"file1",
+                         parent="Version", fileName="file1")
+        )
+        await self.sut._normal_space.put(
+            BinaryLetter("Version_file1", b"",
+                         parent="Version", fileName="file1")
+        )
+
+        # Transfer file2 to PostProcUnit
+        await self.sut._normal_space.put(
+            BinaryLetter("Version_file2", b"file2",
+                         parent="Version", fileName="file2")
+        )
+        await self.sut._normal_space.put(
+            BinaryLetter("Version_file2", b"",
+                         parent="Version", fileName="file2")
+        )
+
+        await asyncio.sleep(3)
+
+        # Verify
+        self.assertTrue(os.path.exists("./Post/file3"))

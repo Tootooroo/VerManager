@@ -25,12 +25,12 @@ import asyncio
 import datetime
 import manager.worker.configs as configs
 
-from typing import Optional, cast, Dict
+from typing import Optional, cast, Dict, BinaryIO, List, \
+    Callable
 from manager.basic.letter import Letter
 from .proc_common import Output, ChannelEntry
 
 # Need by JobProcUnit
-import platform
 import os
 import subprocess
 import shutil
@@ -38,6 +38,9 @@ from manager.basic.util import packShellCommands, execute_shell,\
     pathSeperator
 from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
+
+# Need by PostProcUnit
+from manager.basic.letter import PostTaskLetter
 
 
 class ProcUnit(abc.ABC):
@@ -216,6 +219,24 @@ class PROC_UNIT_IS_IN_DENY_MODE(Exception):
 
 
 # Concrete ProcUnits
+async def job_result_transfer(path, tid: str, linkid: str,
+                              version: str, fileName: str,
+                              send_rtn: Callable) -> None:
+
+    result_file = open(path, "rb")
+    for line in result_file:
+        line_bin = BinaryLetter(
+            tid=tid, bStr=line, parent=version,
+            fileName=fileName)
+        line_bin.setHeader("linkid", linkid)
+
+        await send_rtn(line_bin)
+
+    end_bin = BinaryLetter(
+        tid=tid, bStr=b"", parent=version, fileName=fileName)
+    end_bin.setHeader("linkid", linkid)
+    await send_rtn(end_bin)
+
 
 class JobProcUnit(ProcUnit):
     """ ProcUnit to process job from server """
@@ -288,15 +309,15 @@ class JobProcUnit(ProcUnit):
         # if the job need a post-processing then send
         # to Poster as a PostProvider otherwise to Master.
         if needPost == 'True':
-            await self._job_result_result_transfer("Poster", job)
+            await self._job_result_transfer("Poster", job)
         else:
-            await self._job_result_result_transfer("Master", job)
+            await self._job_result_transfer("Master", job)
 
         # Cleanup
         shutil.rmtree(projName)
 
-    async def _job_result_result_transfer(self, target: str,
-                                          job: NewLetter) -> None:
+    async def _job_result_transfer(self, target: str,
+                                   job: NewLetter) -> None:
 
         assert(self._output_space is not None)
         extra = job.getExtra()
@@ -305,19 +326,9 @@ class JobProcUnit(ProcUnit):
         version = job.getContent('vsn')
         fileName = result_path.split(pathSeperator())[-1]
 
-        result_file = open(result_path, "rb")
-        for line in result_file:
-            line_bin = BinaryLetter(
-                tid=tid, bStr=line, parent=version,
-                fileName=fileName)
-            line_bin.setHeader("linkid", target)
-
-            await self._output_space.put(line_bin)
-
-        end_bin = BinaryLetter(
-            tid=tid, bStr=b"", parent=version, fileName=fileName)
-        end_bin.setHeader("linkid", target)
-        await self._output_space.put(end_bin)
+        await job_result_transfer(
+            result_path, tid, target, version, fileName,
+            self._output_space.put)
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         assert(self._config is not None)
@@ -326,9 +337,9 @@ class JobProcUnit(ProcUnit):
 
     async def run(self) -> None:
 
-        assert(self._config is not None)
         assert(self._output_space is not None)
         assert(self._channel is not None)
+        assert(self._config is not None)
 
         while True:
             job = cast(NewLetter, await self.job_retrive())
@@ -343,13 +354,159 @@ class JobProcUnit(ProcUnit):
             await self._do_job(job)
 
 
+class Post:
+
+    def __init__(self, ident: str, frags: List[str], cmd: List[str],
+                 result_path: str, version: str) -> None:
+        self._ident = ident
+        self._frags = {frag: [None, False, ""] for frag in frags}  \
+            # type: Dict[str, List]
+        self._result_path = result_path
+        self._cmd = cmd
+        self._version = version
+
+    def ident(self) -> str:
+        return self._ident
+
+    def version(self) -> str:
+        return self._version
+
+    async def do(self) -> str:
+        assert(configs.config is not None)
+
+        if os.path.exists("./Post"):
+            os.mkdir("./Post")
+
+        frag_dir = configs.config.getConfig('FRAG_DIR')
+
+        for v in self._frags.values():
+            shutil.copy(frag_dir+"/"+v[2], "./Post/"+v[2])
+
+        self._cmd.insert(0, "cd Post")
+        cmd_str = packShellCommands(self._cmd)
+
+        try:
+            os.system(cmd_str)
+        except Exception:
+            return ""
+
+        if os.path.exists(self._result_path):
+            return self._result_path
+        else:
+            return ""
+
+    def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
+        self._frags[frag_id][2] = fileName
+
+    def get_frag_fileName(self, frag_id: str) -> str:
+        return self._frags[frag_id][2]
+
+    def set_frag_fd(self, frag_id: str, fd: BinaryIO) -> None:
+        self._frags[frag_id][0] = fd
+
+    def get_frag_fd(self, frag_id: str) -> Optional[BinaryIO]:
+        return self._frags[frag_id][0]
+
+    def set_frag_ready(self, frag_id: str) -> None:
+        self._frags[frag_id][1] = True
+
+    def cleanup(self) -> None:
+        assert(configs.config is not None)
+
+        frag_dir = configs.config.getConfig('FRAG_DIR')
+
+        # Remove all binaries that need by this post.
+        for frag in self._frags:
+            os.rmdir(frag_dir+"/"+frag)
+
+    def ready(self) -> bool:
+        isReady = True
+
+        for frag in self._frags.values():
+            isReady &= frag[1]
+
+        return isReady
+
+
 class PostProcUnit(ProcUnit):
 
     def __init__(self, ident: str) -> None:
         ProcUnit.__init__(self, ident)
+        self._posts = {}  # type: Dict[str, Post]
 
     async def reset(self) -> None:
         return
 
+    async def _frag_collect(self, letter: BinaryLetter) -> None:
+        assert(configs.config is not None)
+
+        version = letter.getParent()
+        if version not in self._posts:
+            return
+
+        tid = letter.getTid()
+        post = self._posts[version]
+
+        fd = post.get_frag_fd(tid)
+        if fd is None:
+            frag_dir = configs.config.getConfig('FRAG_DIR')
+            fd = open(frag_dir+"/"+letter.getFileName(), "wb")
+            post.set_frag_fd(tid, fd)
+
+        content = letter.getContent('bytes')
+        if content == b'':
+            # Last byte so file transfer done.
+            post.set_frag_ready(tid)
+            fd.close()
+
+            if post.ready():
+                self._do_post(post)
+        else:
+            fd.write(content)
+
+    async def _do_post(self, post: Post) -> None:
+        path = await post.do()
+
+        seperator = pathSeperator()
+        # Deal with Relative path
+        if path[0] != seperator:
+            path = "./Post/"+path
+
+        if path != '':
+            fileName = path.split(seperator)[-1]
+            await job_result_transfer(
+                path, post.ident(), "Master", post.version(),
+                fileName, self._output_space.put)  # type: ignore
+
+        # Cleanup
+        #post.cleanup()
+        #shutil.rmtree("./Post")
+
+    async def _new_post(self, letter: PostTaskLetter) -> None:
+        ident = letter.getIdent()
+        if ident in self._posts:
+            return
+
+        post = Post(ident, letter.frags(), letter.getCmds(),
+                    letter.getOutput(), letter.getVersion())
+
+        self._posts[letter.getVersion()] = post
+
     async def run(self) -> None:
-        pass
+
+        assert(self._output_space is not None)
+        assert(self._channel is not None)
+
+        # Directory Frags is used to contain all
+        # Binaries that need by Posts
+        if not os.path.exists("./Frags"):
+            os.mkdir("./Frags")
+
+        while True:
+            job = await self.job_retrive()
+
+            if isinstance(job, BinaryLetter):
+                import pdb; pdb.set_trace()
+                await self._frag_collect(job)
+            elif isinstance(job, PostTaskLetter):
+                await self._new_post(job)
