@@ -250,4 +250,4 @@ class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(3)
 
         # Verify
-        self.assertTrue(os.path.exists("./Post/file3"))
+        self.assertTrue(os.path.exists("./Post/Version/file3"))

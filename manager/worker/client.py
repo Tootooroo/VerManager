@@ -30,9 +30,9 @@ import sys
 from threading import Thread
 from typing import Optional
 
-from ..basic.info import Info
-from ..basic.mmanager import MManager, Module
-from ..basic.storage import Storage
+from manager.basic.info import Info
+from manager.basic.mmanager import MManager, Module
+from manager.basic.storage import Storage
 
 from .processor import Processor
 from .sender import Sender

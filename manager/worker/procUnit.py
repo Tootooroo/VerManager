@@ -358,10 +358,22 @@ class Post:
 
     def __init__(self, ident: str, frags: List[str], cmd: List[str],
                  result_path: str, version: str) -> None:
+
+        assert(configs.config is not None)
+
         self._ident = ident
         self._frags = {frag: [None, False, ""] for frag in frags}  \
             # type: Dict[str, List]
+
         self._result_path = result_path
+        # Additional process if it's a relative path
+        if self._result_path[0] is not pathSeperator():
+            post_dir = configs.config.getConfig('POST_DIR')
+            # POST_DIR must be seted
+            if post_dir == "":
+                raise Exception
+            self._result_path = os.path.join(post_dir, version, result_path)
+
         self._cmd = cmd
         self._version = version
 
@@ -374,15 +386,7 @@ class Post:
     async def do(self) -> str:
         assert(configs.config is not None)
 
-        if os.path.exists("./Post"):
-            os.mkdir("./Post")
-
-        frag_dir = configs.config.getConfig('FRAG_DIR')
-
-        for v in self._frags.values():
-            shutil.copy(frag_dir+"/"+v[2], "./Post/"+v[2])
-
-        self._cmd.insert(0, "cd Post")
+        self._cmd.insert(0, "cd Post/" + self._version)
         cmd_str = packShellCommands(self._cmd)
 
         try:
@@ -413,11 +417,8 @@ class Post:
     def cleanup(self) -> None:
         assert(configs.config is not None)
 
-        frag_dir = configs.config.getConfig('FRAG_DIR')
-
-        # Remove all binaries that need by this post.
-        for frag in self._frags:
-            os.rmdir(frag_dir+"/"+frag)
+        post_dir = configs.config.getConfig('POST_DIR')
+        shutil.rmtree(os.path.join(post_dir, self._version))
 
     def ready(self) -> bool:
         isReady = True
@@ -434,6 +435,9 @@ class PostProcUnit(ProcUnit):
         ProcUnit.__init__(self, ident)
         self._posts = {}  # type: Dict[str, Post]
 
+        assert(configs.config is not None)
+        self._post_dir = configs.config.getConfig('POST_DIR')
+
     async def reset(self) -> None:
         return
 
@@ -449,9 +453,10 @@ class PostProcUnit(ProcUnit):
 
         fd = post.get_frag_fd(tid)
         if fd is None:
-            frag_dir = configs.config.getConfig('FRAG_DIR')
-            fd = open(frag_dir+"/"+letter.getFileName(), "wb")
+            path = os.path.join(self._post_dir, version, letter.getFileName())
+            fd = open(path, "wb")
             post.set_frag_fd(tid, fd)
+            post.set_frag_fileName(tid, letter.getFileName())
 
         content = letter.getContent('bytes')
         if content == b'':
@@ -460,37 +465,36 @@ class PostProcUnit(ProcUnit):
             fd.close()
 
             if post.ready():
-                self._do_post(post)
+                await self._do_post(post)
         else:
             fd.write(content)
 
     async def _do_post(self, post: Post) -> None:
         path = await post.do()
 
-        seperator = pathSeperator()
-        # Deal with Relative path
-        if path[0] != seperator:
-            path = "./Post/"+path
-
         if path != '':
-            fileName = path.split(seperator)[-1]
+            fileName = path.split(pathSeperator())[-1]
             await job_result_transfer(
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.put)  # type: ignore
 
         # Cleanup
-        #post.cleanup()
-        #shutil.rmtree("./Post")
+        post.cleanup()
 
     async def _new_post(self, letter: PostTaskLetter) -> None:
         ident = letter.getIdent()
         if ident in self._posts:
             return
 
+        version = letter.getVersion()
         post = Post(ident, letter.frags(), letter.getCmds(),
-                    letter.getOutput(), letter.getVersion())
+                    letter.getOutput(), version)
 
-        self._posts[letter.getVersion()] = post
+        self._posts[version] = post
+
+        path = self._post_dir+"/"+version;
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     async def run(self) -> None:
 
@@ -499,14 +503,13 @@ class PostProcUnit(ProcUnit):
 
         # Directory Frags is used to contain all
         # Binaries that need by Posts
-        if not os.path.exists("./Frags"):
-            os.mkdir("./Frags")
+        if not os.path.exists("./Post"):
+            os.mkdir("./Post")
 
         while True:
             job = await self.job_retrive()
 
             if isinstance(job, BinaryLetter):
-                import pdb; pdb.set_trace()
                 await self._frag_collect(job)
             elif isinstance(job, PostTaskLetter):
                 await self._new_post(job)

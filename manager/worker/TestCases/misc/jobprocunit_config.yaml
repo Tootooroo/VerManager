@@ -1,3 +1,5 @@
 WORKER_NAME: JOB
 REPO_URL: ~/Codebase/trivial
 PROJECT_NAME: trivial
+FRAG_DIR: ./Frags
+POST_DIR: ./Post

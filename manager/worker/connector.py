@@ -270,11 +270,19 @@ class Connector(ModuleDaemon):
         while True:
             letter = await self._letter_Q.get()
             linkid = letter.getHeader('linkid')
+            if linkid == "":
+                raise LINK_ID_NOT_FOUND()
 
             try:
                 await self._linker.sendLetter(linkid, letter)
             except LINK_NOT_EXISTS:
                 continue
+
+
+class LINK_ID_NOT_FOUND(Exception):
+
+    def __str__(self) -> str:
+        return "Link id is not found"
 
 
 class LINK_MSG_CALLBACK_NOT_EXISTS(Exception):
