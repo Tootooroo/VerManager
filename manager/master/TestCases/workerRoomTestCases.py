@@ -3,260 +3,128 @@
 import unittest
 import asyncio
 
+from manager.master.worker import Worker
 from manager.basic.letter import Letter, PropLetter, receving, \
-    CommandLetter, CmdResponseLetter
+    CommandLetter, CmdResponseLetter, sending
 from manager.master.workerRoom import WorkerRoom
 from typing import Any, Optional, Tuple
 from manager.basic.info import Info
 from manager.basic.observer import Subject
+from manager.basic.stubs.virtualMachine import VirtualMachine
 
 
 class sInst:
-
     def getModule(self, name: Any) -> Any:
         return Info("./config_test.yaml")
 
 
-class VirtualWorker:
+class VirtualWorker(VirtualMachine):
 
-    def __init__(self, ident: str, wr: WorkerRoom) -> None:
-        self._ident = ident
-        self.stream = None \
-            # type: Optional[Tuple[asyncio.StreamReader, asyncio.StreamWriter]]
-        self.wr = wr
-        self.proto = None  # type: Any
-        self.isLis = False
-        self.role = ""
+    async def run(self) -> None:
+        r, w = await asyncio.open_connection(self._host, self._port)
 
-    async def connect(self, host: str, port: int) -> None:
+        self.r = r
+        self.w = w
+
+        propLetter = PropLetter(self._ident, "1", "0", Worker.ROLE_MERGER)
+        await sending(w, propLetter)
+
+        await asyncio.sleep(10)
+
+
+class VirtualWorker_Reconnect(VirtualWorker):
+
+    async def run(self) -> None:
+        await VirtualWorker.run(self)
+
+        # Disconnect
+        self.w.close()
+
+        # Reconnect
+        await VirtualWorker.run(self)
+
+
+class VirtualWorker_Lost(VirtualWorker):
+
+    async def run(self) -> None:
+        await VirtualWorker.run(self)
+        # Disconnect
+        self.w.close()
+
+        self.q.put((WorkerRoom.EVENT_DISCONNECTED, self._ident))
+
+class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.wr = WorkerRoom("127.0.0.1", 30000, sInst())
+        self.v_wr1 = VirtualWorker("w1", "127.0.0.1", 30000)
+        self.v_wr2 = VirtualWorker("w2", "127.0.0.1", 30000)
+
+    async def test_WorkerRoom_Connect(self) -> None:
+        # Exercise
+        self.wr.start()
+        await asyncio.sleep(0.1)
+
+        # Start Worker1 and worker2
+        self.v_wr1.start()
+        self.v_wr2.start()
         await asyncio.sleep(1)
 
-        r, w = await asyncio.open_connection("127.0.0.1", 30000) \
-            # type: Tuple[asyncio.StreamReader, asyncio.StreamWriter]
-        self.stream = (r, w)
+        # Verify
+        self.assertTrue(self.wr.isExists("w1"))
+        self.assertTrue(self.wr.isExists("w2"))
 
-        self.stream[1].write(
-            PropLetter(self._ident, "2", "0").toBytesWithLength()
-        )
-        await self.stream[1].drain()
-
-    async def disconnect(self) -> None:
-        if self.stream is None:
-            return None
-        self.stream[1].close()
-
-        await self.wr._eventQueue.put(self._ident)
-
-    async def recv(self, timeout=None) -> Optional[Letter]:
-        if self.stream is None:
-            return None
-        return await receving(self.stream[0], timeout=timeout)
-
-    async def proto_exec(self) -> None:
-        await self.proto(self)
-
-    async def send(self, l: Letter) -> None:
-        assert(isinstance(l, CmdResponseLetter))
-        await self.wr.msgToPostManager(l)
-
-
-class EventListenerStub(Subject):
-    pass
-
-
-async def proto_postElect(vir: VirtualWorker) -> None:
-    try:
-        letter = await vir.recv(timeout=1)
-    except asyncio.exceptions.TimeoutError:
-        return None
-
-    assert(letter is not None)
-    if not isinstance(letter, CommandLetter):
-        return None
-
-    isListener = ""
-    type = letter.getType()
-    role = letter.content_("role")
-
-    if type != "post":
-        return None
-
-    if role == "L":
-        vir.isLis = True
-        vir.role = "L"
-        isListener = "true"
-    else:
-        vir.role = "P"
-        isListener = "false"
-
-    response = CmdResponseLetter(
-        vir._ident, Letter.CmdResponse,
-        CmdResponseLetter.STATE_SUCCESS, {"isListener": isListener}
-    )
-    await vir.send(response)
-
-
-async def virInit(vir: VirtualWorker) -> None:
-    await vir.connect("127.0.0.1", 30000)
-
-    while True:
-        await vir.proto_exec()
-
-        if vir.role != "":
-            break
-
-
-async def proto_check_lisUpdate_command(vir: VirtualWorker) -> None:
-    await proto_postElect(vir)
-
-
-async def workerReconnAction_beforeRemoved(vir: VirtualWorker) -> None:
-    await virInit(vir)
-
-    await vir.disconnect()
-    await asyncio.sleep(2)
-    await vir.connect("127.0.0.1", 30000)
-
-
-async def workerDisconnect(vir: VirtualWorker) -> None:
-    await virInit(vir)
-
-    if vir.isLis:
-        await vir.disconnect()
-
-
-class WorkerRoomTestCases(unittest.TestCase):
-
-    def setUp(self) -> None:
-        async def doSetUp():
-            self.wr = WorkerRoom("127.0.0.1", 30000, sInst())
-            self.v_wr1 = VirtualWorker("w1", self.wr)
-            self.v_wr2 = VirtualWorker("w2", self.wr)
-
-        asyncio.run(doSetUp())
-
-    def test_WorkerRoom_Activate(self) -> None:
+    async def test_WorkerRoom_ConnectDup(self) -> None:
         # Setup
-        coro = None  # type: Any
-        self.v_wr1.proto = proto_postElect
-        self.v_wr2.proto = proto_postElect
+        self.v_wr2._ident = "w1"
 
         # Exercise
-        async def worker_run(w):
-            await w.connect("127.0.0.1", 30000)
-            while True:
-                await w.proto_exec()
+        self.wr.start()
+        await asyncio.sleep(0.1)
 
-        async def stop():
-            nonlocal coro
-            await asyncio.sleep(5)
-            coro.cancel()
-
-        async def doTest():
-            nonlocal coro
-
-            self.wr._lock = asyncio.Lock()
-            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(125)
-
-            coro = asyncio.gather(
-                self.wr.run(),
-                worker_run(self.v_wr1),
-                worker_run(self.v_wr2),
-                stop()
-            )
-
-            try:
-                await coro
-
-            except asyncio.exceptions.CancelledError:
-                pass
-
-        asyncio.run(doTest())
+        self.v_wr1.start()
+        self.v_wr2.start()
+        await asyncio.sleep(0.1)
 
         # Verify
-        workers = [w.getIdent() for w in self.wr.getWorkers()]
-        self.assertTrue("w1" in workers)
-        self.assertTrue("w2" in workers)
+        self.assertEqual(self.wr.getNumOfWorkers(), 1)
 
-        listener = self.wr.postListener()
-        self.assertIsNotNone(listener)
-        self.assertTrue(
-            listener.getIdent() == "w1" or
-            listener.getIdent() == "w2"
-        )
-
-    def test_WorkerRoom_Reconnect(self) -> None:
+    async def test_WorkerRoom_ReconnWithinWaitInterval(self) -> None:
         # Setup
-        coro = None  # type: Any
-        self.v_wr1.proto = proto_postElect
-        self.v_wr2.proto = proto_postElect
+        self.v_wr1 = VirtualWorker_Reconnect("w1", "127.0.0.1", 30000)
+        self.v_wr2 = VirtualWorker_Reconnect("w2", "127.0.0.1", 30000)
 
         # Exercise
-        async def stop():
-            await asyncio.sleep(5)
-            coro.cancel()
+        self.wr.start()
+        await asyncio.sleep(0.1)
 
-        async def doTest():
-            nonlocal coro
-
-            self.wr._lock = asyncio.Lock()
-            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(128)
-
-            coro = asyncio.gather(
-                self.wr.run(),
-                workerReconnAction_beforeRemoved(self.v_wr1),
-                workerReconnAction_beforeRemoved(self.v_wr2),
-                stop()
-            )
-
-            try:
-                await coro
-            except asyncio.exceptions.CancelledError:
-                pass
-
-        asyncio.run(doTest())
+        self.v_wr1.start()
+        self.v_wr2.start()
+        await asyncio.sleep(0.1)
 
         # Verify
-        workers = [w.getIdent() for w in self.wr.getWorkers()]
-        self.assertTrue("w1" in workers)
-        self.assertTrue("w2" in workers)
+        self.assertTrue(self.wr.isExists("w1"))
+        self.assertTrue(self.wr.isExists("w2"))
 
     def test_WorkerRoom_lisAddrUpdate(self) -> None:
-        # Setup
-        coro = None  # type: Any
-        self.v_wr1.proto = proto_postElect
-        self.v_wr2.proto = proto_postElect
-
-        # Exercise
-        async def stop():
-            await asyncio.sleep(5)
-            coro.cancel()
-
-        async def doTest():
-            nonlocal coro
-
-            self.wr._lock = asyncio.Lock()
-            self.wr._pManager._eProtocol.msgQueue = asyncio.Queue(128)
-
-            coro = asyncio.gather(
-                stop(),
-                self.wr.run(),
-                workerDisconnect(self.v_wr1)
-            )
-
-            try:
-                await coro
-            except asyncio.exceptions.CancelledError:
-                pass
-
-        asyncio.run(doTest())
-
-        # Verify
-        workers = [w.getIdent() for w in self.wr.getWorkers()]
-        self.assertTrue("w1" not in workers or "w2" not in workers)
+        pass
 
     def test_WorkerRoom_LisLost(self) -> None:
         pass
 
-    def test_WorkerRoom_WorkerLost(self) -> None:
-        pass
+    async def test_WorkerRoom_WorkerLost(self) -> None:
+        # Setup
+        self.v_wr1 = VirtualWorker_Lost("w1", "127.0.0.1", 30000)
+        self.v_wr2 = VirtualWorker_Lost("w2", "127.0.0.1", 30000)
+
+        # Exercise
+        self.wr.start()
+        await asyncio.sleep(0.1)
+
+        self.v_wr1.start()
+        self.v_wr2.start()
+        await asyncio.sleep(10)
+
+        # Verify
+        self.assertFalse(self.wr.isExists("w1"))
+        self.assertFalse(self.wr.isExists("w2"))

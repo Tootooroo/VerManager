@@ -343,7 +343,6 @@ class JobProcUnit(ProcUnit):
 
         while True:
             job = cast(NewLetter, await self.job_retrive())
-
             if not isinstance(job, NewLetter):
                 continue
 
@@ -492,7 +491,7 @@ class PostProcUnit(ProcUnit):
 
         self._posts[version] = post
 
-        path = self._post_dir+"/"+version;
+        path = self._post_dir+"/"+version
         if not os.path.exists(path):
             os.mkdir(path)
 

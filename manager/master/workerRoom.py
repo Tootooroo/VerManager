@@ -25,7 +25,6 @@
 # Maintain connection with workers
 
 import asyncio
-import unittest
 
 from datetime import datetime
 from manager.basic.observer import Subject, Observer
@@ -34,13 +33,10 @@ from manager.master.worker import Worker, WorkerInitFailed
 from manager.basic.mmanager import ModuleDaemon
 from manager.basic.commands import Command, LisAddrUpdateCmd
 from manager.master.task import Task
-from manager.master.postElectProtos import RandomElectProtocol
-from manager.master.postElection import PostManager
-from manager.basic.letter import CmdResponseLetter
-from typing import Tuple, Callable, Any, List, Dict, Optional
+from typing import Tuple, Callable, Any, List, Dict, Optional, cast
 from manager.basic.info import M_NAME as INFO_M_NAME
-from manager.basic.commands import AcceptCommand, AcceptRstCommand, \
-    LisLostCommand
+from manager.basic.commands import AcceptCommand, AcceptRstCommand
+from manager.basic.letter import receving, PropLetter
 
 M_NAME = "WorkerRoom"
 
@@ -111,11 +107,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         self._stableThres = self._WAITING_INTERVAL + 1
 
-        self._isPManager_init = False
-        self._pManager = PostManager([], RandomElectProtocol())
-
         self._lastChangedPoint = datetime.utcnow()
-
         self._lastCandidates = []  # type: List[str]
 
         self._stop = False
@@ -126,9 +118,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
     async def cleanup(self) -> None:
         return None
 
-    async def stop(self) -> None:
-        return None
-
     def needStop(self) -> bool:
         return False
 
@@ -137,25 +126,27 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     async def _accept_workers(self, r: asyncio.StreamReader,
                               w: asyncio.StreamWriter) -> None:
-        arrived_worker = Worker(r, w)
 
-        w_ident = ""
-
+        # Init Worker
         try:
-            await arrived_worker.active()
-            w_ident = arrived_worker.getIdent()
+            propLetter = await receving(r, timeout=3)
+            if propLetter is None:
+                return
 
-            await self._WR_LOG("Worker " + w_ident + " inited")
-        except WorkerInitFailed:
-            await self._WR_LOG("Worker " + w_ident + " init failed")
+            w_ident = cast(PropLetter, propLetter).getIdent()
+            role = cast(PropLetter, propLetter).getRole()
+
+            arrived_worker = Worker(w_ident, r, w, role)
+        except (ConnectionError, asyncio.exceptions.TimeoutError):
             w.close()
-            return None
+            return
 
+        # Check that is a worker with same ident is already
+        # in reside in WorkerRoom
         if self.isExists(w_ident):
             w.close()
             await self._WR_LOG("Worker " + w_ident + " is already exists")
-
-            return None
+            return
 
         await self._lock.acquire()
 
@@ -178,7 +169,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             self.addWorker(workerInWait)
             del self._workers_waiting[w_ident]
 
-            if self._pManager.isListener(w_ident):
+            if workerInWait.isMerger():
                 if new_address != old_address:
                     # Broadcast command to all workers that online.
                     #
@@ -194,9 +185,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             # so it able to transfer message.
             await workerInWait.control(AcceptCommand())
 
-            if workerInWait.role is None:
-                self._pManager.addCandidate(workerInWait)
-
             await self._WR_LOG("Worker " + w_ident + " is reconnect")
 
             self._lock.release()
@@ -210,14 +198,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         await arrived_worker.control(AcceptRstCommand())
 
         self.addWorker(arrived_worker)
-        self._pManager.addCandidate(arrived_worker)
-
         await self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
 
     async def run(self) -> None:
         server = await asyncio.start_server(self._accept_workers,
                                             self._host, self._port)
-
         await asyncio.gather(
             server.serve_forever(),
             self._maintain()
@@ -232,15 +217,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     def _changePoint(self) -> None:
         self._lastChangedPoint = datetime.utcnow()
-
-    async def msgToPostManager(self, l: CmdResponseLetter) -> None:
-        await self._pManager.proto_msg_transfer(l)
-
-    def postRelations(self) -> Tuple[str, List[str]]:
-        return self._pManager.relations()
-
-    def postListener(self) -> Optional[Worker]:
-        return self._pManager.getListener()
 
     def getTaskOfWorker(self, wId: str, tid: str) -> Optional[Task]:
         worker = self.getWorker(wId)
@@ -269,26 +245,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         while True:
             await self._waiting_worker_update()
             await self._waiting_worker_processing(self._workers_waiting)
-            await self._postProcessing()
             await asyncio.sleep(1)
-
-    async def _postProcessing(self) -> None:
-        candidates = [c.getIdent() for c in self._pManager.candidates()]
-        if candidates != self._lastCandidates:
-            await self._WR_LOG("Role:" + str(self.postRelations()))
-            await self._WR_LOG("Candidates" + str(candidates))
-            self._lastCandidates = candidates
-
-        if not self.isStable():
-            return None
-
-        # Init postManager
-        if self._isPManager_init is False:
-            await self._pManager.proto_init()
-            self._isPManager_init = True
-        else:
-            # Stepping
-            await self._pManager.proto_step()
 
     async def _waiting_worker_update(self) -> None:
         try:
@@ -309,17 +266,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             # Update worker's counter
             worker.setState(Worker.STATE_WAITING)
             self.removeWorker(ident)
-
-            if worker.role is None:
-                # Worker is a candidate
-                self._pManager.removeCandidate(ident)
-
             self._workers_waiting[ident] = worker
-
             self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
-    async def _waiting_worker_processing(self,
-                                         workers: Dict[str, Worker]) -> None:
+    async def _waiting_worker_processing(
+            self, workers: Dict[str, Worker]) -> None:
 
         workers_list = list(workers.values())
 
@@ -338,27 +289,10 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                                long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
 
-            if worker.role is None:
-                # Worker is a candidate
-                self._pManager.removeCandidate(ident)
-            else:
-                # Remove this worker from PostManager
-                # if it's also a listener then set listener to None
-                if self._pManager.isListener(ident):
-
-                    # Send command to notify workers that the listener
-                    # is lost.
-                    await self.broadcast(LisLostCommand())
-
-                    self._pManager.setListener(None)
-                    self._pManager.removeCandidate(ident)
-
-                self._pManager.removeProvider(ident)
-
             self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
             del self._workers_waiting[ident]
 
-            self._lock.release()
+        self._lock.release()
 
     async def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
         self._eventQueue.put((eventType, ident))

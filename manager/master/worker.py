@@ -26,6 +26,7 @@
 # provide communication interface to another module
 
 import traceback
+import unittest
 import asyncio
 
 from typing import Tuple, Optional, List, Dict, Callable
@@ -45,14 +46,19 @@ class WorkerInitFailed(Exception):
 
 class Worker:
 
+    ROLE_MERGER = 0
+    ROLE_NORMAL = 1
+
     STATE_ONLINE = 0
     STATE_WAITING = 1
     STATE_OFFLINE = 2
 
-    def __init__(self, reader: asyncio.StreamReader,
-                 writer: asyncio.StreamWriter) -> None:
+    def __init__(self, ident: str,
+                 reader: asyncio.StreamReader,
+                 writer: asyncio.StreamWriter,
+                 role: int) -> None:
 
-        self.role = None  # type: Optional[int]
+        self._role = role
 
         self._reader = reader
         self._writer = writer
@@ -61,7 +67,7 @@ class Worker:
         self.max = 0
         self.inProcTask = TaskGroup()
         self.menus = []  # type: List[Tuple[str, str]]
-        self.ident = ""
+        self.ident = ident
         self.needUpdate = False
 
         # Before a PropertyNotify letter is report
@@ -86,25 +92,12 @@ class Worker:
         self.counters = [0, 0, 0]
         self._clock = datetime.now()
 
-    async def active(self) -> None:
-        letter = await self._recv()
-
-        if letter is None:
-            raise WorkerInitFailed()
-
-        if Letter.typeOfLetter(letter) == Letter.PropertyNotify:
-            self.max = letter.propNotify_MAX()
-            self.ident = letter.propNotify_IDENT()
-            self.address = "0.0.0.0"
-            self.state = Worker.STATE_ONLINE
-            self._clock = datetime.utcnow()
-        else:
-            raise WorkerInitFailed()
-
     def getStream(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         return (self._reader, self._writer)
 
-    def setStream(self, stream: Tuple[asyncio.StreamReader, asyncio.StreamWriter]) -> None:
+    def setStream(self, stream: Tuple[asyncio.StreamReader,
+                                      asyncio.StreamWriter]) -> None:
+
         self._reader, self._writer = stream
 
     def waitCounter(self) -> int:
@@ -172,6 +165,9 @@ class Worker:
     def numOfTaskProc(self) -> int:
         return self.inProcTask.numOfTasks()
 
+    async def isMerger(self) -> bool:
+        return self._role == Worker.ROLE_MERGER
+
     async def control(self, cmd: Command) -> None:
         letter = cmd.toLetter()
         await self._send(letter)
@@ -192,8 +188,8 @@ class Worker:
     async def sendLetter(self, letter: Letter) -> None:
         await self._send(letter)
 
-    async def waitResponse(self, timeout=None) -> Optional[Letter]:
-        pass
+    async def waitLetter(self, timeout=None) -> Optional[Letter]:
+        return await self.receving(self._reader, timeout=timeout)
 
     # Provide ability to cancel task in queue or
     # processed task
@@ -225,145 +221,26 @@ class Worker:
         return status_dict
 
     @staticmethod
-    async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Letter]:
+    async def receving(reader: asyncio.StreamReader,
+                       timeout=None) -> Optional[Letter]:
         return await letter_receving(reader, timeout=timeout)
 
     @staticmethod
-    async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
-        return await letter_sending(writer, l)
+    async def sending(writer: asyncio.StreamWriter, letter: Letter) -> None:
+        return await letter_sending(writer, letter)
 
     async def _recv(self, timeout=None) -> Optional[Letter]:
         return await Worker.receving(self._reader, timeout=timeout)
 
-    async def _send(self, l: Letter) -> None:
+    async def _send(self, letter: Letter) -> None:
         try:
-            await Worker.sending(self._writer, l)
+            await Worker.sending(self._writer, letter)
         except Exception:
             traceback.print_exc()
 
 
-
 # TestCases
-import unittest
+class WorkerTestCases(unittest.IsolatedAsyncioTestCase):
 
-class WorkerTestCases(unittest.TestCase):
-
-    def test_worker(self):
-        import time
-        from manager.basic.util import spawnThread
-        from manager.master.build import Build, Merge
-        from manager.master.task import SingleTask, PostTask
-        from manager.basic.letter import sending as l_send, receving as l_recv, \
-            NewLetter, PostTaskLetter, PropLetter
-        from socket import socket, AF_INET, SOCK_STREAM
-        from manager.master.worker import Worker
-
-        Max = "2"
-        InProc = "0"
-
-        canceled = False
-
-        async def worker_connect(server_task):
-            # Wait Server start
-            await asyncio.sleep(1)
-
-            reader, writer = await asyncio.open_connection(
-                "127.0.0.1", 9999
-            )
-
-            # Send PropLetter
-            prop_l = PropLetter("TestWorker", Max, InProc)
-            await l_send(writer, prop_l)
-
-            l = await l_recv(reader)
-            if l is None:
-                self.assertTrue(False)
-            else:
-                if isinstance(l, NewLetter):
-                    pass
-                else:
-                    self.assertTrue(False)
-
-            l = await l_recv(reader)
-            if l is None:
-                self.assertTrue(False)
-            else:
-                if isinstance(l, PostTaskLetter):
-                    pass
-                else:
-                    self.assertTrue(False)
-
-            while canceled is False:
-                await asyncio.sleep(1)
-
-            if canceled is True:
-                server_task.cancel()
-
-        async def server_mock():
-            server = await asyncio.start_server(
-                handler, '127.0.0.1', 9999
-            )
-
-            await server.serve_forever()
-
-        async def handler(r: asyncio.StreamReader,
-                          w: asyncio.StreamWriter):
-
-            worker = Worker(r, w)
-            await worker.active()
-
-            # Prop Assert
-            self.assertEqual(int(Max), worker.maxNumOfTask())
-            self.assertEqual(int(InProc), len(worker.inProcTasks()))
-
-            # Send a task to worker
-            build = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
-            await worker.do(SingleTask("Test", "SN", "REV", build, {}))
-
-            # Now inProc task should be 1
-            inProcTasks = worker.inProcTasks()
-            self.assertTrue(1, len(inProcTasks))
-
-            task = inProcTasks[0]
-            self.assertEqual("Test", task.id())
-            self.assertEqual("SN", task.getSN())
-            self.assertEqual("REV", task.getVSN())
-
-            # Now Send a PostTask
-            build_post = Build("B_TEST", {'cmd':["cmd1", "cmd2"], 'output':["./output"]})
-            await worker.do(PostTask("PostTest", "VSN", [], [], Merge(build_post)))
-
-            inProcTasks = worker.inProcTasks()
-            self.assertTrue(2, len(inProcTasks))
-
-            self.assertTrue("Test" in [t.id() for t in inProcTasks])
-            self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
-
-            # Remove tasks
-            worker.removeTask("Test")
-            inProcTasks = worker.inProcTasks()
-            self.assertEqual(1, len(inProcTasks))
-            self.assertTrue("Test" not in [t.id() for t in inProcTasks])
-            self.assertTrue("PostTest" in [t.id() for t in inProcTasks])
-
-            worker.removeTask("PostTest")
-            inProcTasks = worker.inProcTasks()
-            self.assertEqual(0, len(inProcTasks))
-            self.assertTrue("Test" not in [t.id() for t in inProcTasks])
-            self.assertTrue("PostTest" not in [t.id() for t in inProcTasks])
-
-            nonlocal canceled
-            canceled = True
-
-        async def test_main() -> None:
-            server_task = asyncio.create_task(server_mock())
-
-            await asyncio.gather(
-                server_task,
-                worker_connect(server_task)
-            )
-
-        try:
-            asyncio.run(test_main())
-        except asyncio.exceptions.CancelledError:
-            pass
+    async def asyncSetUp(self) -> None:
+        pass

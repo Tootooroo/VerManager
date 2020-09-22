@@ -24,7 +24,7 @@ import asyncio
 import typing
 from .virtualmachine import VirtualMachine
 from manager.basic.letter import receving, sending, HeartbeatLetter,\
-    CommandLetter
+    CommandLetter, PropLetter
 
 
 class VirtualServer(VirtualMachine):
@@ -52,8 +52,10 @@ class VirtualWorker(VirtualMachine):
 
     async def run(self) -> None:
         r, w = await asyncio.open_connection(self._host, self._port)
-        w.write(
-            HeartbeatLetter(self._ident, 0).toBytesWithLength())
+
+        await sending(w, PropLetter(self._ident, "1", "0", 0))
+        await sending(w, HeartbeatLetter(self._ident, 0))
+
         while True:
             await asyncio.sleep(10)
 
@@ -66,6 +68,8 @@ class VirtualWorker_Heartbeat_ACTIVE(VirtualMachine):
 
     async def run(self) -> None:
         r, w = await asyncio.open_connection(self._host, self._port)
+
+        await sending(w, PropLetter(self._ident, "1", "0", 1))
 
         while True:
             await sending(w, HeartbeatLetter(self._ident, self._hbCount))
@@ -137,6 +141,7 @@ class VirtualWorker_SendCommand(VirtualMachine):
     async def run(self) -> None:
         r, w = await asyncio.open_connection(self._host, self._port)
 
+        await sending(w, PropLetter(self._ident, "1", "0", 1))
         await sending(w, HeartbeatLetter(self._ident, 0))
         await sending(w, CommandLetter("Test", {}))
 

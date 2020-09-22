@@ -1,0 +1,63 @@
+# WorkerRoom Testcases
+
+import unittest
+import asyncio
+
+from manager.basic.letter import Letter, PropLetter, receving, \
+    CommandLetter, CmdResponseLetter, sending
+from manager.master.workerRoom import WorkerRoom
+from typing import Any, Optional, Tuple
+from manager.basic.info import Info
+from manager.basic.observer import Subject
+from manager.basic.stubs.virtualMachine import VirtualMachine
+
+
+class sInst:
+    def getModule(self, name: Any) -> Any:
+        return Info("./config_test.yaml")
+
+
+class VirtualWorker(VirtualMachine):
+
+    async def run(self) -> None:
+        r, w = await asyncio.open_connection(self._host, self._port)
+        propLetter = PropLetter(self._ident, "1", "0")
+        await sending(w, propLetter)
+
+        await asyncio.sleep(10)
+
+
+class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.wr = WorkerRoom("127.0.0.1", 30000, sInst())
+        self.v_wr1 = VirtualWorker("w1", "127.0.0.1", 30000)
+        self.v_wr2 = VirtualWorker("w2", "127.0.0.1", 30000)
+
+    async def test_WorkerRoom_Connect(self) -> None:
+        # Exercise
+        self.wr.start()
+        await asyncio.sleep(0.1)
+
+        self.v_wr1.start()
+        self.v_wr2.start()
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(self.wr.isExists("w1"))
+        self.assertTrue(self.wr.isExists("w2"))
+
+    async def test_WorkerRoom_ConnectDup(self) -> None:
+        pass
+
+    def test_WorkerRoom_Reconnect(self) -> None:
+        pass
+
+    def test_WorkerRoom_lisAddrUpdate(self) -> None:
+        pass
+
+    def test_WorkerRoom_LisLost(self) -> None:
+        pass
+
+    def test_WorkerRoom_WorkerLost(self) -> None:
+        pass

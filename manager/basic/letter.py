@@ -571,12 +571,12 @@ class ResponseLetter(Letter):
 
 class PropLetter(Letter):
 
-    def __init__(self, ident:  str, max:  str, proc:  str) -> None:
+    def __init__(self, ident: str, max: str, proc: str, role: int) -> None:
         Letter.__init__(
             self,
             Letter.PropertyNotify,
             {"ident":  ident},
-            {"MAX":  max, "PROC":  proc}
+            {"MAX":  max, "PROC":  proc, "role": str(role)}
         )
 
     @staticmethod
@@ -587,9 +587,10 @@ class PropLetter(Letter):
             return None
 
         return PropLetter(
-            ident = header['ident'],
-            max = content['MAX'],
-            proc = content['PROC']
+            ident=header['ident'],
+            max=content['MAX'],
+            proc=content['PROC'],
+            role=content['role']
         )
 
     def getIdent(self) -> str:
@@ -600,6 +601,9 @@ class PropLetter(Letter):
 
     def getProc(self) -> str:
         return self.getContent('PROC')
+
+    def getRole(self) -> int:
+        return int(self.getContent('role'))
 
 
 class BinaryLetter(Letter):

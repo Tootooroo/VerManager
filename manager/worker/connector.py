@@ -22,10 +22,11 @@
 
 import asyncio
 import typing
+import manager.worker.configs as cfg
 
 from manager.basic.mmanager import ModuleDaemon
-from manager.basic.util import delayExec
-from manager.basic.letter import receving, sending, HeartbeatLetter, Letter
+from manager.basic.letter import receving, sending, HeartbeatLetter, Letter,\
+    PropLetter
 
 
 class Link:
@@ -60,7 +61,6 @@ class Linker:
     def __init__(self) -> None:
         self._links = {}  # type: typing.Dict[str, Link]
         self._lis = {}  # type: typing.Dict[str, typing.Any]
-        self._manage_queue = asyncio.Queue(256)  # type: asyncio.Queue
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
         self._loop = asyncio.get_running_loop()
         self._hostname = ""
@@ -72,9 +72,25 @@ class Linker:
                        host: str = "",
                        port: int = 0) -> None:
 
+        assert(cfg.config is not None)
+
         reader, writer = await asyncio.open_connection(host, port)
 
-        await sending(writer, HeartbeatLetter(self._hostname, 0))
+        worker_ident = cfg.config.getConfig('WORKER_NAME')
+        max_proc_job = cfg.config.getConfig('MAX_PROC')
+        role = cfg.config.getConfig('ROLE')
+
+        try:
+            # Send Property LEtter
+            await sending(writer, PropLetter(
+                worker_ident, max_proc_job, '0', role))
+
+            # Send First heartbeat
+            await sending(writer, HeartbeatLetter(self._hostname, 0))
+        except (ConnectionError, BrokenPipeError):
+            writer.close()
+            return
+
         self._links[linkid] = Link(
             linkid, host, port, reader, writer, Link.ACTIVE)
 
@@ -100,20 +116,6 @@ class Linker:
     async def _active_link(self, reader: asyncio.StreamReader,
                            writer: asyncio.StreamWriter,
                            linkid: str) -> None:
-        # Link Init
-        try:
-            first_heart_beat = HeartbeatLetter(self._hostname, 0)
-            await sending(writer, first_heart_beat)
-
-            heartbeat = await receving(reader, timeout=3)
-        except Exception:
-            self._link_rebuild_helper(linkid)
-
-        if not isinstance(heartbeat, HeartbeatLetter):
-            del self._links[linkid]
-            return
-
-        await self._manage_queue.put(heartbeat)
 
         link = self._links[linkid]
 
@@ -130,7 +132,7 @@ class Linker:
                 break
 
             if isinstance(letter, HeartbeatLetter):
-                await self._manage_queue.put(letter)
+                await self.heartbeat_proc(letter)
             else:
                 if self.msg_callback is None:
                     raise LINK_MSG_CALLBACK_NOT_EXISTS()
@@ -159,12 +161,13 @@ class Linker:
                             writer: asyncio.StreamWriter) -> None:
         # Link init
         try:
-            first_heart_beat = await receving(reader, timeout=3)
+            propLetter = await receving(reader, timeout=3)
         except asyncio.exceptions.TimeoutError:
+            writer.close()
             return
 
-        if isinstance(first_heart_beat, HeartbeatLetter):
-            ident = first_heart_beat.getIdent()
+        if isinstance(propLetter, PropLetter):
+            ident = propLetter.getIdent()
             if ident in self._links:
                 return
 
@@ -173,9 +176,6 @@ class Linker:
         else:
             return
 
-        # Send the first heartbaeat to manage queue
-        await self._manage_queue.put(first_heart_beat)
-
         while True:
             try:
                 letter = await receving(reader)
@@ -183,7 +183,7 @@ class Linker:
                 del self._links[ident]
 
             if isinstance(letter, HeartbeatLetter):
-                await self._manage_queue.put(letter)
+                await self.heartbeat_proc(letter)
             else:
                 if self.msg_callback is None:
                     raise LINK_MSG_CALLBACK_NOT_EXISTS()
@@ -200,31 +200,26 @@ class Linker:
 
         await sending(link.writer, letter)
 
-    async def run(self) -> None:
-        while True:
-            heartbeat = await self._manage_queue.get()
-            if not isinstance(heartbeat, HeartbeatLetter):
-                return
+    async def heartbeat_proc(self, heartbeat: HeartbeatLetter) -> None:
+        if not isinstance(heartbeat, HeartbeatLetter):
+            return
 
-            ident = heartbeat.getIdent()
-            if ident not in self._links:
-                return
+        ident = heartbeat.getIdent()
+        if ident not in self._links:
+            return
 
-            link = self._links[ident]
-            seq = heartbeat.getSeq()
+        link = self._links[ident]
+        seq = heartbeat.getSeq()
 
-            if link.hbCount != seq:
-                return
-            else:
-                link.hbCount += 1
+        if link.hbCount != seq:
+            return
+        else:
+            link.hbCount += 1
 
-            if link.isActive:
-                self._loop.create_task(self._next_heartbeat(link, 2))
-            else:
-                await sending(link.writer, heartbeat)
-
-    def start(self) -> None:
-        self._loop.create_task(self.run())
+        if link.isActive:
+            self._loop.create_task(self._next_heartbeat(link, 2))
+        else:
+            await sending(link.writer, heartbeat)
 
     async def _next_heartbeat(self, link: Link, delay: int) -> None:
         await asyncio.sleep(delay)
@@ -265,7 +260,6 @@ class Connector(ModuleDaemon):
         # start otherwise another component is unable
         # to get letter from connector.
         assert(self._linker.msg_callback is not None)
-        self._linker.start()
 
         while True:
             letter = await self._letter_Q.get()

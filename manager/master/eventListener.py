@@ -120,7 +120,7 @@ class Entry:
             self.stop()
 
     async def eventProc(self) -> None:
-        event = await self._worker.waitResponse(timeout=2)  \
+        event = await self._worker.waitLetter(timeout=2)  \
             # type: Optional[CmdResponseLetter]
         if event is None:
             return None

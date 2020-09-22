@@ -24,7 +24,9 @@
 import asyncio
 import unittest
 import manager.worker.TestCases.misc.linker as misc
+import manager.worker.configs as cfg
 
+from manager.basic.info import Info
 from manager.worker.connector import Linker
 
 
@@ -32,6 +34,8 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         self.linker = Linker()
+        cfg.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
+                          "TestCases/misc/jobprocunit_config.yaml")
 
     async def test_Linker_NewLink_Connect(self) -> None:
         """
@@ -78,7 +82,6 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
             "Worker", "127.0.0.1", 8899)
 
         # Exercise
-        self.linker.start()
         await self.linker.new_listen("lis1", "127.0.0.1", 8899)
         await asyncio.sleep(0.1)
 
@@ -99,13 +102,12 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         vir_worker.start()
         await asyncio.sleep(3)
 
-        self.linker.start()
         self.linker._hostname = "abc"
         await self.linker.new_link("Worker", "127.0.0.1", 8810)
         await asyncio.sleep(0.1)
 
         # Verify
-        self.assertGreater(vir_worker._hbCount, 1)
+        self.assertGreater(vir_worker._hbCount, 0)
 
     async def test_Linker_Msg_Callback_Passive(self) -> None:
         """
@@ -118,7 +120,6 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         vir_worker = misc.VirtualWorker_SendCommand("Worker", "127.0.0.1", 8811)
 
         # Exercise
-        self.linker.start()
         await self.linker.new_listen("lis1", "127.0.0.1", 8811)
         await asyncio.sleep(0.1)
 
@@ -139,7 +140,6 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         vir_worker.start()
         await asyncio.sleep(0.1)
 
-        self.linker.start()
         self.linker._hostname = "Name"
         await self.linker.new_link("lid", "127.0.0.1", 9999)
         await asyncio.sleep(10)

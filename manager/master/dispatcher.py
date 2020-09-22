@@ -34,7 +34,6 @@ from manager.basic.observer import Subject, Observer
 from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.master.postElection import Role_Listener
 from manager.basic.info import Info, M_NAME as INFO_M_NAME
 from manager.basic.type import Error
 from manager.master.task import Task, SuperTask, SingleTask, \
