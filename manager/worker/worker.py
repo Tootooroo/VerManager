@@ -20,9 +20,72 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
+import manager.worker.configs as configs
+
+from typing import Callable
+from manager.basic.letter import Letter
+from manager.basic.info import Info
+from manager.worker.connector import Connector
+from manager.worker.processor import Processor
+from manager.worker.procUnit import JobProcUnit, PostProcUnit
+
+
 class Worker:
 
-    def __init__(self, ident: str, host: str = "", port: int = 0) -> None:
-        self._ident = ident
-        self._host = host
-        self._port = port
+    def __init__(self, cfg_path: str) -> None:
+        self.cfg = configs.config = Info(cfg_path)
+
+    def start(self) -> None:
+        asyncio.run(self.run())
+
+    async def run(self) -> None:
+        # Create Connector and Create Link
+        connector = Connector()
+
+        # Create Processor
+        processor = Processor()
+        processor.setup_output(connector)
+        connector.set_msg_callback(msg_callback_gen(processor.req))
+
+        # Create Link to Master
+        master_address = self.cfg.getConfig('MASTER_ADDRESS')
+        await connector.open_connection('Master', master_address['host'], master_address['port'])
+
+        # Create Link to Merger if exists.
+        merger_address = self.cfg.getConfig('MERGER_ADDRESS')
+        if merger_address != '':
+            await connector.listen("Poster", merger_address['host'],
+                                   merger_address['port'])
+            await connector.open_connection('Poster', merger_address['host'],
+                                            merger_address['port'])
+
+        # Create ProcUnits and
+        # Install ProcUnits into Processor
+        jobProcUnit = JobProcUnit("Job")
+        processor.install_unit(jobProcUnit)
+
+        # Setup dispatch
+        processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
+
+        # Setup ProcUnit for Merger
+        role = self.cfg.getConfig('ROLE')
+        if role == 'MERGER':
+            postProcUnit = PostProcUnit("Poster")
+            processor.install_unit(postProcUnit)
+
+            processor.set_type_dispatch_to_unit(Letter.BinaryFile, "Poster")
+            processor.set_type_dispatch_to_unit(Letter.Post, "Poster")
+
+        # Start Processor
+        processor.start()
+
+        # Block Forever
+        while True:
+            await asyncio.sleep(3600)
+
+
+def msg_callback_gen(f: Callable) -> Callable:
+    async def cb(letter: Letter):
+        f(letter)
+    return cb

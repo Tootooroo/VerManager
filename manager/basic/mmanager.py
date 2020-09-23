@@ -148,7 +148,7 @@ class MManager:
                 m.start()
 
     async def start_all(self) -> None:
-        for m in self._modules:
+        for m in self._modules.values():
             if isinstance(m, ModuleDaemon):
                 m.start()
 

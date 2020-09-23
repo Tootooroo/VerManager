@@ -179,7 +179,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return None
 
     def _dispatch_logging(self, msg: str) -> None:
-        self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
+        #self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
+        return
 
     # Dispatch a task to a worker of
     # all by overhead of workers
@@ -643,7 +644,7 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
 
 
 def theListener(workers: List[Worker]) -> List[Worker]:
-    return list(filter(lambda w: w.role == Role_Listener, workers))
+    return list(filter(lambda w: w._role == Worker.ROLE_MERGER, workers))
 
 
 condChooser = {

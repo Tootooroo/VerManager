@@ -23,9 +23,8 @@
 import asyncio
 import typing
 
-from manager.basic.letter import CommandLetter
+from manager.basic.letter import CommandLetter, Letter
 from manager.worker.procUnit import ProcUnit
-from manager.worker.proc_common import Output
 
 
 # Things that used by ProcUnitTestCases
@@ -65,4 +64,13 @@ async def logic_send_packet(unit: ProcUnit):
     if output is None:
         return
 
-    output.put_nowait(CommandLetter("Reply", {}))
+    await output.send(CommandLetter("Reply", {}), timeout=0)
+
+
+class Connector:
+
+    def __init__(self) -> None:
+        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+
+    async def sendLetter(self, letter: Letter, timeout=None) -> None:
+        await self.q.put(letter)

@@ -30,6 +30,7 @@ from manager.basic.letter import Letter, CommandLetter
 from manager.worker.processor_comps import Dispatcher, UnitMaintainer
 from manager.worker.proc_common import Channel, Output,\
     PROCESSOR_UNIT_ALREADY_EXISTS, ChannelReceiver
+from manager.worker.connector import Connector
 
 
 class Processor(ModuleDaemon):
@@ -54,8 +55,8 @@ class Processor(ModuleDaemon):
     async def cleanup(self) -> None:
         return None
 
-    def setup_output(self, q: asyncio.Queue) -> None:
-        self._output.setQueue(q)
+    def setup_output(self, conn: Connector) -> None:
+        self._output.setConnector(conn)
 
     def req(self, letter: Letter) -> None:
         self._reqQ.put_nowait(letter)
@@ -77,6 +78,13 @@ class Processor(ModuleDaemon):
 
         # Setup output space for unit
         unit.setOutput(self._output)
+
+    def set_type_dispatch_to_unit(self, type: str, uid: str) -> None:
+        if uid not in self._unit_container:
+            raise UNIT_NOT_FOUND(uid)
+
+        unit = self._unit_container[uid]
+        self._dispatcher.addUnit(type, unit)
 
     async def run(self) -> None:
 
@@ -134,5 +142,14 @@ class Processor(ModuleDaemon):
         process any jobs from master.
         """
         for unit in self._unit_container.values():
-            unit.reset()
+            await unit.reset()
         self._output.ready()
+
+
+class UNIT_NOT_FOUND(Exception):
+
+    def __init__(self, uid: str) -> None:
+        self._uid = uid
+
+    def __str__(self) -> str:
+        return "Unit " + self._uid + " is not found in Processor."

@@ -72,7 +72,6 @@ class Logger(ModuleDaemon, Observer):
         self.logTunnels = {}
 
     async def run(self) -> None:
-
         if self.logQueue is None:
             return None
 
@@ -87,9 +86,6 @@ class Logger(ModuleDaemon, Observer):
                 continue
 
             self._output(msgUnit)
-
-    async def stop(self) -> None:
-        self._stop = True
 
     async def stopDelay(self, timeout: Optional[int] = None) -> None:
         if timeout is not None:

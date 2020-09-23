@@ -68,9 +68,6 @@ class RevSync(ModuleDaemon):
     async def cleanup(self) -> None:
         return None
 
-    async def stop(self) -> None:
-        self._stop = True
-
     def needStop(self) -> bool:
         return self._stop
 

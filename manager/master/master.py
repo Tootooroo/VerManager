@@ -122,8 +122,8 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        revSyncner = RevSync(self)
-        self.addModule(revSyncner)
+        #revSyncner = RevSync(self)
+        #self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -154,6 +154,10 @@ class ServerInst(Thread):
             logger.handler_install(module, logger.listenTo)
 
         await self._mmanager.start_all()
+
+        # Block forever
+        while True:
+            await asyncio.sleep(3600)
 
     def run(self) -> None:
         # Start this server instance

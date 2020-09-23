@@ -122,7 +122,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         return False
 
     async def _WR_LOG(self, msg: str) -> None:
-        await self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
+        #await self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
+        return
 
     async def _accept_workers(self, r: asyncio.StreamReader,
                               w: asyncio.StreamWriter) -> None:
@@ -136,7 +137,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             w_ident = cast(PropLetter, propLetter).getIdent()
             role = cast(PropLetter, propLetter).getRole()
 
-            arrived_worker = Worker(w_ident, r, w, role)
+            if role == "MERGER":
+                role_v = Worker.ROLE_MERGER
+            else:
+                role_v = Worker.ROLE_NORMAL
+
+            arrived_worker = Worker(w_ident, r, w, role_v)
+
         except (ConnectionError, asyncio.exceptions.TimeoutError):
             w.close()
             return
@@ -179,7 +186,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                     #       new address via request.
                     self.broadcast(LisAddrUpdateCmd(new_address))
 
-            self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
+            await self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
 
             # Send an accept command to the worker
             # so it able to transfer message.
@@ -249,7 +256,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
     async def _waiting_worker_update(self) -> None:
         try:
-            (eventType, index) = await self._eventQueue.get_nowait()
+            (eventType, index) = self._eventQueue.get_nowait()
         except asyncio.QueueEmpty:
             return None
 
@@ -267,7 +274,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             worker.setState(Worker.STATE_WAITING)
             self.removeWorker(ident)
             self._workers_waiting[ident] = worker
-            self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
+            await self.notify(WorkerRoom.NOTIFY_IN_WAIT, worker)
 
     async def _waiting_worker_processing(
             self, workers: Dict[str, Worker]) -> None:
@@ -289,13 +296,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                                long time will be removed")
             worker.setState(Worker.STATE_OFFLINE)
 
-            self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
+            await self.notify(WorkerRoom.NOTIFY_DISCONN, worker)
             del self._workers_waiting[ident]
 
         self._lock.release()
 
     async def notifyEvent(self, eventType: EVENT_TYPE, ident: str) -> None:
-        self._eventQueue.put((eventType, ident))
+        await self._eventQueue.put((eventType, ident))
 
     def getWorker(self, ident: str) -> Optional[Worker]:
         if ident not in self._workers:

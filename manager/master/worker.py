@@ -165,7 +165,7 @@ class Worker:
     def numOfTaskProc(self) -> int:
         return self.inProcTask.numOfTasks()
 
-    async def isMerger(self) -> bool:
+    def isMerger(self) -> bool:
         return self._role == Worker.ROLE_MERGER
 
     async def control(self, cmd: Command) -> None:

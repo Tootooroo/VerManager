@@ -29,8 +29,6 @@ class VirtualWorker(VirtualMachine):
         propLetter = PropLetter(self._ident, "1", "0", Worker.ROLE_MERGER)
         await sending(w, propLetter)
 
-        await asyncio.sleep(10)
-
 
 class VirtualWorker_Reconnect(VirtualWorker):
 
@@ -50,8 +48,11 @@ class VirtualWorker_Lost(VirtualWorker):
         await VirtualWorker.run(self)
         # Disconnect
         self.w.close()
+        await self.q.put((WorkerRoom.EVENT_DISCONNECTED, self._ident))
 
-        self.q.put((WorkerRoom.EVENT_DISCONNECTED, self._ident))
+    def setq(self, q) -> None:
+        self.q = q
+
 
 class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
 
@@ -115,7 +116,9 @@ class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_WorkerRoom_WorkerLost(self) -> None:
         # Setup
         self.v_wr1 = VirtualWorker_Lost("w1", "127.0.0.1", 30000)
+        self.v_wr1.setq(self.wr._eventQueue)
         self.v_wr2 = VirtualWorker_Lost("w2", "127.0.0.1", 30000)
+        self.v_wr2.setq(self.wr._eventQueue)
 
         # Exercise
         self.wr.start()

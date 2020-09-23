@@ -1,5 +1,5 @@
 Address: "127.0.0.1"
-Port: 8024
+Port: 30000
 
 LogDir: ./log
 ResultDir: ./data

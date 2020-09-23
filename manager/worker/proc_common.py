@@ -24,6 +24,7 @@ import abc
 import asyncio
 import typing
 
+from manager.worker.connector import Connector
 from manager.basic.letter import Letter
 
 
@@ -38,6 +39,7 @@ class Output:
     STATE_STOP = 1
 
     def __init__(self) -> None:
+        self._connector = None  # type: typing.Optional[Connector]
         self._outputQ = None  # type: typing.Optional[asyncio.Queue]
         self._state = self.STATE_READY
 
@@ -53,38 +55,22 @@ class Output:
     def setState(self, state: int) -> None:
         self._state = state
 
-    def setQueue(self, q: asyncio.Queue) -> None:
-        self._outputQ = q
+    def setConnector(self, conn: Connector) -> None:
+        self._connector = conn
 
-    def put_nowait(self, letter: Letter) -> None:
-        assert(self._outputQ is not None)
-        self._outputQ.put_nowait(letter)
-
-    async def put(self, letter: Letter, timeout=None) -> None:
-        assert(self._outputQ is not None)
-        await asyncio.wait_for(
-            self._outputQ.put(letter), timeout=timeout)
-
-    def get_nowait(self) -> typing.Any:
-        assert(self._outputQ is not None)
-        if self.isReady():
-            return self._outputQ.get_nowait()
-        else:
-            raise PROCESSOR_OUTPUT_STOP()
-
-    async def get(self, timeout=None) -> Letter:
-        assert(self._outputQ is not None)
-        if self.isReady():
-            return await asyncio.wait_for(
-                self._outputQ.get(), timeout=timeout)
-        else:
-            raise PROCESSOR_OUTPUT_STOP()
+    async def send(self, letter: Letter, timeout=None) -> None:
+        assert(self._connector is not None)
+        await self._connector.sendLetter(letter, timeout=timeout)
 
     def isReady(self) -> bool:
         return self._state == self.STATE_READY
 
     def isStop(self) -> bool:
         return self._state == self.STATE_STOP
+
+    def link_state(self, linkid: str) -> int:
+        assert(self._connector is not None)
+        return self._connector.link_state(linkid)
 
 
 class ChannelEntry:

@@ -38,6 +38,7 @@ from manager.basic.util import packShellCommands, execute_shell,\
     pathSeperator
 from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
+from manager.worker.connector import Link
 
 # Need by PostProcUnit
 from manager.basic.letter import PostTaskLetter
@@ -188,7 +189,7 @@ class ProcUnit(abc.ABC):
     def _send(self, letter: Letter) -> None:
         if self._output_space is None:
             raise PROC_UNIT_NO_OUTPUT_SPACE(self._unitIdent)
-        self._output_space.put_nowait(letter)
+        self._output_space.send_nowait(letter)
 
 
 class PROC_UNIT_NO_OUTPUT_SPACE(Exception):
@@ -219,9 +220,22 @@ class PROC_UNIT_IS_IN_DENY_MODE(Exception):
 
 
 # Concrete ProcUnits
-async def job_result_transfer(path, tid: str, linkid: str,
-                              version: str, fileName: str,
+async def job_result_transfer(target: str, job: NewLetter,
                               send_rtn: Callable) -> None:
+    extra = job.getExtra()
+    tid = job.getTid()
+    result_path = extra['resultPath']
+    version = job.getContent('vsn')
+    fileName = result_path.split(pathSeperator())[-1]
+
+    await do_job_result_transfer(
+        result_path, tid, target, version, fileName,
+        send_rtn)
+
+
+async def do_job_result_transfer(path, tid: str, linkid: str,
+                                 version: str, fileName: str,
+                                 send_rtn: Callable) -> None:
 
     result_file = open(path, "rb")
     for line in result_file:
@@ -236,6 +250,37 @@ async def job_result_transfer(path, tid: str, linkid: str,
         tid=tid, bStr=b"", parent=version, fileName=fileName)
     end_bin.setHeader("linkid", linkid)
     await send_rtn(end_bin)
+
+
+async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLetter,
+                                         send_rtn: Callable, timeout=None) -> None:
+
+    # Wait until link rebuild or timeout
+    while output.link_state() != Link.CONNECTED:
+        await asyncio.sleep(1)
+        timeout = timeout - 1
+
+        if timeout < 0:
+            raise asyncio.exceptions.TimeoutError()
+
+    await job_result_transfer(linkid, job, send_rtn)
+
+
+async def job_result_transfer_check_link_forever(
+        output: Output, linkid: str, job: NewLetter,
+        send_rtn: Callable, timeout=None) -> None:
+
+    try:
+        await job_result_transfer_check_link(output, linkid, job,
+                                             send_rtn, timeout=timeout)
+    except (ConnectionError, BrokenPipeError):
+        asyncio.get_running_loop().create_task(
+            job_result_transfer_check_link_forever(
+                output, linkid, job, send_rtn)
+        )
+
+    except asyncio.exceptions.TimeoutError:
+        return
 
 
 class JobProcUnit(ProcUnit):
@@ -309,9 +354,28 @@ class JobProcUnit(ProcUnit):
         # if the job need a post-processing then send
         # to Poster as a PostProvider otherwise to Master.
         if needPost == 'True':
-            await self._job_result_transfer("Poster", job)
+            linkid = "Poster"
         else:
-            await self._job_result_transfer("Master", job)
+            linkid = "Master"
+
+        try:
+            await self._job_result_transfer(linkid, job)
+        except Exception:
+            # fixme: Job is not be cleanup in this situation.
+
+            # Create task that will resend letter
+            # if link with master is rebuild.
+            # If timeout then the job on this worker
+            # is treat as unavailable job just drop it.
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                job_result_transfer_check_link_forever(
+                    self._output_space, linkid, job,
+                    self._output_space.send,  # type: ignore
+                    timeout=10)
+            )
+
+            return
 
         # Cleanup
         shutil.rmtree(projName)
@@ -320,19 +384,11 @@ class JobProcUnit(ProcUnit):
                                    job: NewLetter) -> None:
 
         assert(self._output_space is not None)
-        extra = job.getExtra()
-        tid = job.getTid()
-        result_path = extra['resultPath']
-        version = job.getContent('vsn')
-        fileName = result_path.split(pathSeperator())[-1]
-
-        await job_result_transfer(
-            result_path, tid, target, version, fileName,
-            self._output_space.put)
+        await job_result_transfer(target, job, self._output_space.send)
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         assert(self._config is not None)
-        await self._output_space.put(  # type: ignore
+        await self._output_space.send(  # type: ignore
             ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state))
 
     async def run(self) -> None:
@@ -473,9 +529,9 @@ class PostProcUnit(ProcUnit):
 
         if path != '':
             fileName = path.split(pathSeperator())[-1]
-            await job_result_transfer(
+            await do_job_result_transfer(
                 path, post.ident(), "Master", post.version(),
-                fileName, self._output_space.put)  # type: ignore
+                fileName, self._output_space.send)  # type: ignore
 
         # Cleanup
         post.cleanup()

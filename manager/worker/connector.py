@@ -24,7 +24,6 @@ import asyncio
 import typing
 import manager.worker.configs as cfg
 
-from manager.basic.mmanager import ModuleDaemon
 from manager.basic.letter import receving, sending, HeartbeatLetter, Letter,\
     PropLetter
 
@@ -203,7 +202,7 @@ class Linker:
     async def heartbeat_proc(self, heartbeat: HeartbeatLetter) -> None:
         if not isinstance(heartbeat, HeartbeatLetter):
             return
-
+        print(heartbeat)
         ident = heartbeat.getIdent()
         if ident not in self._links:
             return
@@ -227,24 +226,24 @@ class Linker:
         hb = HeartbeatLetter(self._hostname, link.hbCount)
         await sending(link.writer, hb)
 
+    def link_state(self, linkid: str) -> int:
+        try:
+            return self._links[linkid].state
+        except KeyError:
+            return Link.REMOVED
 
-class Connector(ModuleDaemon):
+
+class Connector:
 
     def __init__(self) -> None:
         self._linker = Linker()
         self._letter_Q = asyncio.Queue(128)  # type: asyncio.Queue[Letter]
 
-    async def begin(self) -> None:
-        return
+    async def listen(self, lisId: str, host: str, port: int) -> None:
+        await self._linker.new_listen(lisId, host, port)
 
-    async def cleanup(self) -> None:
-        return
-
-    def listen(self, lisId: str, host: str, port: int) -> None:
-        self._linker.new_listen(lisId, host, port)
-
-    def open_connection(self, linkId, host: str, port: int) -> None:
-        self._linker.new_link(linkId, host, port)
+    async def open_connection(self, linkId, host: str, port: int) -> None:
+        await self._linker.new_link(linkId, host, port)
 
     def close(self, linkId: str) -> None:
         self._linker.delete_link(linkId)
@@ -255,23 +254,16 @@ class Connector(ModuleDaemon):
     def queue(self) -> typing.Optional[asyncio.Queue]:
         return self._letter_Q
 
-    async def run(self) -> None:
-        # msg_callback of linker must be setup before
-        # start otherwise another component is unable
-        # to get letter from connector.
-        assert(self._linker.msg_callback is not None)
+    async def sendLetter(self, letter: Letter, timeout=None) -> None:
+        linkid = letter.getHeader('linkid')
+        if linkid == "":
+            raise LINK_ID_NOT_FOUND()
 
-        while True:
-            letter = await self._letter_Q.get()
-            linkid = letter.getHeader('linkid')
-            if linkid == "":
-                raise LINK_ID_NOT_FOUND()
+        await asyncio.wait_for(
+            self._linker.sendLetter(linkid, letter), timeout=timeout)
 
-            try:
-                await self._linker.sendLetter(linkid, letter)
-            except LINK_NOT_EXISTS:
-                continue
-
+    def link_state(self, linkid: str) -> int:
+        return self._linker.link_state(linkid)
 
 class LINK_ID_NOT_FOUND(Exception):
 

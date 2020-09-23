@@ -143,7 +143,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
     async def test_ProcUnit_Output(self) -> None:
         # Setup
         output = Output()
-        output.setQueue(asyncio.Queue(10))
+        output.setConnector(misc.Connector())
         self.pu.procLogic = misc.logic_send_packet
         self.pu.setOutput(output)
 
@@ -154,7 +154,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         try:
-            letter = self.pu._output_space.get_nowait()  # type: ignore
+            letter = self.pu._output_space._connector.q.get_nowait()  # type: ignore
             type = letter.getType()
 
             success = True

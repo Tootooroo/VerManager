@@ -94,7 +94,7 @@ class Entry:
 
     async def _heartbeatProc(self, hbEvent: HeartbeatLetter) -> None:
         seq = hbEvent.getSeq()
-
+        print(hbEvent)
         if seq != self._hbCount:
             return None
 
@@ -118,10 +118,15 @@ class Entry:
             eventL.remove(ident)
             eventL.removeEntry(ident)
             self.stop()
+            print("stop")
 
     async def eventProc(self) -> None:
-        event = await self._worker.waitLetter(timeout=2)  \
-            # type: Optional[CmdResponseLetter]
+        try:
+            event = await self._worker.waitLetter(timeout=2)  \
+                # type: Optional[CmdResponseLetter]
+        except (ConnectionError, asyncio.exceptions.TimeoutError):
+            return
+
         if event is None:
             return None
 
@@ -186,9 +191,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
     async def cleanup(self) -> None:
         return None
-
-    async def stop(self) -> None:
-        self._stop = True
 
     async def _doStop(self) -> None:
         for ident in self._entries:
