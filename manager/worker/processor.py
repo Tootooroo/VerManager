@@ -101,7 +101,7 @@ class Processor(ModuleDaemon):
             else:
                 # If not a CommandLetter then dispatch to
                 # ProcUnit
-                self._dispatcher.dispatch(letter)
+                await self._dispatcher.dispatch(letter)
 
     def register(self, uid: str, comp: ChannelReceiver) -> None:
         if self._channel.isChannelExists(uid):

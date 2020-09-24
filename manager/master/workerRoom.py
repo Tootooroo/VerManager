@@ -163,28 +163,14 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             workerInWait = self._workers_waiting[w_ident]
             workerInWait.setStream(arrived_worker.getStream())
 
-            old_address = workerInWait.getAddress()
-            new_address = arrived_worker.getAddress()
-
             # Note: Need to setup worker's status before listener
             #       address update otherwise
             #       listener itself will unable
             #       to know address changed.
-            workerInWait.setAddress(new_address)
             workerInWait.setState(Worker.STATE_ONLINE)
 
             self.addWorker(workerInWait)
             del self._workers_waiting[w_ident]
-
-            if workerInWait.isMerger():
-                if new_address != old_address:
-                    # Broadcast command to all workers that online.
-                    #
-                    # Note: This update command will only broadcast
-                    #       to workers that in online state. These
-                    #       worker that in waiting state can acquire
-                    #       new address via request.
-                    self.broadcast(LisAddrUpdateCmd(new_address))
 
             await self.notify(WorkerRoom.NOTIFY_CONN, workerInWait)
 
@@ -208,12 +194,9 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         await self.notify(WorkerRoom.NOTIFY_CONN, arrived_worker)
 
     async def run(self) -> None:
-        server = await asyncio.start_server(self._accept_workers,
-                                            self._host, self._port)
-        await asyncio.gather(
-            server.serve_forever(),
-            self._maintain()
-        )
+        server = await asyncio.start_server(
+            self._accept_workers, self._host, self._port)
+        await asyncio.gather(server.serve_forever(), self._maintain())
 
     def isStable(self) -> bool:
         diff = (datetime.utcnow() - self._lastChangedPoint).seconds
@@ -267,8 +250,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         ident = worker.getIdent()
 
         if eventType == WorkerRoom.EVENT_DISCONNECTED:
-            await self._WR_LOG("Worker " + ident +
-                               " is disconnected changed state into Waiting")
+            await self._WR_LOG(
+                "Worker " + ident + " is in waiting state")
 
             # Update worker's counter
             worker.setState(Worker.STATE_WAITING)

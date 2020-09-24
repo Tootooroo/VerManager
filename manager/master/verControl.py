@@ -24,6 +24,7 @@
 #
 # This module define a object that deal with Revisions
 
+import asyncio
 import unittest
 import django.db.utils
 from typing import Any, Optional, Dict
@@ -51,7 +52,7 @@ class RevSync(ModuleDaemon):
     # repository after RevSync started and RevSync will
     # put such revision into model so the revision database
     # will remain updated
-    revQueue = queue.Queue(maxsize=10)  # type: queue.Queue
+    revQueue = asyncio.Queue(10)  # type: asyncio.Queue
 
     def __init__(self, sInst: Any) -> None:
         global M_NAME
@@ -144,7 +145,8 @@ class RevSync(ModuleDaemon):
 
     @staticmethod
     def revNewPush(rev: HttpRequest) -> bool:
-        RevSync.revQueue.put(rev, block=True, timeout=None)
+        loop = asyncio.get_running_loop()
+        loop.create_task(RevSync.revQueue.put(rev))
         return True
 
     def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
@@ -201,6 +203,7 @@ class RevSync(ModuleDaemon):
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
     async def run(self) -> None:
+        import pdb; pdb.set_trace()
 
         if self.connectToGitlab() is Error:
             return None
@@ -213,7 +216,7 @@ class RevSync(ModuleDaemon):
             if self._stop is True:
                 return None
 
-            request = RevSync.revQueue.get(block=True, timeout=None)
+            request = await RevSync.revQueue.get()
 
             self._requestHandle(request)
 

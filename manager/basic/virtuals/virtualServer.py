@@ -24,8 +24,10 @@ import abc
 import asyncio
 import typing
 
+from manager.basic.stubs.virtualMachine import VirtualMachine
 
-class VirtualServer(abc.ABC):
+
+class VirtualServer(VirtualMachine):
 
     def __init__(self, ident: str, addr: str, port: int) -> None:
         self._ident = ident
@@ -40,17 +42,9 @@ class VirtualServer(abc.ABC):
             w: asyncio.StreamWriter) -> None:
         """ Callback of start_server """
 
-    async def start(self) -> None:
+    async def run(self) -> None:
         server = await asyncio.start_server(
             self.conn_callback, self._addr, self._port)
 
-        self._coro = server.serve_forever()
-        try:
-            await self._coro
-        except Exception:
-            pass
-
-    async def stop(self) -> None:
-        if self._coro is not None:
-            self._coro.throw(
-                asyncio.exceptions.CancelledError)
+        async with server:
+            await server.serve_forever()

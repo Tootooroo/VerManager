@@ -114,6 +114,18 @@ def execute_shell(command: str) -> Optional[subprocess.Popen]:
         return None
 
 
+async def execute_shell_until_complete(command: str) -> int:
+    try:
+        ref = subprocess.Popen(command, shell=True)
+    except FileNotFoundError:
+        return -1
+
+    while True:
+        try:
+            ret_code = ref.wait(timeout=0)
+        except subprocess.TimeoutExpired:
+            await asyncio.sleep(1)
+
 # If shell command is not executed success then return None
 # otherwise return returncode of the shell command.
 def execute_shell_command(command: str) -> Optional[int]:

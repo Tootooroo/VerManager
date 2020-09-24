@@ -20,10 +20,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 import asyncio
 import typing
 import manager.worker.configs as cfg
 
+from datetime import datetime
 from manager.basic.letter import receving, sending, HeartbeatLetter, Letter,\
     PropLetter
 
@@ -50,9 +52,15 @@ class Link:
         self.hbCount = 0
         self.isActive = isActive
         self.state = Link.CONNECTED
-
+        self.last = datetime.utcnow()
         self.host = host
         self.port = port
+
+    def hb_timeer_udpate(self) -> None:
+        self.last = datetime.utcnow()
+
+    def hb_timer_diff(self) -> int:
+        return (datetime.utcnow() - self.last).seconds
 
 
 class Linker:
@@ -62,7 +70,9 @@ class Linker:
         self._lis = {}  # type: typing.Dict[str, typing.Any]
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
         self._loop = asyncio.get_running_loop()
-        self._hostname = ""
+
+        assert(cfg.config is not None)
+        self._hostname = cfg.config.getConfig('WORKER_NAME')
 
     def set_host_name(self, name: str) -> None:
         self._hostname = name
@@ -71,24 +81,7 @@ class Linker:
                        host: str = "",
                        port: int = 0) -> None:
 
-        assert(cfg.config is not None)
-
         reader, writer = await asyncio.open_connection(host, port)
-
-        worker_ident = cfg.config.getConfig('WORKER_NAME')
-        max_proc_job = cfg.config.getConfig('MAX_PROC')
-        role = cfg.config.getConfig('ROLE')
-
-        try:
-            # Send Property LEtter
-            await sending(writer, PropLetter(
-                worker_ident, max_proc_job, '0', role))
-
-            # Send First heartbeat
-            await sending(writer, HeartbeatLetter(self._hostname, 0))
-        except (ConnectionError, BrokenPipeError):
-            writer.close()
-            return
 
         self._links[linkid] = Link(
             linkid, host, port, reader, writer, Link.ACTIVE)
@@ -106,6 +99,7 @@ class Linker:
                 link.state = Link.DISCONNECTED
                 await asyncio.sleep(1)
 
+        link.hbCount = 0
         link.reader = reader
         link.writer = writer
         link.state = Link.CONNECTED
@@ -116,7 +110,30 @@ class Linker:
                            writer: asyncio.StreamWriter,
                            linkid: str) -> None:
 
+        assert(cfg.config is not None)
+
         link = self._links[linkid]
+
+        # Link Init
+        max_proc_job = cfg.config.getConfig('MAX_PROC')
+        role = cfg.config.getConfig('ROLE')
+
+        try:
+            # Send Property LEtter
+            await sending(writer, PropLetter(
+                self._hostname, max_proc_job, '0', role))
+
+            # Send First heartbeat
+            await sending(writer, HeartbeatLetter(self._hostname, 0))
+            # Update timer
+            link.hb_timeer_udpate()
+
+        except (ConnectionError, BrokenPipeError):
+            # Wait a while
+            await asyncio.sleep(1)
+            self._link_rebuild_helper(linkid)
+            # Exit
+            return
 
         while True:
 
@@ -125,10 +142,17 @@ class Linker:
                 break
 
             try:
-                letter = await receving(reader)
+                letter = await receving(reader, timeout=3)
+                if self._heartbeat_check(link) is False:
+                    raise ConnectionError()
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
+                # Wait a while
+                await asyncio.sleep(1)
                 self._link_rebuild_helper(linkid)
-                break
+                # Exit
+                return
+            except asyncio.exceptions.TimeoutError:
+                continue
 
             if isinstance(letter, HeartbeatLetter):
                 await self.heartbeat_proc(letter)
@@ -139,6 +163,7 @@ class Linker:
 
     def _link_rebuild_helper(self, linkid: str) -> None:
         link = self._links[linkid]
+        link.writer.close()
         link.state = Link.RECONNECTING
 
         self._loop.create_task(self.rebuild_link(link))
@@ -202,7 +227,7 @@ class Linker:
     async def heartbeat_proc(self, heartbeat: HeartbeatLetter) -> None:
         if not isinstance(heartbeat, HeartbeatLetter):
             return
-        print(heartbeat)
+
         ident = heartbeat.getIdent()
         if ident not in self._links:
             return
@@ -224,7 +249,17 @@ class Linker:
         await asyncio.sleep(delay)
 
         hb = HeartbeatLetter(self._hostname, link.hbCount)
-        await sending(link.writer, hb)
+        try:
+            await sending(link.writer, hb)
+            link.hb_timeer_udpate()
+        except ConnectionError:
+            # Just return that link
+            # will be rebuild while timer
+            # timeout in wrost situation.
+            return
+
+    def _heartbeat_check(self, link: Link) -> bool:
+        return link.hb_timer_diff() < 4
 
     def link_state(self, linkid: str) -> int:
         try:
@@ -264,6 +299,7 @@ class Connector:
 
     def link_state(self, linkid: str) -> int:
         return self._linker.link_state(linkid)
+
 
 class LINK_ID_NOT_FOUND(Exception):
 

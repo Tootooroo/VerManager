@@ -46,3 +46,4 @@ from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
 #    JobProcUnitTestCases, PostProcUnitTestCases
 #from manager.worker.TestCases.processorTestCases import ProcessorTestCases
 #from manager.worker.TestCases.connectorTestCases import LinkerTestCases
+from manager.worker.TestCases.workerTestCases import WorkerTestCases

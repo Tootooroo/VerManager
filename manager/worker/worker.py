@@ -39,6 +39,9 @@ class Worker:
     def start(self) -> None:
         asyncio.run(self.run())
 
+    def start_nowait(self) -> None:
+        asyncio.get_running_loop().create_task(self.run())
+
     async def run(self) -> None:
         # Create Connector and Create Link
         connector = Connector()

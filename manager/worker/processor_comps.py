@@ -41,16 +41,16 @@ class Dispatcher:
             return None
         self._units[type] = unit
 
-    def dispatch(self, cl: Letter) -> None:
-        type = cl.__name__  # type: ignore
+    async def dispatch(self, cl: Letter) -> None:
+        type_ = cl.typeOfLetter()  # type: ignore
 
-        if type not in self._units:
-            raise PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE(type)
+        if type_ not in self._units:
+            raise PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE(type_)
 
         # These two exception will be dealt by UnitMaintainer.
         # Dispatcher is focus on work of dispatch.
         try:
-            self._units[type].proc(cl)
+            await self._units[type_].proc(cl)
         except (PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE):
             pass
 

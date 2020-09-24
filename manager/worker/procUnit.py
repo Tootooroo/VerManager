@@ -35,7 +35,7 @@ import os
 import subprocess
 import shutil
 from manager.basic.util import packShellCommands, execute_shell,\
-    pathSeperator
+    pathSeperator, execute_shell_until_complete
 from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
 from manager.worker.connector import Link
@@ -339,16 +339,20 @@ class JobProcUnit(ProcUnit):
 
         # Wait for the job
         while True:
-            ret_code = job_ref.wait()
+            # Prevent stuck from call of wait
+            try:
+                ret_code = job_ref.wait(timeout=0)
+                break
+            except subprocess.TimeoutExpired:
+                await asyncio.sleep(1)
 
-            # Error code handle
-            if ret_code != 0:
-                if ret_code != 128:
-                    await self._notify_job_state(
-                        tid, Letter.RESPONSE_STATE_FAILURE)
-                break
-            else:
-                break
+        # Error code handle
+        if ret_code != 0:
+
+            if ret_code != 128:
+                await self._notify_job_state(
+                    tid, Letter.RESPONSE_STATE_FAILURE)
+                return
 
         # Transfer job result to Target destination
         # if the job need a post-processing then send
@@ -377,6 +381,8 @@ class JobProcUnit(ProcUnit):
 
             return
 
+        await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
+
         # Cleanup
         shutil.rmtree(projName)
 
@@ -388,8 +394,9 @@ class JobProcUnit(ProcUnit):
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         assert(self._config is not None)
-        await self._output_space.send(  # type: ignore
-            ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state))
+        response = ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state)
+        response.setHeader('linkid', 'Master')
+        await self._output_space.send(response)  # type: ignore
 
     async def run(self) -> None:
 
@@ -445,7 +452,7 @@ class Post:
         cmd_str = packShellCommands(self._cmd)
 
         try:
-            os.system(cmd_str)
+            await execute_shell_until_complete(cmd_str)
         except Exception:
             return ""
 

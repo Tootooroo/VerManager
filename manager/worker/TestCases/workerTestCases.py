@@ -24,13 +24,86 @@ import asyncio
 import unittest
 import typing
 
+from manager.basic.letter import sending, receving, HeartbeatLetter, \
+    PropLetter, ResponseLetter, BinaryLetter, NewLetter, Letter
 from manager.worker.worker import Worker
+from manager.basic.virtuals.virtualServer import VirtualServer
+
+
+class VirtualServer_Minimal(VirtualServer):
+
+    async def sendToWorker(self, letter: Letter) -> None:
+        await sending(self.w, letter)
+
+    async def conn_callback(self,
+                            r: asyncio.StreamReader,
+                            w: asyncio.StreamWriter) -> None:
+        """ HeartBeat """
+        self._propc = 0
+        self._hbc = 0
+        self._responsec = 0
+        self._binc = 0
+
+        self.r = r
+        self.w = w
+
+        while True:
+            letter = await receving(r)
+
+            if isinstance(letter, PropLetter):
+                self._propc += 1
+
+            if isinstance(letter, HeartbeatLetter):
+                letter.setHeader('ident', 'Master')
+                await sending(w, letter)
+                self._hbc += 1
+
+            if isinstance(letter, ResponseLetter):
+                self._responsec += 1
+
+            if isinstance(letter, BinaryLetter):
+                self._binc += 1
 
 
 class WorkerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.sut = Worker("Worker")
+        self.sut = Worker("./manager/worker/config.yaml")
 
+    @unittest.skip("")
     async def test_Worker_Connect(self, ) -> None:
-        pass
+        # Setup
+        vir_server = VirtualServer_Minimal("Master", "127.0.0.1", 30000)
+
+        # Exercise
+        vir_server.start()
+        await asyncio.sleep(0.1)
+
+        self.sut.start_nowait()
+        await asyncio.sleep(3)
+
+        # Verify
+        self.assertEqual(vir_server._propc, 1)
+        self.assertGreater(vir_server._hbc, 0)
+
+    async def test_worker_DoTask(self) -> None:
+        # Setup
+        vir_server = VirtualServer_Minimal("Master", "127.0.0.1", 30000)
+
+        # Exercise
+        vir_server.start()
+        await asyncio.sleep(0.1)
+
+        self.sut.start_nowait()
+        await asyncio.sleep(0.1)
+
+        # Send Task
+        job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["echo Doing...", "echo job > job_result"],
+                         'resultPath': "./job_result"})
+        await vir_server.sendToWorker(job)
+        await asyncio.sleep(10)
+
+        # verify
+        self.assertEqual(vir_server._responsec, 2)
+        self.assertEqual(vir_server._binc, 2)
