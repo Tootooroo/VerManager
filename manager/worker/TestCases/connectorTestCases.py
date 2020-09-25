@@ -33,9 +33,9 @@ from manager.worker.connector import Linker
 class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.linker = Linker()
         cfg.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
                           "TestCases/misc/jobprocunit_config.yaml")
+        self.linker = Linker()
 
     async def test_Linker_NewLink_Connect(self) -> None:
         """
