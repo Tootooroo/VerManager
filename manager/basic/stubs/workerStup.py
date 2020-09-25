@@ -50,8 +50,10 @@ class WorkerStub(Worker):
     def __init__(self, ident) -> None:
         Worker.__init__(
             self,
+            ident,
             StreamReaderDummy(),
-            StreamWriterDummy()
+            StreamWriterDummy(),
+            0
         )
         self.ident = ident
 

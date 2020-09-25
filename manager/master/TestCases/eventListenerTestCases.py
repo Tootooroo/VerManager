@@ -25,8 +25,7 @@ import asyncio
 
 from typing import Optional, cast
 from manager.basic.stubs.workerStup import WorkerStub
-from manager.basic.letter \
-    import Letter, HeartbeatLetter, CmdResponseLetter, BinaryLetter
+from manager.basic.letter import Letter, HeartbeatLetter, CmdResponseLetter
 from manager.master.eventListener import Entry, EventListener
 from manager.basic.commands import Command
 
@@ -36,14 +35,14 @@ class WorkerStubEntry(WorkerStub):
 
     def __init__(self, ident) -> None:
         WorkerStub.__init__(self, ident)
-        self.q = None  # type: Optional[asyncio.Queue]
+        self.q = asyncio.Queue(10)  # type: asyncio.Queue
 
     async def sendEvent(self, letter: Letter) -> None:
         if self.q is None:
             return None
         await self.q.put(letter)
 
-    async def waitResponse(self, timeout=None) -> Optional[Letter]:
+    async def waitLetter(self, timeout=None) -> Optional[Letter]:
         if self.q is None:
             return None
 
@@ -57,7 +56,7 @@ class WorkerMockEntry(WorkerStubEntry):
 
     def __init__(self, ident) -> None:
         WorkerStubEntry.__init__(self, ident)
-        self.rq = None  # type: Optional[asyncio.Queue]
+        self.rq = asyncio.Queue(10)  # type: asyncio.Queue
 
     async def sendLetter(self, letter: Letter) -> None:
         await self.rq.put(letter)  # type: ignore
@@ -77,13 +76,13 @@ class WorkerMockEntry(WorkerStubEntry):
         assert(letter.getIdent() == 'Master')
 
 
-class EntryTestCases(unittest.TestCase):
+class EntryTestCases(unittest.IsolatedAsyncioTestCase):
 
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
         env = Entry.EntryEnv(None, {})  # type: Entry.EntryEnv
         self.entry = Entry("Entry", WorkerStubEntry("w1"), env)
 
-    def test_Entry_Exists(self) -> None:
+    async def test_Entry_Exists(self) -> None:
         # Setup
         def handler1(e, letter):
             return None
@@ -95,7 +94,7 @@ class EntryTestCases(unittest.TestCase):
         # Exercise and verify
         self.assertTrue("H" in self.entry._env.handlers)
 
-    def test_Entry_addHandler(self) -> None:
+    async def test_Entry_addHandler(self) -> None:
         # Setup
         def handler(e, letter):
             return None
@@ -107,7 +106,7 @@ class EntryTestCases(unittest.TestCase):
         self.assertTrue(self.entry.isEventExists("H"))
         self.assertEqual(handler, self.entry.getHandler("H"))
 
-    def test_Entry_removeHandler(self) -> None:
+    async def test_Entry_removeHandler(self) -> None:
         # Setup
         def handler(e, letter):
             return None
@@ -119,37 +118,27 @@ class EntryTestCases(unittest.TestCase):
         # Verify
         self.assertTrue(not self.entry.isEventExists("H"))
 
-    def test_Entry_EventHandle(self) -> None:
+    async def test_Entry_EventHandle(self) -> None:
         # Setup
         eventProced = False
-
-        async def sendEvent(worker: WorkerStubEntry):
-            event = CmdResponseLetter(
-                "w1", "EVENT",
-                CmdResponseLetter.STATE_FAILED, {}
-            )
-            await worker.sendEvent(event)
-
-            await asyncio.sleep(1)
-            self.entry.stop()
 
         def handler(e, letter):
             nonlocal eventProced
             eventProced = True
-
         self.entry.addHandler("EVENT", handler)
+        self.entry.start()
+        await asyncio.sleep(0.1)
 
         # Exercise
-        async def doTest() -> None:
-            worker = cast(WorkerStubEntry, self.entry.getWorker())
-            worker.q = asyncio.Queue(10)
+        worker = cast(WorkerStubEntry, self.entry.getWorker())
+        event = CmdResponseLetter(
+            "w1", "EVENT",
+            CmdResponseLetter.STATE_FAILED, {}
+        )
+        await worker.sendEvent(event)
 
-            await asyncio.gather(
-                sendEvent(self.entry.getWorker()),  # type: ignore
-                self.entry.monitor()
-            )
-
-        asyncio.run(doTest())
+        await asyncio.sleep(1)
+        self.entry.stop()
 
         # Verify
         self.assertTrue(eventProced)
@@ -187,7 +176,7 @@ class EntryTestCases(unittest.TestCase):
 class WorkerMockHeartBeat(WorkerStub):
     def __init__(self, ident: str) -> None:
         WorkerStub.__init__(self, ident)
-        self.q = None   # type: Optional[asyncio.Queue]
+        self.q = asyncio.Queue(10)   # type: asyncio.Queue
 
     async def control(self, cmd: Command) -> None:
         pass
@@ -199,14 +188,12 @@ class WorkerMockHeartBeat(WorkerStub):
         pass
 
 
-class EventListenerTestCases(unittest.TestCase):
+class EventListenerTestCases(unittest.IsolatedAsyncioTestCase):
 
-    def setUp(self) -> None:
-        async def doSetUp() -> None:
-            self.eventL = EventListener(None)
-        asyncio.run(doSetUp())
+    async def asyncSetUp(self) -> None:
+        self.eventL = EventListener(None)
 
-    def test_EventListener_register(self) -> None:
+    async def test_EventListener_register(self) -> None:
         # Exercise
         w1 = WorkerStub("w1")
         self.eventL.register(w1)
@@ -215,7 +202,7 @@ class EventListenerTestCases(unittest.TestCase):
         regWorkers = self.eventL.registered()
         self.assertTrue(w1 in regWorkers)
 
-    def test_EventListener_remove(self) -> None:
+    async def test_EventListener_remove(self) -> None:
         # Setup
         w1 = WorkerStub("w1")
         w2 = WorkerStub("w2")
@@ -230,24 +217,21 @@ class EventListenerTestCases(unittest.TestCase):
         self.assertTrue(w1 not in regWorkers)
         self.assertTrue(w2 in regWorkers)
 
-    def test_EventListener_WorkerLost(self) -> None:
+    async def test_EventListener_WorkerLost(self) -> None:
+        """
+        Worker do nothing so it should be marked
+        as a offline worker so entry will be removed
+        from eventlistener then notify another components
+        a worker is lost.
+        """
+
         # Setup
         worker = WorkerMockEntry("w1")
 
         # Exercise
-        async def stopEventL() -> None:
-            await asyncio.sleep(5)
-            await self.eventL.stop()
-
-        async def doTest() -> None:
-            worker.q = asyncio.Queue(10)
-            worker.rq = asyncio.Queue(10)
-            self.eventL._regWorkerQ = asyncio.Queue(25)
-            await self.eventL._regWorkerQ.put(worker)
-
-            await asyncio.gather(self.eventL.run(), stopEventL())
-
-        asyncio.run(doTest())
+        await self.eventL._regWorkerQ.put(worker)
+        self.eventL.start()
+        await asyncio.sleep(4)
 
         # Verify
         self.assertEqual(0, len(self.eventL._entries))

@@ -11,6 +11,7 @@ from typing import Any, Optional, Tuple
 from manager.basic.info import Info
 from manager.basic.observer import Subject
 from manager.basic.stubs.virtualMachine import VirtualMachine
+from manager.basic.observer import Observer
 
 
 class sInst:
@@ -26,8 +27,25 @@ class VirtualWorker(VirtualMachine):
         self.r = r
         self.w = w
 
-        propLetter = PropLetter(self._ident, "1", "0", Worker.ROLE_MERGER)
+        propLetter = PropLetter(self._ident, "1", "0", "Merger")
         await sending(w, propLetter)
+
+
+class WaitMessgComp(Observer):
+
+    def __init__(self) -> None:
+        Observer.__init__(self)
+        self.conn_msg_count = 0
+        self.wait_msg_count = 0
+        self.remove_msg_count = 0
+
+    async def msg_cb(self, worker: Worker) -> None:
+        if worker.isOnline():
+            self.conn_msg_count += 1
+        elif worker.isWaiting():
+            self.wait_msg_count += 1
+        elif worker.isOffline():
+            self.remove_msg_count += 1
 
 
 class VirtualWorker_Reconnect(VirtualWorker):
@@ -120,6 +138,12 @@ class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
         self.v_wr2 = VirtualWorker_Lost("w2", "127.0.0.1", 30000)
         self.v_wr2.setq(self.wr._eventQueue)
 
+        comp = WaitMessgComp()
+        comp.handler_install("WorkerRoom", comp.msg_cb)
+        self.wr.subscribe(WorkerRoom.NOTIFY_CONN, comp)
+        self.wr.subscribe(WorkerRoom.NOTIFY_DISCONN, comp)
+        self.wr.subscribe(WorkerRoom.NOTIFY_IN_WAIT, comp)
+
         # Exercise
         self.wr.start()
         await asyncio.sleep(0.1)
@@ -131,3 +155,6 @@ class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertFalse(self.wr.isExists("w1"))
         self.assertFalse(self.wr.isExists("w2"))
+        self.assertEqual(comp.conn_msg_count, 2)
+        self.assertEqual(comp.wait_msg_count, 2)
+        self.assertEqual(comp.remove_msg_count, 2)

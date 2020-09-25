@@ -94,7 +94,7 @@ class Entry:
 
     async def _heartbeatProc(self, hbEvent: HeartbeatLetter) -> None:
         seq = hbEvent.getSeq()
-        print(hbEvent)
+
         if seq != self._hbCount:
             return None
 
@@ -118,7 +118,6 @@ class Entry:
             eventL.remove(ident)
             eventL.removeEntry(ident)
             self.stop()
-            print("stop")
 
     async def eventProc(self) -> None:
         try:
@@ -144,6 +143,10 @@ class Entry:
         except Exception:
             pass
 
+    def start(self) -> None:
+        asyncio.get_running_loop().\
+            create_task(self.monitor())
+
     async def monitor(self) -> None:
         while True:
             if self._stop:
@@ -151,6 +154,8 @@ class Entry:
 
             await self.eventProc()
             await self._heartbeatMaintain()
+
+            await asyncio.sleep(0.1)
 
 
 class EventListener(ModuleDaemon, Subject, Observer):
@@ -246,10 +251,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
         if ident in self._entries:
             self._entries[ident].stop()
 
-    async def _attachEntry(self, entry: Entry) -> None:
-        loop = asyncio.get_event_loop()
-        loop.create_task(entry.monitor())
-
     async def run(self) -> None:
 
         # Entry environment initialization
@@ -273,9 +274,8 @@ class EventListener(ModuleDaemon, Subject, Observer):
                 continue
 
             entry = Entry(w.getIdent(), w, entryEnv)
-
             self.addEntry(entry)
-            await self._attachEntry(entry)
+            entry.start()
 
     async def workerRegister(self, worker: Worker) -> None:
         if worker in self.registered():

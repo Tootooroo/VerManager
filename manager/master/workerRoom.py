@@ -143,6 +143,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
                 role_v = Worker.ROLE_NORMAL
 
             arrived_worker = Worker(w_ident, r, w, role_v)
+            arrived_worker.setState(Worker.STATE_ONLINE)
 
         except (ConnectionError, asyncio.exceptions.TimeoutError):
             w.close()

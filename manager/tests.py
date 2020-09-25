@@ -35,11 +35,12 @@ from manager.master.worker import WorkerTestCases
 from manager.basic.mmanager import MManagerTestCases
 from manager.master.postElection import PostElectTestCases
 from manager.master.postElectProtos import RandomElectProtosTest
-from manager.master.TestCases.eventListenerTestCases \
-    import EntryTestCases, EventListenerTestCases
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
 from manager.worker.TestCases.serverTestCases import ServerTestCases
 """
+
+from manager.master.TestCases.eventListenerTestCases \
+    import EntryTestCases, EventListenerTestCases
 from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
 from manager.master.task import TaskTestCases
 from manager.worker.TestCases.procUnitTestCases import ProcUnitUnitTestCases, \

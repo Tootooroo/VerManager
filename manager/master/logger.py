@@ -90,7 +90,7 @@ class Logger(ModuleDaemon, Observer):
     async def stopDelay(self, timeout: Optional[int] = None) -> None:
         if timeout is not None:
             await asyncio.sleep(timeout)
-        await self.stop()
+        self.stop()
 
     def needStop(self) -> bool:
         return self._stop
