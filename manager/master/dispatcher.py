@@ -22,23 +22,23 @@
 
 import traceback
 import asyncio
-import unittest
+import manager.master.configs as cfg
 
-from typing import Any, List, Optional, Callable, Dict, Tuple
+from typing import Any, List, Optional, Callable, \
+    Dict, Tuple, cast
 from functools import reduce
 from datetime import datetime
 from collections import namedtuple
-from queue import Queue, Empty, Full
 from threading import Lock, Event, Condition
 from manager.basic.observer import Subject, Observer
 from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.basic.info import Info, M_NAME as INFO_M_NAME
+from manager.basic.info import Info
 from manager.basic.type import Error
 from manager.master.task import Task, SuperTask, SingleTask, \
     PostTask, TASK_FORMAT_ERROR
-from manager.master.taskTracker import TaskTracker, M_NAME as TRACKER_M_NAME
+from manager.master.taskTracker import TaskTracker
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.commands import ReWorkCommand
 
@@ -61,8 +61,9 @@ class WaitArea:
     def __init__(self, ident: str, specifics:  List[WaitAreaSpec]) -> None:
         self.ident = ident
 
-        self._space = [(t, Queue(num), pri) for t, pri, num in specifics] \
-            # type: List[Tuple[str, Queue, int]]
+        self._space = [
+            (t, asyncio.Queue(num), pri) for t, pri, num in specifics
+        ]  # type: List[Tuple[str, asyncio.Queue, int]]
 
         # Sort Queues by priority
         self._space.sort(key=lambda t: t[2])
@@ -71,54 +72,74 @@ class WaitArea:
         self._space_map = {t: queue for t, queue, _ in self._space}
 
         self._num_of_tasks = 0
-        self._cond = Condition()
+        self._cond = asyncio.Condition()
+        self._cond_no_async = Condition()
 
-    def enqueue(self, t: Any, timeout=None) -> None:
+    async def enqueue(self, t: Any, timeout=None) -> None:
         try:
             q = self._space_map[type(t).__name__]
-            q.put(t, timeout=timeout)
+            await asyncio.wait_for(q.put(t), timeout=timeout)
 
             self._num_of_tasks += 1
 
         except KeyError:
             raise WaitArea.Area_unknown_task
-        except Full:
+        except asyncio.exceptions.TimeoutError:
             raise WaitArea.Area_Full
 
     def enqueue_nowait(self, t: Any) -> None:
-        self.enqueue(t, timeout=0)
+        try:
+            q = self._space_map[type(t).__name__]
+            q.put_nowait(t)
+            self._num_of_tasks += 1
 
-    def dequeue(self, timeout=None) -> Any:
-        with self._cond:
-            cond = self._cond.wait_for(
-                lambda: self._num_of_tasks > 0,
+        except KeyError:
+            raise WaitArea.Area_unknown_task
+        except asyncio.QueueFull:
+            raise WaitArea.Area_Full
+
+    async def dequeue(self, timeout=None) -> Any:
+        async with self._cond:
+            cond = await asyncio.wait_for(
+                self._cond.wait_for(lambda: self._num_of_tasks > 0),
                 timeout=timeout
             )
 
             if cond is False:
-                raise WaitArea.Area_Empty
+                raise WaitArea.Area_Empty()
 
+        return self._dequeue()
+
+    def dequeue_nowait(self) -> Any:
+        with self._cond_no_async:
+            cond = self._cond_no_async.wait_for(
+                lambda: self._num_of_tasks > 0,
+                timeout=0
+            )
+
+            if cond is False:
+                raise WaitArea.Area_Empty()
+
+        return self._dequeue()
+
+    def _dequeue(self) -> Any:
         for _, q, _ in self._space:
 
             try:
-                task = q.get(timeout=0)
+                task = q.get_nowait()
                 self._num_of_tasks -= 1
                 return task
 
-            except Empty:
+            except asyncio.QueueEmpty:
                 pass
-
-    def dequeue_nowait(self) -> Any:
-        return self.dequeue(timeout=0)
 
     def peek(self) -> Any:
         if self._num_of_tasks == 0:
             return None
 
         for _, q, _ in self._space:
-
-            if len(q.queue) > 0:
-                return q.queue[0]
+            if len(q._queue) > 0:
+                return q._queue[0]
             else:
                 continue
 
@@ -126,7 +147,7 @@ class WaitArea:
         all_content = []
 
         for _, q, _ in self._space:
-            all_content += list(q.queue)
+            all_content += list(q._queue)
 
         return all_content
 
@@ -135,7 +156,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
     NOTIFY_LOG = "log"
 
-    def __init__(self, workerRoom: WorkerRoom, inst: Any) -> None:
+    def __init__(self) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
@@ -145,7 +166,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         Observer.__init__(self)
 
-        self._sInst = inst
         self._stop = False
 
         # A queue contain a collection of tasks
@@ -159,18 +179,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         self.dispatchLock = Lock()
 
-        taskTracker = inst.getModule(TRACKER_M_NAME) \
-            # type: Optional[TaskTracker]
+        self._taskTracker = None  # type: Optional[TaskTracker]
 
-        assert(taskTracker is not None)
-        self._taskTracker = taskTracker
+        self._workers = None  # type: Optional[WorkerRoom]
 
-        self._workers = workerRoom
-
-        # To protect _workers while add or remove
-        # worker is happen during search on _workers
-        self._workerLock = Lock()
         self._numOfWorkers = 0
+        self._loop = asyncio.get_running_loop()
 
     async def begin(self) -> None:
         return None
@@ -178,25 +192,30 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     async def cleanup(self) -> None:
         return None
 
-    def _dispatch_logging(self, msg: str) -> None:
-        #self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
-        return
+    def setWorkerRoom(self, wr: WorkerRoom) -> None:
+        self._workers = wr
+
+    def setTaskTracker(self, tt: TaskTracker) -> None:
+        self._taskTracker = tt
+
+    async def _dispatch_logging(self, msg: str) -> None:
+        await self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
 
     # Dispatch a task to a worker of
     # all by overhead of workers
     #
     # return True if task is assign successful otherwise return False
-    def _dispatch(self, task: Task) -> bool:
+    async def _dispatch(self, task: Task) -> bool:
         ret = False
 
         if isinstance(task, SuperTask):
             self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
-            return self._dispatchSuperTask(task)
+            return await self._dispatchSuperTask(task)
 
-        ret = self._do_dispatch(task)
+        ret = await self._do_dispatch(task)
         return ret
 
-    def _do_dispatch(self, task: Task) -> bool:
+    async def _do_dispatch(self, task: Task) -> bool:
         # First to find a acceptable worker
         # if found then assign task to the worker
         # and _tasks otherwise append to taskWait
@@ -206,7 +225,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         if isinstance(task, PostTask):
             cond = theListener
 
-        workers = self._workers.getWorkerWithCond_nosync(cond)
+        workers = cast(WorkerRoom, self._workers)\
+            .getWorkerWithCond_nosync(cond)
 
         # No workers satisfiy the condition.
         if workers == []:
@@ -216,8 +236,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         try:
             worker = workers[0]
-            worker.do(task)
-            self._taskTracker.onWorker(task.id(), worker)
+            await worker.do(task)
+            cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
         except Exception:
             self._dispatch_logging("Task " + task.id() +
                                    " dispatch failed: Worker is\
@@ -226,16 +246,16 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return True
 
-    def _dispatchSuperTask(self, task: SuperTask) -> bool:
+    async def _dispatchSuperTask(self, task: SuperTask) -> bool:
         subTasks = task.getChildren()
 
         for sub in subTasks:
-            self._taskTracker.track(sub)
+            cast(TaskTracker, self._taskTracker).track(sub)
 
-            ret = self._do_dispatch(sub)
+            ret = await self._do_dispatch(sub)
 
             if ret is False:
-                self._waitArea.enqueue(sub)
+                await self._waitArea.enqueue(sub)
                 self.taskEvent.set()
             else:
                 sub.toProcState()
@@ -244,34 +264,36 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return True
 
-    def dispatch(self, task: Task) -> bool:
+    async def _dispatch_async(self, task: Task) -> bool:
+        """
+        Dispatch a task to workers.
+        """
+
         self._dispatch_logging("Dispatch task " + task.id())
 
-        if self._taskTracker.isInTrack(task.id()):
-            task_exists = self._taskTracker.getTask(task.id())
-
+        # Task is already in process increase task's refs.
+        if cast(TaskTracker, self._taskTracker).isInTrack(task.id()):
+            task_exists = cast(TaskTracker, self._taskTracker)\
+                .getTask(task.id())
             assert(task_exists is not None)
             task_exists.refs += 1
 
             return True
 
-        # Bind task with a build or buildSet
-        try:
-            task = self._bind(task)
-        except TASK_FORMAT_ERROR:
-            return False
-
-        self._taskTracker.track(task)
+        cast(TaskTracker, self._taskTracker).track(task)
 
         with self.dispatchLock:
-            if self._dispatch(task) is False:
+            if await self._dispatch(task) is False:
                 # fixme: Queue may full while inserting
-                self._waitArea.enqueue(task)
+                await self._waitArea.enqueue(task)
                 self.taskEvent.set()
 
             return True
 
-    def redispatch(self, task: Task) -> bool:
+    def dispatch(self, task: Task) -> None:
+        self._loop.create_task(self._dispatch_async(task))
+
+    async def redispatch(self, task: Task) -> bool:
         taskId = task.id()
 
         self._dispatch_logging("Redispatch task " + taskId)
@@ -279,10 +301,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         # Set task's state to prepare and remove worker
         # deal with it before from record.
         ret = task.stateChange(Task.STATE_PREPARE)
-        self._taskTracker.onWorker(task.id(), None)
+        cast(TaskTracker, self._taskTracker).onWorker(task.id(), None)
 
         if ret is Error:
-            self._taskTracker.untrack(task.id())
+            cast(TaskTracker, self._taskTracker).untrack(task.id())
             return False
 
         with self.dispatchLock:
@@ -293,11 +315,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return True
 
     def _bind(self, task: Task) -> Task:
+
         if not task.isBindWithBuild():
             # To check taht whether the task bind with
             # a build or BuildSet. If not bind just to
             # bind one with it.
-            info = self._sInst.getModule(INFO_M_NAME)  # type: Info
+            info = cast(Info, cfg.config)
 
             try:
                 build = Build(task.vsn, info.getConfig("Build"))
@@ -324,6 +347,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
     async def run(self) -> None:
 
+        assert(self._workers is not None)
+        assert(cast(TaskTracker, self._taskTracker) is not None)
+
         await asyncio.gather(
             self._dispatching(),
             self._taskAging()
@@ -336,7 +362,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 return None
             else:
                 ident = task_peek.id()
-                if not self._taskTracker.isInTrack(ident):
+                if not cast(TaskTracker, self._taskTracker).isInTrack(ident):
                     # Drop untracked task
                     area.dequeue_nowait()
                     continue
@@ -346,6 +372,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     # Dispatcher thread is response to assign task
     # in queue which name is taskWait
     async def _dispatching(self) -> None:
+
         while True:
             await asyncio.sleep(1)
 
@@ -357,7 +384,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 # To check that is a worker available.
                 cond = condChooser[type(task_peek).__name__]
-                if self._workers.getWorkerWithCond(cond) == []:
+                if cast(WorkerRoom, self._workers).\
+                   getWorkerWithCond(cond) == []:
                     continue
 
                 # Dispatch task to worker
@@ -375,9 +403,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             # For a task that refs reduce
             # to 0 do aging instance otherwise wait 1 min
-            tasks_outdated = [t for t in self._taskTracker.tasks()
-                              if t.refs == 0 or
-                              (datetime.utcnow() - t.last()).seconds > 10]
+            tasks_outdated = [
+                t for t in cast(TaskTracker, self._taskTracker).tasks()
+                if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 10]
 
             self._dispatch_logging("Outdate tasks:" + str(
                 [t.id() for t in tasks_outdated]
@@ -386,7 +414,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             for t in tasks_outdated:
                 ident = t.id()
 
-                if self._workers.getNumOfWorkers() != 0:
+                if cast(WorkerRoom, self._workers).getNumOfWorkers() != 0:
                     # Task in proc or prepare status
                     # will not be aging even though
                     # their counter is out of date.
@@ -413,13 +441,13 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                                 continue
 
                 self._dispatch_logging("Remove task " + ident)
-                self._taskTracker.untrack(ident)
+                cast(TaskTracker, self._taskTracker).untrack(ident)
 
     # Cancel a task
     # This method cannot cancel a member of a SuperTask
     # but this method can cancel a SuperTask.
     async def cancel(self, taskId: str) -> None:
-        task = self._taskTracker.getTask(taskId)
+        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
 
         if task is None:
             return None
@@ -431,7 +459,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 # is not allowed.
                 return None
 
-            theWorker = self._taskTracker.whichWorker(task.id())
+            theWorker = cast(TaskTracker, self._taskTracker)\
+                .whichWorker(task.id())
             if theWorker is not None:
                 await theWorker.cancel(task.id())
 
@@ -444,26 +473,26 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             for child in children:
                 ident = child.id()
-                theWorker = self._taskTracker.whichWorker(ident)
+                theWorker = cast(TaskTracker, self._taskTracker).whichWorker(ident)
 
                 if theWorker is not None:
                     await theWorker.cancel(ident)
 
                 child.stateChange(Task.STATE_FAILURE)
-                self._taskTracker.untrack(ident)
+                cast(TaskTracker, self._taskTracker).untrack(ident)
 
         task.stateChange(Task.STATE_FAILURE)
-        self._taskTracker.untrack(task.id())
+        cast(TaskTracker, self._taskTracker).untrack(task.id())
 
     # Cancel all tasks processing on a worker
     def cancelOnWorker(self, wId: str) -> None:
         pass
 
     def removeTask(self, taskId: str) -> None:
-        self._taskTracker.untrack(taskId)
+        cast(TaskTracker, self._taskTracker).untrack(taskId)
 
     def getTask(self, taskId: str) -> Optional[Task]:
-        return self._taskTracker.getTask(taskId)
+        return cast(TaskTracker, self._taskTracker).getTask(taskId)
 
     def getTaskInWaits(self) -> List[Task]:
         return self._waitArea.all()
@@ -472,10 +501,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     # after the call of this method task will be
     # remove from _tasks
     def retrive(self, taskId: str) -> Optional[str]:
-        if not self._taskTracker.isInTrack(taskId):
+        if not cast(TaskTracker, self._taskTracker).isInTrack(taskId):
             return None
 
-        task = self._taskTracker.getTask(taskId)
+        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
         if task is None:
             return None
 
@@ -488,23 +517,23 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return task.data
 
     def taskState(self, taskId: str) -> int:
-        if not self._taskTracker.isInTrack(taskId):
+        if not cast(TaskTracker, self._taskTracker).isInTrack(taskId):
             return Error
 
-        task = self._taskTracker.getTask(taskId)
+        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
         if task is None:
             return Error
 
         return task.taskState()
 
     def isTaskExists(self, taskId: str) -> bool:
-        return self._taskTracker.isInTrack(taskId)
+        return cast(TaskTracker, self._taskTracker).isInTrack(taskId)
 
     def _isTask(self, taskId: str, state: Callable) -> bool:
-        if not self._taskTracker.isInTrack(taskId):
+        if not cast(TaskTracker, self._taskTracker).isInTrack(taskId):
             return False
 
-        task = self._taskTracker.getTask(taskId)
+        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
         if task is None:
             return False
 
@@ -527,10 +556,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                             == Task.STATE_FINISHED)
 
     def taskLastUpdate(self, taskId: str) -> None:
-        if not self._taskTracker.isInTrack(taskId):
+        if not cast(TaskTracker, self._taskTracker).isInTrack(taskId):
             return None
 
-        task = self._taskTracker.getTask(taskId)
+        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
         if task is None:
             return None
 
@@ -550,7 +579,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # Clean record in TaskTracker
             # so status of TaskTracker is up to date
             # and will able to perform action depend on it.
-            self._taskTracker.onWorker(t.id(), None)
+            cast(TaskTracker, self._taskTracker).onWorker(t.id(), None)
 
         for t in tasks:
 
@@ -573,7 +602,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 Second: Redispatch tasks that is
                         already done by listener
                 """
-                tasksOnLost = self._taskTracker.\
+                tasksOnLost = cast(TaskTracker, self._taskTracker).\
                     tasksOfWorker(worker.getIdent())
 
                 # Find tasks that is done and depended by this task.
@@ -587,7 +616,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 Third: Send RE_WORK command to workers that dealing
                        dependence of this task.
                 """
-                pairs = [(self._taskTracker.whichWorker(dep.id()), dep.id())
+                pairs = [(cast(TaskTracker, self._taskTracker).whichWorker(dep.id()), dep.id())
                          for dep in deps]
 
                 workers = {w.getIdent(): w for w, t_id in pairs
@@ -638,7 +667,7 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     def f_online_acceptable(w):
-        return w.isOnline() and w.isAbleToAccept() and w.role is not None
+        return w.isOnline() and w.isAbleToAccept()
 
     return list(filter(lambda w: f_online_acceptable(w), workers))
 
@@ -651,217 +680,3 @@ condChooser = {
     'SingleTask': viaOverhead,
     'PostTask': theListener
 }
-
-
-# UnitTest
-class DispatcherUnitTest(unittest.TestCase):
-
-    def test_waitarea(self) -> None:
-        type_of_tasks = [
-            WaitAreaSpec("Post", 0, 10),
-            WaitAreaSpec("Single", 1, 10)
-        ]
-        area = WaitArea("Area", type_of_tasks)
-
-        class Single:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        class Post:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        class Broken:
-            def __init__(self, ident: str):
-                self.ident = ident
-
-        area.enqueue(Single("S1"))
-        area.enqueue(Post("P1"))
-
-        try:
-            area.enqueue(Broken("B1"))
-
-            # Exception should throw before this
-            # expression.
-            self.assertTrue(False)
-
-        except WaitArea.Area_unknown_task:
-            pass
-
-        # Higher priority of tasks should
-        # dequeue before lower tasks.
-        p1 = area.peek()
-        self.assertEqual("P1", p1.ident)
-        t1 = area.dequeue()
-        self.assertTrue(t1 is p1)
-
-        s1 = area.peek()
-        self.assertEqual("S1", s1.ident)
-        t2 = area.dequeue()
-        self.assertTrue(t2 is s1)
-
-        i = 0
-        while i < 10:
-            area.enqueue(Single("S"+str(i)))
-            area.enqueue(Post("P"+str(i)))
-            i += 1
-
-        # Now Single queue of area is full
-        try:
-            area.enqueue(Single("Full"), timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Full:
-            pass
-
-        # Now Post queue of area is full
-        try:
-            area.enqueue(Post("Full"), timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Full:
-            pass
-
-        i = 0
-        while i < 20:
-            t = area.dequeue()
-
-            if i < 10:
-                self.assertTrue(type(t) is Post)
-            else:
-                self.assertTrue(type(t) is Single)
-
-            i += 1
-
-        try:
-            broken = area.dequeue(timeout=0)
-            self.assertTrue(False)
-        except WaitArea.Area_Empty:
-            pass
-
-        area.enqueue(Single("S1"))
-        area.enqueue(Single("S2"))
-        area.enqueue(Single("S3"))
-        area.enqueue(Single("S4"))
-        area.enqueue(Post("P1"))
-        area.enqueue(Post("P2"))
-        area.enqueue(Post("P3"))
-
-        allT = [t.ident for t in area.all()]
-        self.assertTrue("S1" in allT)
-        self.assertTrue("S2" in allT)
-        self.assertTrue("S3" in allT)
-        self.assertTrue("S4" in allT)
-        self.assertTrue("P1" in allT)
-        self.assertTrue("P2" in allT)
-        self.assertTrue("P3" in allT)
-
-
-        # Test nowait version of enqueue and dequeue
-        area_nowait = WaitArea("Nowait", type_of_tasks)
-        try:
-            area_nowait.dequeue_nowait()
-            self.assertTrue(False)
-        except WaitArea.Area_Empty:
-            pass
-
-        # Use all space of WaitArea
-        i = 0
-        while i < 10:
-            area_nowait.enqueue(Single("S"+str(i)))
-            area_nowait.enqueue(Post("P"+str(i)))
-            i += 1
-
-        try:
-            area_nowait.enqueue_nowait(Single("FULL"))
-            self.assertTrue(False)
-        except WaitArea.Area_Full:
-            pass
-
-    def test_dispatcher(self):
-
-        from manager.basic.info import Info
-
-        class WorkerMock(Worker):
-
-            def __init__(self, ident:str) -> None:
-                Worker.__init__(self, None, None)  # type: ignore
-                self.ident = ident
-                self.done = False
-
-            def do(self, t:Task):
-                self.done = True
-                self.inProcTask.newTask(t)
-
-        class WorkerRMock(WorkerRoom):
-
-            def __init__(self, inst) -> None:
-                WorkerRoom.__init__(self, " ", 8066, inst)
-
-            def needStop(self) -> bool:
-                return False
-
-        class Inst:
-
-            def getModule(self, name: str) -> Any:
-                if name == INFO_M_NAME:
-                    return Info("./config_test.yaml")
-                return TaskTracker()
-
-        inst = Inst()
-        wr = WorkerRMock(inst)
-
-        w1 = WorkerMock("ABC")
-        w1.state = Worker.STATE_ONLINE
-        w1.max = 1
-        w1.role = 0
-
-        w2 = WorkerMock("DEF")
-        w2.state = Worker.STATE_ONLINE
-        w2.max = 1
-        w2.role = 1
-
-        wr.addWorker(w1)
-        wr.addWorker(w2)
-
-        d = Dispatcher(wr, inst)
-
-        async def dispatch_test(d) -> None:
-            t = Task("ID", "SN", "VSN", {})
-            d.dispatch(t)
-            self.assertTrue(w1.done and w2.done)
-
-            self.assertTrue(len(d.getTaskInWaits()) == 2)
-
-            # Wait 12 seconds
-            await asyncio.sleep(10)
-
-            # These task should still exists cause they are depended
-            # by SuperTask and PostTask
-            self.assertTrue(len(d.getTaskInWaits()) == 2)
-
-            # Now dispatch second task
-            t1 = Task("ID1", "SN1", "VSN1", {})
-            d.dispatch(t1)
-
-            # 6 Tasks should in wait for worker
-            self.assertTrue(len(d.getTaskInWaits()) == 6)
-
-            # Remove all worker
-            wr.removeWorker("ABC")
-            wr.removeWorker("DEF")
-
-            # Wait 12 seconds
-            await asyncio.sleep(15)
-
-            # If there is no workers during age interval
-            # all taskk will be aged
-            self.assertTrue(len(d.getTaskInWaits()) == 0)
-
-            await d.stop()
-
-        async def mainTest() -> None:
-            await asyncio.gather(
-                d.run(),
-                dispatch_test(d)
-            )
-
-        asyncio.run(mainTest())

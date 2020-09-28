@@ -65,7 +65,7 @@ class VirtualServer_Minimal(VirtualServer):
                 self._binc += 1
 
 
-class WorkerTestCases(unittest.IsolatedAsyncioTestCase):
+class WorkerTestCases_(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         self.sut = Worker("./manager/worker/config.yaml")
@@ -86,6 +86,7 @@ class WorkerTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(vir_server._propc, 1)
         self.assertGreater(vir_server._hbc, 0)
 
+    @unittest.skip("")
     async def test_worker_DoTask(self) -> None:
         # Setup
         vir_server = VirtualServer_Minimal("Master", "127.0.0.1", 30000)
