@@ -23,6 +23,7 @@
 import asyncio
 import unittest
 import typing
+import manager.master.configs as cfg
 
 from manager.basic.info import Info
 from manager.master.dispatcher import Dispatcher, WaitArea, \
@@ -199,6 +200,27 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         Dispatch a SuperTask.
         """
 
+        # Setup
+        cfg.config = Info("./config.yaml")
+
         # Exercise
-        buildSet = BuildSet({})
+        buildSet = BuildSet(cfg.config.getConfig("BuildSet_GL8900"))
         self.sut.dispatch(SuperTask("S", "S", "R", buildSet, {}))
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertEqual(self.n.postCount, 0)
+        self.assertEqual(self.m.postCount, 1)
+        self.assertEqual(self.n.singleCount+self.m.singleCount, 4)
+
+    async def test_Dispatcher_Aging_SingleTask(self) -> None:
+        """
+        Aging SingleTask
+        """
+
+        # Setup
+        cfg.config = Info("./config.yaml")
+
+        # Exercise
+        build = Build("B", {"cmd": "...", "output": "..."})
+        self.sut.dispatch(SingleTask("S", "V", "R", build))

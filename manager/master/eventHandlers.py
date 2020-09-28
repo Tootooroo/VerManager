@@ -226,6 +226,10 @@ async def responseHandler(
 
     await EVENT_HANDLER_TOOLS.do_action(task, state)
 
+    # Notify to components that
+    # task's state is changed.
+    env.eventListener.notify((taskId, state))
+
     if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
         wr.removeTaskFromWorker(ident, taskId)
 

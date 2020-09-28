@@ -23,7 +23,7 @@
 import typing
 
 from manager.master.worker import Worker
-from manager.master.task import Task
+from manager.master.task import Task, SingleTask, PostTask
 from manager.basic.stubs.workerStup import \
     StreamReaderDummy, StreamWriterDummy
 
@@ -34,6 +34,13 @@ class WorkerStub(Worker):
         Worker.__init__(
             self, ident, StreamReaderDummy(), StreamWriterDummy(), role)
         self.in_doing_task = None  # type: typing.Optional[Task]
+        self.postCount = 0
+        self.singleCount = 0
 
     async def do(self, task: Task) -> None:
         self.in_doing_task = task
+
+        if isinstance(task, SingleTask):
+            self.singleCount += 1
+        elif isinstance(task, PostTask):
+            self.postCount += 1

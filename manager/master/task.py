@@ -58,6 +58,27 @@ class TASK_TRANSFORM_ERROR(Exception):
 
 class TaskBase(ABC):
 
+    # Task does not dispatch to any worker.
+    STATE_PREPARE = 0
+
+    # Task was dispatch to a worker.
+    STATE_IN_PROC = 1
+
+    # Task is done and the result of task has been received.
+    STATE_FINISHED = 2
+
+    # Task is failure.
+    STATE_FAILURE = 3
+
+    STATE_TOPOLOGY = {
+        STATE_PREPARE: [STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],
+        STATE_IN_PROC: [STATE_IN_PROC, STATE_PREPARE,
+                        STATE_FINISHED, STATE_FAILURE],
+        STATE_FINISHED: [STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
+        STATE_FAILURE: [STATE_FAILURE]
+    }  # type:  Dict[int, List[int]]
+
+
     @abstractmethod
     def id(self) -> str:
         """ identity of task """
@@ -86,26 +107,6 @@ class TaskBase(ABC):
 class Task(TaskBase):
 
     Type = 0
-
-    # Task does not dispatch to any worker.
-    STATE_PREPARE = 0
-
-    # Task was dispatch to a worker.
-    STATE_IN_PROC = 1
-
-    # Task is done and the result of task has been received.
-    STATE_FINISHED = 2
-
-    # Task is failure.
-    STATE_FAILURE = 3
-
-    STATE_TOPOLOGY = {
-        STATE_PREPARE: [STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],
-        STATE_IN_PROC: [STATE_IN_PROC, STATE_PREPARE,
-                        STATE_FINISHED, STATE_FAILURE],
-        STATE_FINISHED: [STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
-        STATE_FAILURE: [STATE_FAILURE]
-    }  # type:  Dict[int, List[int]]
 
     def __init__(self, id:  str, sn: str, vsn: str,
                  extra: Dict[str, str] = {}) -> None:

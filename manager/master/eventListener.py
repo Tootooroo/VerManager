@@ -166,6 +166,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
     NOTIFY_LOG = "log"
     NOTIFY_LOST = "lost"
+    NOTIFY_TASK_STATE_CHANGED = "TSC"
 
     def __init__(self, inst: Any) -> None:
         global letterLog, M_NAME
@@ -179,6 +180,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
         Subject.__init__(self, M_NAME)
         self.addType(self.NOTIFY_LOG)
         self.addType(self.NOTIFY_LOST)
+        self.addType(self.NOTIFY_TASK_STATE_CHANGED)
 
         # Init as Observer
         Observer.__init__(self)
@@ -207,9 +209,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
     def needStop(self) -> bool:
         return self._stop
-
-    def getModule(self, m: str) -> Any:
-        return self._sInst.getModule(m)
 
     def registerEvent(self, eventType: str, handler: Handler) -> None:
         if eventType in self.handlers:

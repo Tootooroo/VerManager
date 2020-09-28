@@ -20,9 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import traceback
 import asyncio
-import manager.master.configs as cfg
 
 from typing import Any, List, Optional, Callable, \
     Dict, Tuple, cast
@@ -31,13 +29,10 @@ from datetime import datetime
 from collections import namedtuple
 from threading import Condition
 from manager.basic.observer import Subject, Observer
-from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.basic.info import Info
 from manager.basic.type import Error
-from manager.master.task import Task, SuperTask, SingleTask, \
-    PostTask, TASK_FORMAT_ERROR
+from manager.master.task import Task, SuperTask, SingleTask, PostTask
 from manager.master.taskTracker import TaskTracker
 from manager.master.workerRoom import WorkerRoom
 from manager.basic.commands import ReWorkCommand
@@ -313,46 +308,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         return True
 
-    def _bind(self, task: Task) -> Task:
-
-        if not task.isBindWithBuild():
-            # To check taht whether the task bind with
-            # a build or BuildSet. If not bind just to
-            # bind one with it.
-            info = cast(Info, cfg.config)
-
-            try:
-                build = Build(task.vsn, info.getConfig("Build"))
-                if isinstance(build, Build):
-                    task.setBuild(build)
-            except Exception:
-                pass
-
-            try:
-                buildSet = BuildSet(info.getConfig("BuildSet"))
-                if isinstance(buildSet, BuildSet):
-                    task.setBuild(buildSet)
-            except Exception:
-                pass
-
-            try:
-                task = task.transform()
-            except TASK_FORMAT_ERROR:
-                raise TASK_FORMAT_ERROR
-            except Exception:
-                traceback.print_exc()
-
-        return task
-
     async def run(self) -> None:
 
         assert(self._workers is not None)
         assert(cast(TaskTracker, self._taskTracker) is not None)
 
-        await asyncio.gather(
-            self._dispatching(),
-            self._taskAging()
-        )
+        await self._dispatching(),
 
     def _peek_trimUntrackTask(self, area: WaitArea) -> Any:
         while True:
