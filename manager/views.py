@@ -114,7 +114,6 @@ class VersionViewSet(viewsets.ModelViewSet):
         except ObjectDoesNotExist:
             return HttpResponseBadRequest("Version does not exists.")
 
-        print(extra)
         task = Task(pk, version.sn, pk, extra=extra)
         if task.isValid() is False:
             return HttpResponseBadRequest()

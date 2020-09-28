@@ -22,29 +22,59 @@
 
 # Create your tests here.
 """
-#from manager.master.verControl import VerControlTestCases
-from manager.basic.letter import LetterTestCases
-#from manager.master.dispatcher import DispatcherUnitTest
-from manager.basic.info import InfoTestCases
-from manager.master.logger import LoggerTestCases
-from manager.basic.storage import StorageTestCases
-from manager.master.build import BuildTestCases
-from manager.basic.observer import ObTestCases
-from manager.worker.postListener import PostListenerTestCases
-from manager.master.worker import WorkerTestCases
-from manager.basic.mmanager import MManagerTestCases
-from manager.master.postElection import PostElectTestCases
-from manager.master.postElectProtos import RandomElectProtosTest
+from manager.master.verControl import VerControlTestCases
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
-from manager.worker.TestCases.serverTestCases import ServerTestCases
 """
 
-from manager.master.TestCases.eventListenerTestCases \
-    import EntryTestCases, EventListenerTestCases
-from manager.master.TestCases.workerRoomTestCases import WorkerRoomTestCases
-from manager.master.task import TaskTestCases
-from manager.worker.TestCases.procUnitTestCases import ProcUnitUnitTestCases, \
-    JobProcUnitTestCases, PostProcUnitTestCases
-from manager.worker.TestCases.processorTestCases import ProcessorTestCases
-from manager.worker.TestCases.connectorTestCases import LinkerTestCases
-from manager.worker.TestCases.workerTestCases import WorkerTestCases
+from manager.master.TestCases.dispatcherTestCases import \
+    WaitAreaTestCases, DispatcherUnitTest
+
+"""
+from manager.master.worker import \
+    WorkerTestCases
+
+from manager.basic.letter import \
+    LetterTestCases
+
+#from manager.master.logger import \
+#    LoggerTestCases
+
+from manager.basic.info import \
+    InfoTestCases
+
+from manager.basic.storage import \
+    StorageTestCases
+
+from manager.master.build import \
+    BuildTestCases
+
+from manager.basic.observer import \
+    ObTestCases
+
+from manager.basic.mmanager import \
+    MManagerTestCases
+
+from manager.master.TestCases.eventListenerTestCases import \
+    EntryTestCases, \
+    EventListenerTestCases
+
+from manager.master.TestCases.workerRoomTestCases import \
+    WorkerRoomTestCases
+
+from manager.master.task import \
+    TaskTestCases
+
+from manager.worker.TestCases.procUnitTestCases import \
+    ProcUnitUnitTestCases, \
+    JobProcUnitTestCases, \
+    PostProcUnitTestCases
+
+from manager.worker.TestCases.processorTestCases import \
+    ProcessorTestCases
+
+from manager.worker.TestCases.connectorTestCases import \
+    LinkerTestCases
+
+from manager.worker.TestCases.workerTestCases import \
+    WorkerTestCases_
+"""

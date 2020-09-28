@@ -445,8 +445,7 @@ class SingleTask(Task):
             post = self._parent.getPostTask()
             if post is not None:
                 return [self._parent, post]
-        else:
-            return []
+        return []
 
     def toLetter(self) -> NewLetter:
 

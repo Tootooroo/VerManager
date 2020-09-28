@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import unittest
 import typing
 
@@ -31,7 +32,7 @@ from manager.master.taskTracker import TaskTracker
 from manager.master.TestCases.misc.workerStub import WorkerStub
 from manager.master.worker import Worker
 from manager.master.task import SingleTask, SuperTask, PostTask
-from manager.master.build import Build
+from manager.master.build import Build, BuildSet
 
 
 class sInst:
@@ -140,29 +141,64 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         self.sut.setWorkerRoom(self.wr)
         self.sut.setTaskTracker(self.tt)
 
-    async def test_Dispatcher_(self) -> None:
-        """
-        Dispatch a SingleTask to Workers.
-        It should be done by a normal worker not
-        a Merger.
-        """
-
-        # Setup
-        normal_worker = WorkerStub("Normal", Worker.ROLE_NORMAL)
+        # Add Workers
+        self.n = normal_worker = WorkerStub("Normal", Worker.ROLE_NORMAL)
         normal_worker.setState(Worker.STATE_ONLINE)
         normal_worker.max = 1
 
-        merger = WorkerStub("Merger", Worker.ROLE_MERGER)
+        self.m = merger = WorkerStub("Merger", Worker.ROLE_MERGER)
         merger.setState(Worker.STATE_ONLINE)
         merger.max = 1
 
         self.wr.addWorker(normal_worker)
         self.wr.addWorker(merger)
 
+    async def test_Dispatcher_Dispatch(self) -> None:
+        """
+        Dispatch a SingleTask to Workers.
+        Only one of worker can receive dispatched task
+        """
+
         # Exercise
-        self.sut.dispatch(SingleTask("Single", "V", "R",
-                                     Build("B", {"cmd":"...", "output":"..."})))
+        self.sut.dispatch(
+            SingleTask("Single", "V", "R",
+                       Build("B", {"cmd": "...", "output": "..."}))
+        )
+        await asyncio.sleep(0.1)
 
         # Verify
-        self.assertIsNotNone(normal_worker.in_doing_task)
-        self.assertIsNone(merger.in_doing_task)
+
+        # At least one of workers is deal with the task
+        self.assertTrue(
+            self.n.in_doing_task or self.m.in_doing_task
+        )
+
+        # Make sure only one worker receive the task
+        self.assertTrue(
+            self.n.in_doing_task is None or
+            self.m.in_doing_task is None
+        )
+
+    async def test_Dispatcher_DispatchPostTask(self) -> None:
+        """
+        Dispatch a PostTask to workers.
+        PostTask should only dispatch to Merger.
+        """
+
+        # Exercise
+        self.sut.dispatch(PostTask("P", "V", [], None))
+        await asyncio.sleep(0.1)
+
+        # Verify
+        # Make sure merger is doing the task and
+        # normal is not.
+        self.assertTrue(self.m.in_doing_task and self.n.in_doing_task is None)
+
+    async def test_Dispatcher_Dispatch_SuperTask(self) -> None:
+        """
+        Dispatch a SuperTask.
+        """
+
+        # Exercise
+        buildSet = BuildSet({})
+        self.sut.dispatch(SuperTask("S", "S", "R", buildSet, {}))

@@ -29,7 +29,7 @@ from typing import Any, List, Optional, Callable, \
 from functools import reduce
 from datetime import datetime
 from collections import namedtuple
-from threading import Lock, Event, Condition
+from threading import Condition
 from manager.basic.observer import Subject, Observer
 from manager.master.build import Build, BuildSet
 from manager.basic.mmanager import ModuleDaemon
@@ -175,9 +175,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         ])
 
         # An Event to indicate that there is some task in taskWait queue
-        self.taskEvent = Event()
+        self.taskEvent = asyncio.Event()
 
-        self.dispatchLock = Lock()
+        self.dispatchLock = asyncio.Lock()
 
         self._taskTracker = None  # type: Optional[TaskTracker]
 
@@ -209,7 +209,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         ret = False
 
         if isinstance(task, SuperTask):
-            self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
+            await self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
             return await self._dispatchSuperTask(task)
 
         ret = await self._do_dispatch(task)
@@ -230,8 +230,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         # No workers satisfiy the condition.
         if workers == []:
-            self._dispatch_logging("Task " + task.id() +
-                                   " dispatch failed: No available worker")
+            await self._dispatch_logging(
+                "Task " + task.id() + " dispatch failed: No available worker")
             return False
 
         try:
@@ -239,9 +239,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
         except Exception:
-            self._dispatch_logging("Task " + task.id() +
-                                   " dispatch failed: Worker is\
-                                   unable to do the task.")
+            await self._dispatch_logging("Task " + task.id() +
+                                         " dispatch failed: Worker is\
+                                         unable to do the task.")
             return False
 
         return True
@@ -268,8 +268,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         """
         Dispatch a task to workers.
         """
-
-        self._dispatch_logging("Dispatch task " + task.id())
+        await self._dispatch_logging("Dispatch task " + task.id())
 
         # Task is already in process increase task's refs.
         if cast(TaskTracker, self._taskTracker).isInTrack(task.id()):
@@ -282,7 +281,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         cast(TaskTracker, self._taskTracker).track(task)
 
-        with self.dispatchLock:
+        async with self.dispatchLock:
             if await self._dispatch(task) is False:
                 # fixme: Queue may full while inserting
                 await self._waitArea.enqueue(task)
@@ -296,7 +295,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     async def redispatch(self, task: Task) -> bool:
         taskId = task.id()
 
-        self._dispatch_logging("Redispatch task " + taskId)
+        await self._dispatch_logging("Redispatch task " + taskId)
 
         # Set task's state to prepare and remove worker
         # deal with it before from record.
@@ -307,7 +306,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             cast(TaskTracker, self._taskTracker).untrack(task.id())
             return False
 
-        with self.dispatchLock:
+        async with self.dispatchLock:
             if self._do_dispatch(task) is False:
                 self._waitArea.enqueue(task)
                 self.taskEvent.set()
@@ -376,7 +375,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         while True:
             await asyncio.sleep(1)
 
-            if self.taskEvent.wait(timeout=0):
+            if self.taskEvent.is_set():
                 task_peek = self._peek_trimUntrackTask(self._waitArea)
                 if task_peek is None:
                     self.taskEvent.clear()
@@ -389,7 +388,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     continue
 
                 # Dispatch task to worker
-                with self.dispatchLock:
+                async with self.dispatchLock:
                     current = self._waitArea.dequeue_nowait()
                     if self._dispatch(current) is False:
                         self._waitArea.enqueue(current)
@@ -407,7 +406,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 t for t in cast(TaskTracker, self._taskTracker).tasks()
                 if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 10]
 
-            self._dispatch_logging("Outdate tasks:" + str(
+            await self._dispatch_logging("Outdate tasks:" + str(
                 [t.id() for t in tasks_outdated]
             ))
 
@@ -419,7 +418,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     # will not be aging even though
                     # their counter is out of date.
                     if t.isProc() or t.isPrepare():
-                        self._dispatch_logging(
+                        await self._dispatch_logging(
                             "Task " + ident +
                             " is in processing/Prepare. Abort to remove")
                         continue
@@ -434,13 +433,13 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                             isInProc = dep.taskState == Task.STATE_IN_PROC
 
                             if isPrepare or isInProc:
-                                self._dispatch_logging(
+                                await self._dispatch_logging(
                                     "Task " + ident + " is remain"
                                     "cause it depend on another tasks"
                                 )
                                 continue
 
-                self._dispatch_logging("Remove task " + ident)
+                await self._dispatch_logging("Remove task " + ident)
                 cast(TaskTracker, self._taskTracker).untrack(ident)
 
     # Cancel a task
@@ -473,7 +472,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             for child in children:
                 ident = child.id()
-                theWorker = cast(TaskTracker, self._taskTracker).whichWorker(ident)
+                theWorker = cast(TaskTracker, self._taskTracker)\
+                    .whichWorker(ident)
 
                 if theWorker is not None:
                     await theWorker.cancel(ident)
@@ -616,8 +616,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 Third: Send RE_WORK command to workers that dealing
                        dependence of this task.
                 """
-                pairs = [(cast(TaskTracker, self._taskTracker).whichWorker(dep.id()), dep.id())
-                         for dep in deps]
+                pairs = [
+                    (cast(TaskTracker, self._taskTracker).whichWorker(dep.id()),
+                     dep.id()) for dep in deps]
 
                 workers = {w.getIdent(): w for w, t_id in pairs
                            if w is not None}
@@ -668,7 +669,6 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
     def f_online_acceptable(w):
         return w.isOnline() and w.isAbleToAccept()
-
     return list(filter(lambda w: f_online_acceptable(w), workers))
 
 
