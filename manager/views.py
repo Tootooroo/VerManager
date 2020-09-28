@@ -122,8 +122,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         assert(S.ServerInstance is not None)
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
-        if dispatcher.dispatch(task) is False:
-            return HttpResponseBadRequest()
+        dispatcher.dispatch(task)
 
         return Response('Success')
 

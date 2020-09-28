@@ -35,7 +35,7 @@ from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler, postHandler, lisAddrUpdateHandler
+    logHandler, logRegisterhandler
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.verControl import RevSync
@@ -98,21 +98,21 @@ class ServerInst(Thread):
         tracker = TaskTracker()
         self.addModule(tracker)
 
-        dispatcher = Dispatcher(workerRoom, self)
+        dispatcher = Dispatcher()
+        dispatcher.setWorkerRoom(workerRoom)
+        dispatcher.setTaskTracker(tracker)
         self.addModule(dispatcher)
 
         eventListener = EventListener(self)
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
-        eventListener.registerEvent(Letter.CmdResponse, postHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
         eventListener.registerEvent(Letter.Log, logHandler)
-        eventListener.registerEvent(Letter.Req, lisAddrUpdateHandler)
         self.addModule(eventListener)
 
         # EventHandler init
         env = Entry.EntryEnv(eventListener, eventListener.handlers)
-        EVENT_HANDLERS.EVENT_HANDLER_TOOLS \
+        EVENT_HANDLERS.EVENT_HANDLER_TOOLS\
                       .action_init(env)
 
         logDir = info.getConfig('LogDir')

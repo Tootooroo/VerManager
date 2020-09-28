@@ -76,10 +76,10 @@ class TaskTracker(Module):
         Module.__init__(self, M_NAME)
         self._tasks = {}  # type: Dict[str, TrackUnit]
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
     def track(self, t: Task) -> None:

@@ -121,9 +121,8 @@ class Entry:
 
     async def eventProc(self) -> None:
         try:
-            event = await self._worker.waitLetter(timeout=2)  \
-                # type: Optional[CmdResponseLetter]
-        except (ConnectionError, asyncio.exceptions.TimeoutError):
+            event = await self._worker.waitLetter(timeout=2)
+        except asyncio.exceptions.TimeoutError:
             return
 
         if event is None:
@@ -152,8 +151,13 @@ class Entry:
             if self._stop:
                 return None
 
-            await self.eventProc()
-            await self._heartbeatMaintain()
+            try:
+                await self.eventProc()
+                await self._heartbeatMaintain()
+            except Exception:
+                # Close stream
+                self._worker.getStream()[1].close()
+                return
 
             await asyncio.sleep(0.1)
 
