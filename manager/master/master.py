@@ -111,7 +111,8 @@ class ServerInst(Thread):
         self.addModule(eventListener)
 
         # EventHandler init
-        env = Entry.EntryEnv(eventListener, eventListener.handlers)
+        env = Entry.EntryEnv(eventListener, eventListener.handlers,
+                             self._mmanager)
         EVENT_HANDLERS.EVENT_HANDLER_TOOLS\
                       .action_init(env)
 

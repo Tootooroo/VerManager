@@ -50,7 +50,7 @@ class Entry:
     and logics that deal with event received
     from the worker.
     """
-    EntryEnv = namedtuple('EntryEnv', 'eventListener handlers')
+    EntryEnv = namedtuple('EntryEnv', 'eventListener handlers modules')
 
     def __init__(self, ident: str, worker, env: EntryEnv) -> None:
         self._ident = ident
