@@ -168,10 +168,8 @@ class EventListener(ModuleDaemon, Subject, Observer):
     NOTIFY_LOST = "lost"
     NOTIFY_TASK_STATE_CHANGED = "TSC"
 
-    def __init__(self, inst: Any) -> None:
+    def __init__(self) -> None:
         global letterLog, M_NAME
-
-        self._sInst = inst
 
         # Init as module
         ModuleDaemon.__init__(self, M_NAME)

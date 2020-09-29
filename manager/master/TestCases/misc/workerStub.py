@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import typing
 
 from manager.master.worker import Worker
@@ -44,3 +45,15 @@ class WorkerStub(Worker):
             self.singleCount += 1
         elif isinstance(task, PostTask):
             self.postCount += 1
+
+
+class WorkerStubSendBinary(Worker):
+
+    def __init__(self, ident: str, role: int) -> None:
+        Worker.__init__(
+            self, ident, StreamReaderDummy(), StreamWriterDummy(), role
+        )
+        self.q = asyncio.Queue(10)  # type: asyncio.Queue
+
+    async def waitLetter(self, timeout=None) -> None:
+        return await self.q.get()

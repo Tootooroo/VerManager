@@ -80,8 +80,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
         configs = sInst.getModule(INFO_M_NAME)
 
-        self._serverInst = sInst
-
         # _workers is a collection of workers in online state
         self._workers = {}  # type: Dict[str, Worker]
 

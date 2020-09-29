@@ -28,8 +28,9 @@ import concurrent.futures
 import os
 import zipfile
 import shutil
+import manager.master.configs as cfg
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, cast
 from collections import namedtuple
 
 from manager.master.eventListener \
@@ -37,19 +38,17 @@ from manager.master.eventListener \
 
 from manager.basic.type import Error
 from manager.basic.letter import Letter, \
-    CmdResponseLetter, ResponseLetter, BinaryLetter, ReqLetter
+    ResponseLetter, BinaryLetter
 
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
 from manager.master.dispatcher import Dispatcher
 
-from manager.basic.commands import LisAddrUpdateCmd
 from manager.basic.storage import StoChooser
 
 from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom
-from manager.master.workerRoom import M_NAME as WORKER_ROOM_MOD_NAME
 
 from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
@@ -192,7 +191,7 @@ class EVENT_HANDLER_TOOLS:
         if isinstance(t, SingleTask) or isinstance(t, PostTask):
 
             if t.isAChild():
-                dispatcher = env.eventListener.getModule(DISPATCHER_M_NAME)\
+                dispatcher = env.modules.getModule(DISPATCHER_M_NAME)\
                     # type: Dispatcher
 
                 assert(dispatcher is not None)
@@ -212,10 +211,7 @@ async def responseHandler(
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    wr = env.eventListener.getModule('WorkerRoom') \
-        # type: Optional[WorkerRoom]
-    assert(wr is not None)
-
+    wr = cast(WorkerRoom, env.modules.getModule('WorkerRoom'))
     task = wr.getTaskOfWorker(ident, taskId)
 
     if task is None or not Task.isValidState(state):
@@ -228,7 +224,8 @@ async def responseHandler(
 
     # Notify to components that
     # task's state is changed.
-    env.eventListener.notify((taskId, state))
+    type = env.eventListener.NOTIFY_TASK_STATE_CHANGED
+    await env.eventListener.notify(type, (taskId, state))
 
     if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
         wr.removeTaskFromWorker(ident, taskId)
@@ -244,7 +241,7 @@ async def copyFileInExecutor(src: str, dest: str) -> None:
 async def temporaryBuild_handling(
         task: Task, env: Entry.EntryEnv) -> None:
 
-    logger = env.eventListener.getModule('Logger')
+    logger = env.modules.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
     seperator = pathSeperator()
@@ -271,7 +268,9 @@ async def temporaryBuild_handling(
 async def responseHandler_ResultStore(
         task: Task, env: Entry.EntryEnv) -> None:
 
-    logger = env.eventListener.getModule('Logger')
+    assert(cfg.config is not None)
+
+    logger = env.modules.getModule('Logger')
 
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
     seperator = pathSeperator()
@@ -289,10 +288,14 @@ async def responseHandler_ResultStore(
     extra = task.getExtra()
     chooser = chooserSet[taskId]
 
-    cfgs = env.eventListener.getModule(INFO_M_NAME)
-    resultDir = cfgs.getConfig("ResultDir")
+    resultDir = cfg.config.getConfig("ResultDir")
 
     fileName = chooser.path().split(seperator)[-1]
+
+    if not os.path.exists("./data"):
+        os.mkdir("./data")
+    if not os.path.exists("public"):
+        os.mkdir("public")
 
     try:
         if extra is not None and "logFrom" in extra and "logTo" in extra:
@@ -305,19 +308,15 @@ async def responseHandler_ResultStore(
             dest = resultDir + seperator + fileName
             shutil.copy(chooser.path(), dest)
 
-        if not os.path.exists("public"):
-            os.mkdir("public")
         await copyFileInExecutor(chooser.path(), "public/"+fileName)
 
     except FileNotFoundError as e:
-        Logger.putLog(logger, letterLog, str(e))
+        await Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
-        Logger.putLog(logger, letterLog, str(e))
+        await Logger.putLog(logger, letterLog, str(e))
 
-    url = cfgs.getConfig('GitlabUr')
+    url = cfg.config.getConfig('GitlabUr')
 
-    if not os.path.exists("./data"):
-        os.mkdir("./data")
 
     task.setData(url + "/data/" + fileName)
 
@@ -340,7 +339,7 @@ async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
             fileName = letter.getFileName()
             version = letter.getParent()
 
-            sto = env.eventListener.getModule(STORAGE_M_NAME)
+            sto = env.modules.getModule(STORAGE_M_NAME)
             chooser = sto.create(version, fileName)
             chooserSet[tid] = chooser
 
@@ -359,7 +358,7 @@ async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
 
 
 async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:
-    logger = env.eventListener.getModule(LOGGER_M_NAME)
+    logger = env.modules.getModule(LOGGER_M_NAME)
 
     logId = letter.getHeader('logId')
     logMsg = letter.getContent('logMsg')
@@ -369,6 +368,6 @@ async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:
 
 
 async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
-    logger = env.eventListener.getModule(LOGGER_M_NAME)
+    logger = env.modules.getModule(LOGGER_M_NAME)
     logId = letter.getHeader('logId')
     logger.log_register(logId)
