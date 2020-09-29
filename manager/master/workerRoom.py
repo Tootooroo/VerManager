@@ -120,8 +120,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         return False
 
     async def _WR_LOG(self, msg: str) -> None:
-        #await self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
-        return
+        await self.notify(WorkerRoom.NOTIFY_LOG, (wrLog, msg))
 
     async def _accept_workers(self, r: asyncio.StreamReader,
                               w: asyncio.StreamWriter) -> None:

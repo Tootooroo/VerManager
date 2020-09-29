@@ -22,5 +22,7 @@
 
 from typing import Optional
 from manager.basic.info import Info
+from manager.basic.mmanager import MManager
 
 config = None  # type: Optional[Info]
+mmanager = None  # type: Optional[MManager]

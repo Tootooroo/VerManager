@@ -79,7 +79,7 @@ class WorkerMockEntry(WorkerStubEntry):
 class EntryTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        env = Entry.EntryEnv(None, {})  # type: Entry.EntryEnv
+        env = Entry.EntryEnv(None, {}, None)  # type: Entry.EntryEnv
         self.entry = Entry("Entry", WorkerStubEntry("w1"), env)
 
     async def test_Entry_Exists(self) -> None:
@@ -191,7 +191,7 @@ class WorkerMockHeartBeat(WorkerStub):
 class EventListenerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.eventL = EventListener(None)
+        self.eventL = EventListener()
 
     async def test_EventListener_register(self) -> None:
         # Exercise

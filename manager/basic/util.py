@@ -125,6 +125,9 @@ async def execute_shell_until_complete(command: str) -> int:
             ret_code = ref.wait(timeout=0)
         except subprocess.TimeoutExpired:
             await asyncio.sleep(1)
+            continue
+
+        return ret_code
 
 # If shell command is not executed success then return None
 # otherwise return returncode of the shell command.

@@ -21,23 +21,21 @@
 # SOFTWARE.
 
 # Create your tests here.
-"""
-from manager.master.verControl import VerControlTestCases
-from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
-"""
+#from manager.master.verControl import VerControlTestCases
 
+"""
+from manager.master.logger import \
+    LoggerTestCases
+
+from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
 
-"""
 from manager.master.worker import \
     WorkerTestCases
 
 from manager.basic.letter import \
     LetterTestCases
-
-#from manager.master.logger import \
-#    LoggerTestCases
 
 from manager.basic.info import \
     InfoTestCases
@@ -64,10 +62,6 @@ from manager.master.TestCases.workerRoomTestCases import \
 from manager.master.task import \
     TaskTestCases
 
-from manager.worker.TestCases.procUnitTestCases import \
-    ProcUnitUnitTestCases, \
-    JobProcUnitTestCases, \
-    PostProcUnitTestCases
 
 from manager.worker.TestCases.processorTestCases import \
     ProcessorTestCases
@@ -78,3 +72,7 @@ from manager.worker.TestCases.connectorTestCases import \
 from manager.worker.TestCases.workerTestCases import \
     WorkerTestCases_
 """
+from manager.worker.TestCases.procUnitTestCases import \
+    ProcUnitUnitTestCases, \
+    JobProcUnitTestCases, \
+    PostProcUnitTestCases

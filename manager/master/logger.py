@@ -78,7 +78,6 @@ class Logger(ModuleDaemon, Observer):
         while True:
             if self._stop:
                 return None
-
             try:
                 msgUnit = await asyncio.wait_for(
                     self.logQueue.get(), timeout=1)
@@ -158,37 +157,32 @@ class Logger(ModuleDaemon, Observer):
 
 
 # TestCases
-class LoggerTestCases(unittest.TestCase):
+class LoggerTestCases(unittest.IsolatedAsyncioTestCase):
 
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
         self.logger = Logger("./logger")
 
-    def tearDown(self) -> None:
+    async def asyncTearDown(self) -> None:
         shutil.rmtree("./logger")
 
-    def test_Logger_logRegister(self) -> None:
+    async def test_Logger_logRegister(self) -> None:
         self.logger.log_register("ID")
         self.assertTrue("ID" in self.logger.logTunnels)
 
-    def test_Logger_logRegister_duplicate(self) -> None:
+    async def test_Logger_logRegister_duplicate(self) -> None:
         self.logger.log_register("ID")
         self.logger.log_register("ID")
         self.assertTrue("ID" in self.logger.logTunnels)
 
-    def test_Logger_logPut(self) -> None:
+    async def test_Logger_logPut(self) -> None:
         # Setup
         self.logger.log_register("ID")
 
         # Exercise
-        async def exerciseHelper() -> None:
-            await self.logger.begin()
-            await self.logger.log_put("ID", "123456789")
-            await asyncio.gather(
-                self.logger.run(),
-                self.logger.stopDelay(1)
-            )
-
-        asyncio.run(exerciseHelper())
+        await self.logger.begin()
+        await self.logger.log_put("ID", "123456789")
+        self.logger.start()
+        await asyncio.sleep(1)
 
         # Verify
         f = open("./logger/ID")
@@ -196,7 +190,7 @@ class LoggerTestCases(unittest.TestCase):
         val = val.split(":")[-1].strip()
         self.assertEqual("123456789", val)
 
-    def test_logger_close(self) -> None:
+    async def test_logger_close(self) -> None:
         # Setup
         self.logger.log_register("ID")
         self.assertTrue("ID" in self.logger.logTunnels)

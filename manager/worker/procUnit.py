@@ -533,7 +533,6 @@ class PostProcUnit(ProcUnit):
 
     async def _do_post(self, post: Post) -> None:
         path = await post.do()
-
         if path != '':
             fileName = path.split(pathSeperator())[-1]
             await do_job_result_transfer(

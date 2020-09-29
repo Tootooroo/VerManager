@@ -22,6 +22,7 @@
 
 import asyncio
 import manager.master.eventHandlers as EVENT_HANDLERS
+import manager.master.configs as cfg
 
 from typing import Optional, List
 from threading import Thread
@@ -84,6 +85,7 @@ class ServerInst(Thread):
         global predicates
 
         self._mmanager = MManager()
+        cfg.mmanager = self._mmanager
 
         info = Info(self._configPath)
 

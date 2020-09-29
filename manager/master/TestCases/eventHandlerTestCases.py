@@ -28,7 +28,7 @@ import manager.master.configs as cfg
 
 from manager.master.eventHandlers import EVENT_HANDLER_TOOLS
 from typing import Any
-from manager.master.task import Task, SingleTask, PostTask
+from manager.master.task import Task, SingleTask
 from manager.basic.info import Info
 from manager.basic.mmanager import MManager, Module
 from manager.basic.letter import Letter, BinaryLetter, LogLetter, \

@@ -67,6 +67,7 @@ class Info(Module):
         results = list(map(lambda p: p(self._config), predicates))
         return reduce(lambda acc, curr: acc and curr, results)
 
+
 # TestCases
 class InfoTestCases(unittest.TestCase):
 
@@ -78,7 +79,7 @@ class InfoTestCases(unittest.TestCase):
         # Exercise
         tzvalue = self.cfgs.getConfig("TimeZone")
         prjId = self.cfgs.getConfig("Project_ID")
-        cmds = self.cfgs.getConfig("BuildSet", "Builds", "GL5610", "cmd")
+        cmds = self.cfgs.getConfig("BuildSet_GL8900", "Builds", "GL5610", "cmd")
 
         # Verify
         self.assertEqual(480, tzvalue)

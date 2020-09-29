@@ -23,6 +23,7 @@
 # EventListener
 
 import asyncio
+import manager.master.configs as cfg
 
 from django.utils import timezone
 
@@ -255,7 +256,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
     async def run(self) -> None:
 
         # Entry environment initialization
-        entryEnv = Entry.EntryEnv(self, self.handlers)
+        entryEnv = Entry.EntryEnv(self, self.handlers, cfg.mmanager)
 
         while True:
 

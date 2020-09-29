@@ -175,12 +175,12 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         self.queue = asyncio.Queue(10)  # type: asyncio.Queue
 
         output = Output()
-        output.setQueue(self.queue)
+        self.connector = misc.Connector()
+        output.setConnector(self.connector)
         self.sut.setOutput(output)
 
         self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
-    @unittest.skip("")
     async def test_JobProcUnit_JobProc(self) -> None:
         # Setup
         self.sut.start()
@@ -193,7 +193,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         while True:
-            letter = await asyncio.wait_for(self.queue.get(), timeout=3)
+            letter = await asyncio.wait_for(self.connector.q.get(), timeout=3)
 
             if not isinstance(letter, BinaryLetter):
                 continue
@@ -211,12 +211,12 @@ class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         self.queue = asyncio.Queue(10)  # type: asyncio.Queue
 
         output = Output()
-        output.setQueue(self.queue)
+        self.connector = misc.Connector()
+        output.setConnector(self.connector)
         self.sut.setOutput(output)
 
         self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
-    @unittest.skip("Need to remove cleanup after Post Job")
     async def test_PostProcUnit_Do(self) -> None:
         # Setup
         self.sut.start()
