@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 # Create your tests here.
-#from manager.master.verControl import VerControlTestCases
+from manager.master.TestCases.verControlTestcases import VerControlTestCases
 
 """
 from manager.master.logger import \
@@ -71,8 +71,10 @@ from manager.worker.TestCases.connectorTestCases import \
 
 from manager.worker.TestCases.workerTestCases import \
     WorkerTestCases_
-"""
+
 from manager.worker.TestCases.procUnitTestCases import \
     ProcUnitUnitTestCases, \
     JobProcUnitTestCases, \
     PostProcUnitTestCases
+
+"""

@@ -105,7 +105,7 @@ class ServerInst(Thread):
         dispatcher.setTaskTracker(tracker)
         self.addModule(dispatcher)
 
-        eventListener = EventListener(self)
+        eventListener = EventListener()
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
@@ -125,8 +125,9 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        #revSyncner = RevSync(self)
-        #self.addModule(revSyncner)
+        revSyncner = RevSync()
+        await revSyncner.revDBInit()
+        self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -135,6 +136,8 @@ class ServerInst(Thread):
 
         workerRoom.subscribe(WorkerRoom.NOTIFY_LOG, logger)
         eventListener.subscribe(EventListener.NOTIFY_LOG, logger)
+        eventListener.subscribe(
+            EventListener.NOTIFY_TASK_STATE_CHANGED, dispatcher)
         dispatcher.subscribe(Dispatcher.NOTIFY_LOG, logger)
 
         # Install observer handlers to EventListener

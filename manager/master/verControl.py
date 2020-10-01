@@ -25,22 +25,22 @@
 # This module define a object that deal with Revisions
 
 import asyncio
-import unittest
 import django.db.utils
-from typing import Any, Optional, Dict
+import re
+import gitlab
+import json
+import manager.master.configs as cfg
 
+from concurrent.futures import ProcessPoolExecutor
+from asgiref.sync import sync_to_async
+from django.http import HttpRequest
+from manager.basic.info import Info
+from typing import Any, Optional, Dict, cast
 from manager.basic.type import State, Ok, Error
 from manager.basic.util import map_strict
 from manager.basic.mmanager import ModuleDaemon
 from manager.models import Revisions, make_sure_mysql_usable
-from django.http import HttpRequest
-import re
-import queue
-import gitlab  # type: ignore
 
-import json
-
-from manager.basic.info import M_NAME as INFO_M_NAME
 
 revSyncner = None
 M_NAME = "RevSyncner"
@@ -54,14 +54,13 @@ class RevSync(ModuleDaemon):
     # will remain updated
     revQueue = asyncio.Queue(10)  # type: asyncio.Queue
 
-    def __init__(self, sInst: Any) -> None:
+    def __init__(self) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
 
         self._stop = False
-
-        self._sInst = sInst
+        self._executor = ProcessPoolExecutor(max_workers=1)
 
     async def begin(self) -> None:
         return None
@@ -72,8 +71,10 @@ class RevSync(ModuleDaemon):
     def needStop(self) -> bool:
         return self._stop
 
-    def connectToGitlab(self) -> State:
-        cfgs = self._sInst.getModule(INFO_M_NAME)
+    def _connectToGitlab(self) -> Optional[gitlab.Gitlab]:
+        assert(cfg.config is not None)
+
+        cfgs = cfg.config
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
 
@@ -81,26 +82,26 @@ class RevSync(ModuleDaemon):
 
         if url == "" or token == "":
             return Error
-        # fixme: repo url and token key must not a constant just place these in
-        #        configuration file
-        self.gitlabRef = gitlab.Gitlab(url, token)
 
-        try:
-            self.gitlabRef.auth()
-        except Exception:
-            return Error
+        ref = gitlab.Gitlab(url, token)
+        ref.auth()
 
-        return Ok
+        return ref
 
-    def revTransfer(rev, tz):
-        revision = Revisions(sn=rev.id,
-                             author=rev.author_name,
-                             comment=rev.message,
-                             dateTime=rev.committed_date)
-        try:
-            revision.save()
-        except Exception:
-            pass
+    def _retrive_revisions(self) -> Optional[Any]:
+        ref = self._connectToGitlab()
+
+        if ref is None:
+            return None
+
+        return ref.projects.get(self._project_id).commis.list(all=True)
+
+    async def revTransfer(rev, tz):
+        revision = Revisions(
+            sn=rev.id, author=rev.author_name,
+            comment=rev.message, dateTime=rev.committed_date)
+
+        await sync_to_async(revision.save)()
 
         return revision
 
@@ -119,22 +120,25 @@ class RevSync(ModuleDaemon):
         formatDate = formatDate.replace("T", " ")
         return formatDate + offset
 
-    def revDBInit(self) -> bool:
-        pId = self._project_id
-        revisions = self.gitlabRef.projects.get(pId).commits.list(all=True)
+    async def revDBInit(self) -> bool:
+        revisions = await asyncio.get_running_loop()\
+            .run_in_executor(self._executor, self._retrive_revisions)
+        if revisions is None:
+            raise VERSION_DB_INIT_FAILED()
 
         # Remove old datas of revisions cause these data may out of date
         # repository may be rebased so that the structure of it is very
         # different with datas in database so just remove these data and
         # load from server again
         try:
-            Revisions.objects.all().delete()  # type: ignore
+            await sync_to_async(Revisions.objects.all().delete)()
 
             # Fill revisions just retrived into model
-            config = self._sInst.getModule(INFO_M_NAME)
+            config = cast(Info, cfg.config)
             tz = config.getConfig('TimeZone')
 
-            map_strict(lambda rev: RevSync.revTransfer(rev, tz), revisions)
+            for rev in revisions:
+                await RevSync.revTransfer(rev, tz)
 
         except django.db.utils.ProgrammingError:
             return False
@@ -173,7 +177,7 @@ class RevSync(ModuleDaemon):
 
         return None
 
-    def _requestHandle(self, request: HttpRequest) -> bool:
+    async def _requestHandle(self, request: HttpRequest) -> bool:
         # Premise of these code work correct is a merge request
         # contain only a commit if it can't be satisfied
         # should read gitlab when merge event arrived and
@@ -194,7 +198,8 @@ class RevSync(ModuleDaemon):
 
         rev = Revisions(sn=sn_, author=author_, comment=comment_,
                         dateTime=date_time_)
-        rev.save()
+
+        await sync_to_async(rev.save, thread_sensitive=True)()
 
         return True
 
@@ -203,13 +208,6 @@ class RevSync(ModuleDaemon):
     # from. Responsbility will gain more benefit if such operation
     # to be complicated.
     async def run(self) -> None:
-        import pdb; pdb.set_trace()
-
-        if self.connectToGitlab() is Error:
-            return None
-
-        if self.revDBInit() is False:
-            return None
 
         while True:
 
@@ -218,49 +216,10 @@ class RevSync(ModuleDaemon):
 
             request = await RevSync.revQueue.get()
 
-            self._requestHandle(request)
+            await self._requestHandle(request)
 
 
-# TestCases
-class HttpRequest_:
+class VERSION_DB_INIT_FAILED(Exception):
 
-    def __init__(self):
-        self.headers = ""
-        self.body = ""
-
-
-class VerControlTestCases(unittest.TestCase):
-
-    def test_new_rev(self):
-        import time
-        from manager.models import Revisions
-
-        revSyncer = RevSync(None)
-
-        request = HttpRequest_()
-        request.headers = {'Content-Type': 'application/json',
-                           'X-Gitlab-Event': 'Merge Request Hook'}
-
-        request.body = '{ "object_attributes": {\
-                            "state": "merged",\
-                            "last_commit": {\
-                              "id": "12345678",\
-                              "message": "message",\
-                              "timestamp": "2019-05-09T01:39:08Z",\
-                              "author": {\
-                                "name": "root"\
-                              }\
-                            }\
-                           }\
-                         }'
-
-        revSyncer._requestHandle(request)
-
-        time.sleep(0.5)
-
-        rev = Revisions.objects.get(pk='12345678')
-
-        self.assertEqual("12345678", rev.sn)
-        self.assertEqual("message", rev.comment)
-        self.assertEqual("root", rev.author)
-        self.assertEqual("2019-05-09 01:39:08+00:00", str(rev.dateTime))
+    def __str__(self) -> str:
+        return "Version Database failed to init"

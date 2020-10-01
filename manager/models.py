@@ -66,6 +66,7 @@ def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
 
     return comments
 
+
 def make_sure_mysql_usable():
     if connection.connection and not connection.is_usable():
         del connections._connections.default
