@@ -57,7 +57,7 @@ class Logger(ModuleDaemon, Observer):
         self.logQueue = None  \
             # type: Optional[asyncio.Queue[Tuple[LOG_ID, LOG_MSG]]]
 
-        self.logTunnels = {} # type: Dict[str, TextIO]
+        self.logTunnels = {}  # type: Dict[str, TextIO]
 
         self._stop = False
 
@@ -72,8 +72,8 @@ class Logger(ModuleDaemon, Observer):
         self.logTunnels = {}
 
     async def run(self) -> None:
-        if self.logQueue is None:
-            return None
+
+        assert(self.logQueue is not None)
 
         while True:
             if self._stop:

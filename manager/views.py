@@ -139,16 +139,14 @@ class VersionViewSet(viewsets.ModelViewSet):
             replace(":", "").replace(" ", "") + "_" + revision[0:10]
 
         task = Task(version, revision, version,
-                    extra = {"Temporary":"true"})
+                    extra={"Temporary": "true"})
 
         if not task.isValid():
             return HttpResponseBadRequest()
 
-        if dispatcher.dispatch(task) == False:
-            return HttpResponseBadRequest()
+        dispatcher.dispatch(task)
 
         return HttpResponse()
-
 
     @action(detail=True, methods=['post'])
     def gen_status_query(self, request, pk=None) -> Response:

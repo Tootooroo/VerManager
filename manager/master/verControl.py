@@ -32,12 +32,12 @@ import json
 import manager.master.configs as cfg
 
 from concurrent.futures import ProcessPoolExecutor
+from queue import Queue
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
 from manager.basic.info import Info
 from typing import Any, Optional, Dict, cast
-from manager.basic.type import State, Ok, Error
-from manager.basic.util import map_strict
+from manager.basic.type import Error
 from manager.basic.mmanager import ModuleDaemon
 from manager.models import Revisions, make_sure_mysql_usable
 
@@ -48,19 +48,18 @@ M_NAME = "RevSyncner"
 
 class RevSync(ModuleDaemon):
 
-    # This queue will fill by new revision that merged into
-    # repository after RevSync started and RevSync will
-    # put such revision into model so the revision database
-    # will remain updated
-    revQueue = asyncio.Queue(10)  # type: asyncio.Queue
-
     def __init__(self) -> None:
         global M_NAME
 
         ModuleDaemon.__init__(self, M_NAME)
 
         self._stop = False
-        self._executor = ProcessPoolExecutor(max_workers=1)
+
+        # This queue will fill by new revision that merged into
+        # repository after RevSync started and RevSync will
+        # put such revision into model so the revision database
+        # will remain updated
+        self.revQueue = Queue(10)  # type: Queue
 
     async def begin(self) -> None:
         return None
@@ -71,14 +70,13 @@ class RevSync(ModuleDaemon):
     def needStop(self) -> bool:
         return self._stop
 
-    def _connectToGitlab(self) -> Optional[gitlab.Gitlab]:
+    @staticmethod
+    def _connectToGitlab() -> Optional[gitlab.Gitlab]:
         assert(cfg.config is not None)
 
         cfgs = cfg.config
         url = cfgs.getConfig('GitlabUrl')
         token = cfgs.getConfig('PrivateToken')
-
-        self._project_id = cfgs.getConfig("Project_ID")
 
         if url == "" or token == "":
             return Error
@@ -88,13 +86,17 @@ class RevSync(ModuleDaemon):
 
         return ref
 
-    def _retrive_revisions(self) -> Optional[Any]:
-        ref = self._connectToGitlab()
+    @staticmethod
+    def _retrive_revisions() -> Optional[Any]:
+        assert(cfg.config is not None)
+
+        ref = RevSync._connectToGitlab()
+        projId = cfg.config.getConfig("Project_ID")
 
         if ref is None:
             return None
 
-        return ref.projects.get(self._project_id).commis.list(all=True)
+        return ref.projects.get(projId).commis.list(all=True)
 
     async def revTransfer(rev, tz):
         revision = Revisions(
@@ -121,8 +123,10 @@ class RevSync(ModuleDaemon):
         return formatDate + offset
 
     async def revDBInit(self) -> bool:
-        revisions = await asyncio.get_running_loop()\
-            .run_in_executor(self._executor, self._retrive_revisions)
+        loop = asyncio.get_running_loop()
+        e = ProcessPoolExecutor()
+        revisions = await loop.run_in_executor(e, self._retrive_revisions)
+
         if revisions is None:
             raise VERSION_DB_INIT_FAILED()
 
@@ -147,10 +151,8 @@ class RevSync(ModuleDaemon):
 
         return True
 
-    @staticmethod
-    def revNewPush(rev: HttpRequest) -> bool:
-        loop = asyncio.get_running_loop()
-        loop.create_task(RevSync.revQueue.put(rev))
+    def revNewPush(self, rev: HttpRequest) -> bool:
+        self.revQueue.put(rev)
         return True
 
     def gitlabWebHooksChecking(self, request: HttpRequest) -> Optional[Dict]:
@@ -214,7 +216,7 @@ class RevSync(ModuleDaemon):
             if self._stop is True:
                 return None
 
-            request = await RevSync.revQueue.get()
+            request = self.revQueue.get()
 
             await self._requestHandle(request)
 

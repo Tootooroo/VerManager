@@ -21,11 +21,18 @@
 # SOFTWARE.
 
 # Create your tests here.
+
+#from manager.functionalTest import FunctionalTestCases
 from manager.master.TestCases.verControlTestcases import VerControlTestCases
 
+
 """
+
 from manager.master.logger import \
     LoggerTestCases
+
+from manager.master.TestCases.taskTrackerTestCases import \
+    TaskTrackerTestCases
 
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
 from manager.master.TestCases.dispatcherTestCases import \

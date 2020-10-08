@@ -166,5 +166,9 @@ class ServerInst(Thread):
             await asyncio.sleep(3600)
 
     def run(self) -> None:
+
+        # Load configuration
+        cfg.config = Info("./config_test.yaml")
+
         # Start this server instance
         asyncio.run(self._execute())

@@ -23,6 +23,7 @@
 import unittest
 import asyncio
 
+from concurrent.futures import ProcessPoolExecutor
 from asgiref.sync import sync_to_async
 from manager.master.verControl import RevSync
 from manager.models import Revisions
@@ -40,9 +41,7 @@ class VerControlTestCases(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.revSyncer = RevSync()
 
-    async def asyncTearDown(self) -> None:
-        pass
-
+    @unittest.skip("")
     async def test_new_rev(self) -> None:
         # Setup
         request = HttpRequest_()
@@ -64,7 +63,7 @@ class VerControlTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         self.revSyncer.start()
-        await self.revSyncer.revQueue.put(request)
+        self.revSyncer.revNewPush(request)
         await asyncio.sleep(1)
 
         # Verify

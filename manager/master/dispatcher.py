@@ -204,7 +204,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         ret = False
 
         if isinstance(task, SuperTask):
-            await self._dispatch_logging("Task " + task.id() + " is a SuperTask.")
+            await self._dispatch_logging(
+                "Task " + task.id() + " is a SuperTask.")
             return await self._dispatchSuperTask(task)
 
         ret = await self._do_dispatch(task)
