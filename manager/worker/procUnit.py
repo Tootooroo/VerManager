@@ -403,7 +403,7 @@ class JobProcUnit(ProcUnit):
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
-        notify_job_state(tid, state, output.send)
+        await notify_job_state(tid, state, output.send)
 
     async def run(self) -> None:
 
@@ -545,21 +545,24 @@ class PostProcUnit(ProcUnit):
         path = await post.do()
 
         if path != '':
+            # Success
             fileName = path.split(pathSeperator())[-1]
 
             await do_job_result_transfer(
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send)  # type: ignore
 
-        # Tell to master post is done
-        pass
+            await self._notify_job_state(post.ident(), Letter.RESPONSE_STATE_FINISHED)
+        else:
+            # Failed
+            await self._notify_job_state(post.ident(), Letter.RESPONSE_STATE_FAILURE)
 
         # Cleanup
         post.cleanup()
 
-    async def notify_job_state(self, tid: str, state: str) -> None:
+    async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
-        notify_job_state(tid, state, output.send)
+        await notify_job_state(tid, state, output.send)
 
     async def _new_post(self, letter: PostTaskLetter) -> None:
         ident = letter.getIdent()
