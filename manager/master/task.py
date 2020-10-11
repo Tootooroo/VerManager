@@ -42,7 +42,6 @@ from manager.basic.info import Info
 from manager.master.build import Build, BuildSet
 
 
-
 TaskState = int
 
 TaskType = int
@@ -77,7 +76,6 @@ class TaskBase(ABC):
         STATE_FINISHED: [STATE_PREPARE, STATE_FINISHED, STATE_FAILURE],
         STATE_FAILURE: [STATE_FAILURE]
     }  # type:  Dict[int, List[int]]
-
 
     @abstractmethod
     def id(self) -> str:

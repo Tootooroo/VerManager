@@ -53,13 +53,27 @@ class Worker:
 
         # Create Link to Master
         master_address = self.cfg.getConfig('MASTER_ADDRESS')
-        await connector.open_connection('Master', master_address['host'], master_address['port'])
+        await connector.open_connection('Master', master_address['host'],
+                                        master_address['port'])
 
-        # Create Link to Merger if exists.
+        # Merger Setup
+        role = self.cfg.getConfig('ROLE')
         merger_address = self.cfg.getConfig('MERGER_ADDRESS')
-        if merger_address != '':
+
+        if role == 'MERGER':
+            # Setup PostProcUnit
+            postProcUnit = PostProcUnit("Poster")
+            processor.install_unit(postProcUnit)
+
+            processor.set_type_dispatch_to_unit(Letter.BinaryFile, "Poster")
+            processor.set_type_dispatch_to_unit(Letter.Post, "Poster")
+
+            # Listen to another workers
             await connector.listen("Poster", merger_address['host'],
                                    merger_address['port'])
+
+        # Create Link to Merger if exists.
+        if merger_address != '':
             await connector.open_connection('Poster', merger_address['host'],
                                             merger_address['port'])
 
@@ -70,15 +84,6 @@ class Worker:
 
         # Setup dispatch
         processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
-
-        # Setup ProcUnit for Merger
-        role = self.cfg.getConfig('ROLE')
-        if role == 'MERGER':
-            postProcUnit = PostProcUnit("Poster")
-            processor.install_unit(postProcUnit)
-
-            processor.set_type_dispatch_to_unit(Letter.BinaryFile, "Poster")
-            processor.set_type_dispatch_to_unit(Letter.Post, "Poster")
 
         # Start Processor
         processor.start()

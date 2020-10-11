@@ -79,53 +79,18 @@ class WorkerMockEntry(WorkerStubEntry):
 class EntryTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        env = Entry.EntryEnv(None, {}, None)  # type: Entry.EntryEnv
-        self.entry = Entry("Entry", WorkerStubEntry("w1"), env)
-
-    async def test_Entry_Exists(self) -> None:
-        # Setup
-        def handler1(e, letter):
-            return None
-
-        # Exercise
-        self.assertTrue("H" not in self.entry._env.handlers)
-        self.entry.addHandler("H", handler1)
-
-        # Exercise and verify
-        self.assertTrue("H" in self.entry._env.handlers)
-
-    async def test_Entry_addHandler(self) -> None:
-        # Setup
-        def handler(e, letter):
-            return None
-
-        # Exercise
-        self.entry.addHandler("H", handler)
-
-        # Verify
-        self.assertTrue(self.entry.isEventExists("H"))
-        self.assertEqual(handler, self.entry.getHandler("H"))
-
-    async def test_Entry_removeHandler(self) -> None:
-        # Setup
-        def handler(e, letter):
-            return None
-        self.entry.addHandler("H", handler)
-
-        # Exercise
-        self.entry.removeHandler("H")
-
-        # Verify
-        self.assertTrue(not self.entry.isEventExists("H"))
+        self.env = Entry.EntryEnv(None, {}, None)  # type: Entry.EntryEnv
+        self.entry = Entry("Entry", WorkerStubEntry("w1"), self.env)
 
     async def test_Entry_EventHandle(self) -> None:
         # Setup
         eventProced = False
 
-        def handler(e, letter):
+        async def handler(e, letter):
             nonlocal eventProced
             eventProced = True
-        self.entry.addHandler("EVENT", handler)
+
+        self.env.handlers[Letter.CmdResponse] = [handler]
         self.entry.start()
         await asyncio.sleep(0.1)
 
@@ -168,9 +133,6 @@ class EntryTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertEqual(10, self.entry._hbCount)
-
-    async def eventProc(self) -> None:
-        pass
 
 
 class WorkerMockHeartBeat(WorkerStub):

@@ -42,6 +42,7 @@ M_NAME = "Logger"
 LOG_ID = str
 LOG_MSG = str
 
+
 class LOGGER_NOT_EXISTS(Exception):
     pass
 
@@ -54,8 +55,7 @@ class Logger(ModuleDaemon, Observer):
         Observer.__init__(self)
 
         self.logPath = path
-        self.logQueue = None  \
-            # type: Optional[asyncio.Queue[Tuple[LOG_ID, LOG_MSG]]]
+        self.logQueue = asyncio.Queue(128)  # type: asyncio.Queue
 
         self.logTunnels = {}  # type: Dict[str, TextIO]
 
@@ -65,11 +65,10 @@ class Logger(ModuleDaemon, Observer):
             os.mkdir(path)
 
     async def begin(self) -> None:
-        self.logQueue = asyncio.Queue(128)
+        return None
 
     async def cleanup(self) -> None:
-        self.logQueue = None
-        self.logTunnels = {}
+        return None
 
     async def run(self) -> None:
 

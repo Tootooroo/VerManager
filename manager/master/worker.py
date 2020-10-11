@@ -159,6 +159,9 @@ class Worker:
     def removeTaskWithCond(self, predicate: Callable[[Task], bool]) -> None:
         return self.inProcTask.removeTasks(predicate)
 
+    def setMax(self, max: int) -> None:
+        self.max = max
+
     def maxNumOfTask(self) -> int:
         return self.max
 

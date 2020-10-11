@@ -547,10 +547,10 @@ class ResponseLetter(Letter):
             return None
 
         return ResponseLetter(
-            ident = header['ident'],
-            tid = header['tid'],
-            state = content['state'],
-            parent = header['parent']
+            ident=header['ident'],
+            tid=header['tid'],
+            state=content['state'],
+            parent=header['parent']
         )
 
     def getIdent(self) -> str:

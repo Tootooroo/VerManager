@@ -303,8 +303,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             return False
 
         async with self.dispatchLock:
-            if self._do_dispatch(task) is False:
-                self._waitArea.enqueue(task)
+            success = await self._do_dispatch(task)
+            if not success:
+                await self._waitArea.enqueue(task)
                 self.taskEvent.set()
 
         return True
@@ -352,8 +353,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 # Dispatch task to worker
                 async with self.dispatchLock:
                     current = self._waitArea.dequeue_nowait()
-                    if self._dispatch(current) is False:
-                        self._waitArea.enqueue(current)
+                    success = await self._dispatch(current)
+                    if not success:
+                        await self._waitArea.enqueue(current)
             else:
                 continue
 
@@ -558,7 +560,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 First: Redispatch task
                 """
-                self.redispatch(t)
+                await self.redispatch(t)
 
                 """
                 Second: Redispatch tasks that is
@@ -572,7 +574,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                              if task.isFinished() and t in task.dependedBy()]
 
                 for task in doneTasks:
-                    self.redispatch(task)
+                    await self.redispatch(task)
 
                 """
                 Third: Send RE_WORK command to workers that dealing
@@ -604,7 +606,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     c = ReWorkCommand(d[w])
 
                     try:
-                        workers[w].control(c)
+                        await workers[w].control(c)
                     except BrokenPipeError:
                         continue
 

@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 import abc
 import asyncio
 import datetime
@@ -39,6 +40,7 @@ from manager.basic.util import packShellCommands, execute_shell,\
 from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
 from manager.worker.connector import Link
+from manager.basic.info import Info
 
 # Need by PostProcUnit
 from manager.basic.letter import PostTaskLetter
@@ -224,8 +226,10 @@ async def job_result_transfer(target: str, job: NewLetter,
                               send_rtn: Callable) -> None:
     extra = job.getExtra()
     tid = job.getTid()
-    result_path = extra['resultPath']
     version = job.getContent('vsn')
+
+    projName = cast(Info, configs.config).getConfig("PROJECT_NAME")
+    result_path = "./Builds/" + projName + '/' + extra['resultPath']
     fileName = result_path.split(pathSeperator())[-1]
 
     await do_job_result_transfer(
@@ -256,7 +260,7 @@ async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLe
                                          send_rtn: Callable, timeout=None) -> None:
 
     # Wait until link rebuild or timeout
-    while output.link_state() != Link.CONNECTED:
+    while output.link_state(linkid) != Link.CONNECTED:
         await asyncio.sleep(1)
         timeout = timeout - 1
 
@@ -281,6 +285,14 @@ async def job_result_transfer_check_link_forever(
 
     except asyncio.exceptions.TimeoutError:
         return
+
+
+async def notify_job_state(tid: str, state: str, rtn: Callable) -> None:
+    assert(configs.config is not None)
+    response = ResponseLetter(
+        configs.config.getConfig('WORKER_NAME'), tid, state)
+    response.setHeader('linkid', 'Master')
+    await rtn(response)
 
 
 class JobProcUnit(ProcUnit):
@@ -316,7 +328,7 @@ class JobProcUnit(ProcUnit):
         ] + cmds
 
         if not os.path.exists(projName):
-            commands = ["git clone -b master " + repo_url] + commands
+            commands = ["cd Builds", "git clone -b master " + repo_url] + commands
 
         # Pack all building commands into a single string
         # so all of them will be executed in the same shell
@@ -357,7 +369,7 @@ class JobProcUnit(ProcUnit):
         # Transfer job result to Target destination
         # if the job need a post-processing then send
         # to Poster as a PostProvider otherwise to Master.
-        if needPost == 'True':
+        if needPost == 'true':
             linkid = "Poster"
         else:
             linkid = "Master"
@@ -383,9 +395,6 @@ class JobProcUnit(ProcUnit):
 
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
-        # Cleanup
-        shutil.rmtree(projName)
-
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
 
@@ -393,16 +402,17 @@ class JobProcUnit(ProcUnit):
         await job_result_transfer(target, job, self._output_space.send)
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
-        assert(self._config is not None)
-        response = ResponseLetter(self._config.getConfig('WORKER_NAME'), tid, state)
-        response.setHeader('linkid', 'Master')
-        await self._output_space.send(response)  # type: ignore
+        output = cast(Output, self._output_space)
+        notify_job_state(tid, state, output.send)
 
     async def run(self) -> None:
 
         assert(self._output_space is not None)
         assert(self._channel is not None)
         assert(self._config is not None)
+
+        if not os.path.exists("./Builds"):
+            os.mkdir("./Builds")
 
         while True:
             job = cast(NewLetter, await self.job_retrive())
@@ -533,14 +543,23 @@ class PostProcUnit(ProcUnit):
 
     async def _do_post(self, post: Post) -> None:
         path = await post.do()
+
         if path != '':
             fileName = path.split(pathSeperator())[-1]
+
             await do_job_result_transfer(
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send)  # type: ignore
 
+        # Tell to master post is done
+        pass
+
         # Cleanup
         post.cleanup()
+
+    async def notify_job_state(self, tid: str, state: str) -> None:
+        output = cast(Output, self._output_space)
+        notify_job_state(tid, state, output.send)
 
     async def _new_post(self, letter: PostTaskLetter) -> None:
         ident = letter.getIdent()
@@ -568,9 +587,12 @@ class PostProcUnit(ProcUnit):
             os.mkdir("./Post")
 
         while True:
-            job = await self.job_retrive()
+            try:
+                job = await self.job_retrive()
 
-            if isinstance(job, BinaryLetter):
-                await self._frag_collect(job)
-            elif isinstance(job, PostTaskLetter):
-                await self._new_post(job)
+                if isinstance(job, BinaryLetter):
+                    await self._frag_collect(job)
+                elif isinstance(job, PostTaskLetter):
+                    await self._new_post(job)
+            except Exception as e:
+                print(e)

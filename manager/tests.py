@@ -22,8 +22,12 @@
 
 # Create your tests here.
 
-#from manager.functionalTest import FunctionalTestCases
-from manager.master.TestCases.verControlTestcases import VerControlTestCases
+# from manager.master.TestCases.eventListenerTestCases import \
+# iEntryTestCases, \
+# EventListenerTestCases
+
+from manager.functionalTest import FunctionalTestCases
+# from manager.master.TestCases.verControlTestcases import VerControlTestCases
 
 
 """
@@ -58,10 +62,6 @@ from manager.basic.observer import \
 
 from manager.basic.mmanager import \
     MManagerTestCases
-
-from manager.master.TestCases.eventListenerTestCases import \
-    EntryTestCases, \
-    EventListenerTestCases
 
 from manager.master.TestCases.workerRoomTestCases import \
     WorkerRoomTestCases

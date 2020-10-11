@@ -39,7 +39,6 @@ from manager.master.eventHandlers import responseHandler, binaryHandler, \
     logHandler, logRegisterhandler
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
-from manager.master.verControl import RevSync
 from manager.master.taskTracker import TaskTracker
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -125,9 +124,9 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        revSyncner = RevSync()
-        await revSyncner.revDBInit()
-        self.addModule(revSyncner)
+        # revSyncner = RevSync()
+        # await revSyncner.revDBInit()
+        # self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)

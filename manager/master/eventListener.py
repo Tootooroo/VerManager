@@ -71,22 +71,6 @@ class Entry:
     def getWorker(self) -> Worker:
         return self._worker
 
-    def addHandler(self, eventType: str, h: Handler) -> bool:
-        if eventType in self._env.handlers:
-            return False
-
-        self._env.handlers[eventType] = h
-        return True
-
-    def removeHandler(self, eventType: str) -> None:
-        del self._env.handlers[eventType]
-
-    def getHandler(self, eventType) -> Optional[Handler]:
-        if eventType in self._env.handlers:
-            return self._env.handlers[eventType]
-        else:
-            return None
-
     def isEventExists(self, eventType: str) -> bool:
         return eventType in self._env.handlers
 
@@ -95,7 +79,6 @@ class Entry:
 
     async def _heartbeatProc(self, hbEvent: HeartbeatLetter) -> None:
         seq = hbEvent.getSeq()
-
         if seq != self._hbCount:
             return None
 
@@ -129,19 +112,22 @@ class Entry:
         if event is None:
             return None
 
+        print(event)
+
         if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)
             return None
 
-        type = event.getType()
+        type = event.typeOfLetter()
 
         try:
             # eventProc must not throw any of exceptions
             # if exceptions is catch from event handlers
             # need to log into logfile.
-            await self._env.handlers[type](self._env, event)
-        except Exception:
-            pass
+            for rtn in self._env.handlers[type]:
+                await rtn(self._env, event)
+        except Exception as e:
+            print(e)
 
     def start(self) -> None:
         asyncio.get_running_loop().\
@@ -155,7 +141,9 @@ class Entry:
             try:
                 await self.eventProc()
                 await self._heartbeatMaintain()
-            except Exception:
+            except Exception as e:
+                # Print Exception
+                print(e)
                 # Close stream
                 self._worker.getStream()[1].close()
                 return

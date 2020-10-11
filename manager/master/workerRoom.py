@@ -128,11 +128,13 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # Init Worker
         try:
             propLetter = await receving(r, timeout=3)
+
             if propLetter is None:
                 return
 
             w_ident = cast(PropLetter, propLetter).getIdent()
             role = cast(PropLetter, propLetter).getRole()
+            max = int(cast(PropLetter, propLetter).getMax())
 
             if role == "MERGER":
                 role_v = Worker.ROLE_MERGER
@@ -141,6 +143,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
 
             arrived_worker = Worker(w_ident, r, w, role_v)
             arrived_worker.setState(Worker.STATE_ONLINE)
+            arrived_worker.setMax(max)
 
         except (ConnectionError, asyncio.exceptions.TimeoutError):
             w.close()

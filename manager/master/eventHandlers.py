@@ -324,7 +324,6 @@ async def responseHandler_ResultStore(
 async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
 
     import traceback
-
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
     if not isinstance(letter, BinaryLetter):

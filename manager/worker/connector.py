@@ -115,7 +115,7 @@ class Linker:
         link = self._links[linkid]
 
         # Link Init
-        max_proc_job = cfg.config.getConfig('MAX_PROC')
+        max_proc_job = cfg.config.getConfig('MAX_TASK_CAN_PROC')
         role = cfg.config.getConfig('ROLE')
 
         try:
