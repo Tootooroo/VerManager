@@ -36,8 +36,17 @@ from manager.master.dispatcher import M_NAME as DISPATCH_M_NAME, \
 class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.master = ServerInst("127.0.0.1", 30000, "./config_test.yaml")
+        self.master = ServerInst("127.0.0.1", 30000, "./config.yaml")
         self.worker = Worker("./manager/worker/config.yaml")
+        self.worker1 = Worker("./manager/worker/config1.yaml")
+        self.worker2 = Worker("./manager/worker/config2.yaml")
+
+    async def test_Functional_Startup(self) -> None:
+        # Exercise
+        self.master.start()
+
+        # Verify
+        await asyncio.sleep(10)
 
     @unittest.skip("")
     async def test_Functional_DispatchSingleTask(self) -> None:
@@ -62,9 +71,11 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(10)
         self.assertTrue(os.path.exists("./data/result"))
 
+    @unittest.skip("")
     async def test_Functional_DispatchSuperTaskWithOnlyOneWorker(self) -> None:
         # Setup
         self.master.start()
+
         await asyncio.sleep(1)
         self.worker.start_nowait()
 

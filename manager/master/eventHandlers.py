@@ -317,7 +317,6 @@ async def responseHandler_ResultStore(
 
     url = cfg.config.getConfig('GitlabUr')
 
-
     task.setData(url + "/data/" + fileName)
 
 

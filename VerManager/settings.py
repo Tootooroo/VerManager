@@ -28,7 +28,7 @@ DEBUG = True
 HOST = os.environ.get('ALLOWED_HOST')
 if HOST is None:
     HOST = 'localhost'
-ALLOWED_HOSTS = [HOST]
+ALLOWED_HOSTS = ['127.0.0.1']
 
 
 # Application definition
@@ -141,8 +141,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (
-    '/home/aydenlin/Projects/VerManager/manager/static/browser/dist/browser',
-    '/home/aydenlin/Projects/VerManager/data'
+    '/home/ayden/Codebase/VerManager/manager/static/browser/dist/browser',
+    '/home/ayden/Codebase/VerManager/data'
 )
 
 REQUIRE_BASE_URL = "./"

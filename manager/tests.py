@@ -26,9 +26,13 @@
 # iEntryTestCases, \
 # EventListenerTestCases
 
-from manager.functionalTest import FunctionalTestCases
+#from manager.functionalTest import FunctionalTestCases
 # from manager.master.TestCases.verControlTestcases import VerControlTestCases
 
+from manager.master.task import \
+    TaskTestCases
+from manager.master.TestCases.dispatcherTestCases import \
+    WaitAreaTestCases, DispatcherUnitTest
 
 """
 
@@ -39,8 +43,6 @@ from manager.master.TestCases.taskTrackerTestCases import \
     TaskTrackerTestCases
 
 from manager.master.TestCases.eventHandlerTestCases import EventHandlerTestCases
-from manager.master.TestCases.dispatcherTestCases import \
-    WaitAreaTestCases, DispatcherUnitTest
 
 from manager.master.worker import \
     WorkerTestCases
@@ -65,10 +67,6 @@ from manager.basic.mmanager import \
 
 from manager.master.TestCases.workerRoomTestCases import \
     WorkerRoomTestCases
-
-from manager.master.task import \
-    TaskTestCases
-
 
 from manager.worker.TestCases.processorTestCases import \
     ProcessorTestCases

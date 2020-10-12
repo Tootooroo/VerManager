@@ -22,6 +22,7 @@
 
 # EventListener
 
+import traceback
 import asyncio
 import manager.master.configs as cfg
 
@@ -74,8 +75,14 @@ class Entry:
     def isEventExists(self, eventType: str) -> bool:
         return eventType in self._env.handlers
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         self._stop = True
+        ident = self._worker.getIdent()
+        eventL = self._env.eventListener
+
+        await eventL.notify(eventL.NOTIFY_LOST, ident)
+        eventL.remove(ident)
+        eventL.removeEntry(ident)
 
     async def _heartbeatProc(self, hbEvent: HeartbeatLetter) -> None:
         seq = hbEvent.getSeq()
@@ -94,14 +101,8 @@ class Entry:
 
     async def _heartbeatMaintain(self) -> None:
         current = timezone.now()
-        eventL = self._env.eventListener  # type: EventListener
-        ident = self._worker.getIdent()
-
         if self.isHeartbeatTimeout(current):
-            await eventL.notify(eventL.NOTIFY_LOST, ident)
-            eventL.remove(ident)
-            eventL.removeEntry(ident)
-            self.stop()
+            await self.stop()
 
     async def eventProc(self) -> None:
         try:
@@ -111,8 +112,6 @@ class Entry:
 
         if event is None:
             return None
-
-        print(event)
 
         if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)
@@ -126,8 +125,8 @@ class Entry:
             # need to log into logfile.
             for rtn in self._env.handlers[type]:
                 await rtn(self._env, event)
-        except Exception as e:
-            print(e)
+        except Exception:
+            traceback.print_exc()
 
     def start(self) -> None:
         asyncio.get_running_loop().\
@@ -141,11 +140,10 @@ class Entry:
             try:
                 await self.eventProc()
                 await self._heartbeatMaintain()
-            except Exception as e:
+            except Exception:
                 # Print Exception
-                print(e)
-                # Close stream
-                self._worker.getStream()[1].close()
+                traceback.print_exc()
+                await self.stop()
                 return
 
             await asyncio.sleep(0.1)

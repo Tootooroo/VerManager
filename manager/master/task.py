@@ -21,9 +21,10 @@
 # SOFTWARE.
 
 import unittest
+
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, \
-    BinaryIO, Union, Any, Tuple, Callable
+    BinaryIO, Union, Any, Tuple, Callable, cast
 from functools import reduce
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, \
@@ -392,7 +393,7 @@ class SuperTask(Task):
         if varPairs != []:
             merge.varAssign(varPairs)
 
-        pt = PostTask(PostTask.genIdent(self.vsn),
+        pt = PostTask(PostTask.genIdent(self.taskId),
                       self.vsn, frags, merge)
 
         if pt.isValid() is False:
@@ -517,7 +518,7 @@ class PostTask(Task):
 
     def toLetter(self) -> PostTaskLetter:
         return PostTaskLetter(
-            self.vsn+"__Post", self.vsn, self._merge.getCmds(),
+            self.id(), self.vsn, self._merge.getCmds(),
             self._merge.getOutput(), frags=self._frags)
 
 
@@ -664,5 +665,32 @@ class TaskTestCases(unittest.TestCase):
         self.assertTrue("VersionToto__GL5610-v3" in children)
         self.assertTrue("VersionToto__GL8900" in children)
 
-    def test_SingleTask_ToLetter(self) -> None:
-        pass
+    def test_SuperTask_Deps(self) -> None:
+        # Create a taks object
+        t = SuperTask("VersionToto", "ABC", "VersionToto", self.bs, {})
+
+        # Verify
+        deps = [t.id() for t in t.dependence()]
+        self.assertTrue("VersionToto__GL5610" in deps)
+        self.assertTrue("VersionToto__GL5610-v2" in deps)
+        self.assertTrue("VersionToto__GL5610-v3" in deps)
+        self.assertTrue("VersionToto__GL8900" in deps)
+        self.assertTrue("VersionToto__Post" in deps)
+
+        post = cast(PostTask, t.getPostTask())
+        deps = [t.id() for t in post.dependence()]
+        self.assertTrue("VersionToto__GL5610" in deps)
+        self.assertTrue("VersionToto__GL5610-v2" in deps)
+        self.assertTrue("VersionToto__GL5610-v3" in deps)
+        self.assertTrue("VersionToto__GL8900" in deps)
+
+        depBy = [t.id() for t in post.dependedBy()]
+        self.assertTrue("VersionToto" in depBy)
+
+        depBys = [t.dependedBy() for t in t.dependence()
+                  if isinstance(t, SingleTask)]
+
+        for d in depBys:
+            d_id = [t.id() for t in d]
+            self.assertTrue("VersionToto" in d_id)
+            self.assertTrue("VersionToto__Post" in d_id)

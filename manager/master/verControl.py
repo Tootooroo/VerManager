@@ -32,7 +32,6 @@ import json
 import manager.master.configs as cfg
 
 from concurrent.futures import ProcessPoolExecutor
-from queue import Queue
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
 from manager.basic.info import Info
@@ -59,7 +58,7 @@ class RevSync(ModuleDaemon):
         # repository after RevSync started and RevSync will
         # put such revision into model so the revision database
         # will remain updated
-        self.revQueue = Queue(10)  # type: Queue
+        self.revQueue = asyncio.Queue(10)  # type: Queue
 
     async def begin(self) -> None:
         return None
@@ -96,7 +95,7 @@ class RevSync(ModuleDaemon):
         if ref is None:
             return None
 
-        return ref.projects.get(projId).commis.list(all=True)
+        return ref.projects.get(projId).commits.list(all=True)
 
     async def revTransfer(rev, tz):
         revision = Revisions(
@@ -126,6 +125,7 @@ class RevSync(ModuleDaemon):
         loop = asyncio.get_running_loop()
         e = ProcessPoolExecutor()
         revisions = await loop.run_in_executor(e, self._retrive_revisions)
+        print(1)
 
         if revisions is None:
             raise VERSION_DB_INIT_FAILED()
@@ -134,6 +134,7 @@ class RevSync(ModuleDaemon):
         # repository may be rebased so that the structure of it is very
         # different with datas in database so just remove these data and
         # load from server again
+
         try:
             await sync_to_async(Revisions.objects.all().delete)()
 
@@ -143,7 +144,6 @@ class RevSync(ModuleDaemon):
 
             for rev in revisions:
                 await RevSync.revTransfer(rev, tz)
-
         except django.db.utils.ProgrammingError:
             return False
         except Exception:
@@ -216,9 +216,11 @@ class RevSync(ModuleDaemon):
             if self._stop is True:
                 return None
 
-            request = self.revQueue.get()
-
-            await self._requestHandle(request)
+            try:
+                request = await self.revQueue.get()
+                await self._requestHandle(request)
+            except Exception as e:
+                print(e)
 
 
 class VERSION_DB_INIT_FAILED(Exception):

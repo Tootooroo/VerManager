@@ -128,6 +128,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # Init Worker
         try:
             propLetter = await receving(r, timeout=3)
+            print(propLetter)
 
             if propLetter is None:
                 return
@@ -144,6 +145,8 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             arrived_worker = Worker(w_ident, r, w, role_v)
             arrived_worker.setState(Worker.STATE_ONLINE)
             arrived_worker.setMax(max)
+
+            await self._WR_LOG("Worker " + w_ident + " is connected")
 
         except (ConnectionError, asyncio.exceptions.TimeoutError):
             w.close()
@@ -276,8 +279,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         for worker in outOfTime:
             ident = worker.getIdent()
             await self._WR_LOG("Worker " + ident +
-                               " is dissconnected for a \
-                               long time will be removed")
+                               " is disconnected")
             worker.setState(Worker.STATE_OFFLINE)
 
             await self.notify(WorkerRoom.NOTIFY_DISCONN, worker)

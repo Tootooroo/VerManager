@@ -20,7 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
+import manager.master.configs as cfg
+from manager.master.build import BuildSet
 from typing import cast
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
@@ -117,6 +118,9 @@ class VersionViewSet(viewsets.ModelViewSet):
         task = Task(pk, version.sn, pk, extra=extra)
         if task.isValid() is False:
             return HttpResponseBadRequest()
+        bs = BuildSet(cfg.config.getConfig("BuildSet"))
+        task.setBuild(bs)
+        task = task.transform()
 
         assert(S.ServerInstance is not None)
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))

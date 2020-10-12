@@ -315,7 +315,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         assert(self._workers is not None)
         assert(cast(TaskTracker, self._taskTracker) is not None)
 
-        await self._dispatching(),
+        self._loop.create_task(self._dispatching())
+        self._loop.create_task(self._taskAging())
 
     def _peek_trimUntrackTask(self, area: WaitArea) -> Any:
         while True:
@@ -368,12 +369,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             # to 0 do aging instance otherwise wait 1 min
             tasks_outdated = [
                 t for t in cast(TaskTracker, self._taskTracker).tasks()
-                if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 10]
-
-            await self._dispatch_logging("Outdate tasks:" + str(
-                [t.id() for t in tasks_outdated]
-            ))
-
+                if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 3]
             for t in tasks_outdated:
                 ident = t.id()
 
@@ -382,9 +378,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     # will not be aging even though
                     # their counter is out of date.
                     if t.isProc() or t.isPrepare():
-                        await self._dispatch_logging(
-                            "Task " + ident +
-                            " is in processing/Prepare. Abort to remove")
                         continue
                     else:
                         # Need to check that is this
@@ -397,10 +390,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                             isInProc = dep.taskState == Task.STATE_IN_PROC
 
                             if isPrepare or isInProc:
-                                await self._dispatch_logging(
-                                    "Task " + ident + " is remain"
-                                    "cause it depend on another tasks"
-                                )
                                 continue
 
                 await self._dispatch_logging("Remove task " + ident)

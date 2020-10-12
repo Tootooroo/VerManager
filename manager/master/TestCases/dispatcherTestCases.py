@@ -32,7 +32,7 @@ from manager.master.workerRoom import WorkerRoom
 from manager.master.taskTracker import TaskTracker
 from manager.master.TestCases.misc.workerStub import WorkerStub
 from manager.master.worker import Worker
-from manager.master.task import SingleTask, SuperTask, PostTask
+from manager.master.task import Task, SingleTask, SuperTask, PostTask
 from manager.master.build import Build, BuildSet
 
 
@@ -195,6 +195,7 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         # normal is not.
         self.assertTrue(self.m.in_doing_task and self.n.in_doing_task is None)
 
+    @unittest.skip("")
     async def test_Dispatcher_Dispatch_SuperTask(self) -> None:
         """
         Dispatch a SuperTask.
@@ -223,4 +224,50 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         build = Build("B", {"cmd": "...", "output": "..."})
-        self.sut.dispatch(SingleTask("S", "V", "R", build))
+        t = SingleTask("S", "V", "R", build)
+        self.sut._taskTracker.track(t)  # type: ignore
+        t.state = Task.STATE_FINISHED
+        self.sut.start()
+
+        # Verify
+        await asyncio.sleep(5)
+        self.assertFalse(
+            self.sut._taskTracker.isInTrack("S")  # type: ignore
+        )
+
+    async def test_Dispatcher_Aging_SuperTask_INPROC(self) -> None:
+        # Setup
+        cfg.config = Info("./config.yaml")
+
+        # Exercise
+        bs = BuildSet(cfg.config.getConfig("BuildSet"))
+        t = SuperTask("S", "V", "R", bs, {})
+
+        # Set state of tasks to Fin
+        t.state = Task.STATE_IN_PROC
+        for task in t.getChildren():
+            task.state = Task.STATE_IN_PROC
+            self.sut._taskTracker.track(task)  # type: ignore
+
+        self.sut._taskTracker.track(t)  # type: ignore
+        self.sut.start()
+
+        # Verify
+        await asyncio.sleep(5)
+        self.assertTrue(
+            self.sut._taskTracker.isInTrack("S__GL5610")  # type: ignore
+        )
+
+    async def test_Dispatcher_Aging_SuperTask_CASE_1(self) -> None:
+        """
+        All SingleTask of a SuperTask is in Fin and Post is not.
+        """
+
+        # Setup
+        cfg.config = Info("./config.yaml")
+
+        # Exercise
+        bs = BuildSet(cfg.config.getConfig("BuildSet"))
+        t = SuperTask("S", "V", "R", bs, {})
+
+        # Set state of tasks

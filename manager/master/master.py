@@ -40,6 +40,7 @@ from manager.master.eventHandlers import responseHandler, binaryHandler, \
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
+from manager.master.verControl import RevSync
 
 ServerInstance = None  # type:  Optional['ServerInst']
 
@@ -124,9 +125,10 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        # revSyncner = RevSync()
-        # await revSyncner.revDBInit()
-        # self.addModule(revSyncner)
+        #revSyncner = RevSync()
+        #await revSyncner.revDBInit()
+        #self.addModule(revSyncner)
+        #print("Done")
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -167,7 +169,7 @@ class ServerInst(Thread):
     def run(self) -> None:
 
         # Load configuration
-        cfg.config = Info("./config_test.yaml")
+        cfg.config = Info("./config.yaml")
 
         # Start this server instance
         asyncio.run(self._execute())
