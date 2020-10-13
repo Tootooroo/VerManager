@@ -26,6 +26,7 @@ import typing
 import manager.worker.configs as cfg
 
 from datetime import datetime
+from manager.worker.channel import ChannelReceiver
 from manager.basic.letter import receving, sending, HeartbeatLetter, Letter,\
     PropLetter
 
@@ -73,6 +74,7 @@ class Linker:
 
         assert(cfg.config is not None)
         self._hostname = cfg.config.getConfig('WORKER_NAME')
+        self.channel_data = None  # type: typing.Optional[typing.Dict]
 
     def set_host_name(self, name: str) -> None:
         self._hostname = name
@@ -115,13 +117,14 @@ class Linker:
         link = self._links[linkid]
 
         # Link Init
+        proc = 0
         max_proc_job = cfg.config.getConfig('MAX_TASK_CAN_PROC')
         role = cfg.config.getConfig('ROLE')
 
         try:
             # Send Property LEtter
             await sending(writer, PropLetter(
-                self._hostname, max_proc_job, '0', role))
+                self._hostname, max_proc_job, str(proc), role))
 
             # Send First heartbeat
             await sending(writer, HeartbeatLetter(self._hostname, 0))
@@ -268,9 +271,11 @@ class Linker:
             return Link.REMOVED
 
 
-class Connector:
+class Connector(ChannelReceiver):
 
     def __init__(self) -> None:
+        ChannelReceiver.__init__(self)
+
         self._linker = Linker()
         self._letter_Q = asyncio.Queue(128)  # type: asyncio.Queue[Letter]
 
@@ -299,6 +304,10 @@ class Connector:
 
     def link_state(self, linkid: str) -> int:
         return self._linker.link_state(linkid)
+
+    async def update(self, uid: str) -> None:
+        # Do nothing
+        return None
 
 
 class LINK_ID_NOT_FOUND(Exception):

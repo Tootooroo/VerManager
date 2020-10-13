@@ -118,6 +118,8 @@ class VersionViewSet(viewsets.ModelViewSet):
         task = Task(pk, version.sn, pk, extra=extra)
         if task.isValid() is False:
             return HttpResponseBadRequest()
+
+        # Bind task with build
         bs = BuildSet(cfg.config.getConfig("BuildSet"))
         task.setBuild(bs)
         task = task.transform()
@@ -158,6 +160,7 @@ class VersionViewSet(viewsets.ModelViewSet):
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
         if not dispatcher.isTaskExists(pk):
+            print("Not exists")
             return HttpResponseBadRequest("Not Exists")
 
         if dispatcher.isTaskFinished(pk):
@@ -172,9 +175,11 @@ class VersionViewSet(viewsets.ModelViewSet):
             return HttpResponseNotModified()
 
         elif dispatcher.isTaskFailure(pk):
+            print("Failed")
             dispatcher.removeTask(pk)
             return HttpResponseBadRequest()
 
+        print("Last")
         return HttpResponseBadRequest()
 
 

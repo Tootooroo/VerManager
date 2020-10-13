@@ -20,7 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import abc
 import typing
 import asyncio
 
@@ -28,9 +27,10 @@ from manager.worker.procUnit import ProcUnit
 from manager.basic.mmanager import ModuleDaemon
 from manager.basic.letter import Letter, CommandLetter
 from manager.worker.processor_comps import Dispatcher, UnitMaintainer
-from manager.worker.proc_common import Channel, Output,\
-    PROCESSOR_UNIT_ALREADY_EXISTS, ChannelReceiver
+from manager.worker.proc_common import Output,\
+    PROCESSOR_UNIT_ALREADY_EXISTS
 from manager.worker.connector import Connector
+from manager.worker.channel import Channel, ChannelReceiver
 
 
 class Processor(ModuleDaemon):
@@ -74,7 +74,12 @@ class Processor(ModuleDaemon):
         unit.setChannel(channel)
         unit.msg_gen()
 
+        # Register channel
         self._channel.addReceiver(uid, self._maintainer)
+
+        # UnitMaintainer need info of Unit
+        # to make sure the ProcUnit is Health.
+        self.register(uid, self._maintainer)
 
         # Setup output space for unit
         unit.setOutput(self._output)

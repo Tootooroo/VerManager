@@ -22,9 +22,9 @@
 
 import asyncio
 
+from functools import reduce
 from typing import Any, List, Optional, Callable, \
     Dict, Tuple, cast
-from functools import reduce
 from datetime import datetime
 from collections import namedtuple
 from threading import Condition
@@ -266,17 +266,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         """
         await self._dispatch_logging("Dispatch task " + task.id())
 
-        # Task is already in process increase task's refs.
-        if cast(TaskTracker, self._taskTracker).isInTrack(task.id()):
-            task_exists = cast(TaskTracker, self._taskTracker)\
-                .getTask(task.id())
-            assert(task_exists is not None)
-            task_exists.refs += 1
-
-            return True
-
-        cast(TaskTracker, self._taskTracker).track(task)
-
         async with self.dispatchLock:
             if await self._dispatch(task) is False:
                 # fixme: Queue may full while inserting
@@ -286,6 +275,18 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             return True
 
     def dispatch(self, task: Task) -> None:
+        # Task is already in process increase task's refs.
+        if cast(TaskTracker, self._taskTracker).isInTrack(task.id()):
+            task_exists = cast(TaskTracker, self._taskTracker)\
+                .getTask(task.id())
+            assert(task_exists is not None)
+            task_exists.refs += 1
+
+            return None
+
+        cast(TaskTracker, self._taskTracker).track(task)
+
+        # Dispatch task to workers
         self._loop.create_task(self._dispatch_async(task))
 
     async def redispatch(self, task: Task) -> bool:
@@ -363,6 +364,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     async def _taskAging(self) -> None:
 
         while True:
+            # Aging check for every 1 seconds
             await asyncio.sleep(1)
 
             # For a task that refs reduce
@@ -370,6 +372,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             tasks_outdated = [
                 t for t in cast(TaskTracker, self._taskTracker).tasks()
                 if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 3]
+
             for t in tasks_outdated:
                 ident = t.id()
 
@@ -382,15 +385,12 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                     else:
                         # Need to check that is this
                         # task dependen on another task
-                        deps = t.dependedBy()
+                        deps = cast(List[Task], t.dependedBy())
+                        dep_state = \
+                            [dep.isProc() or dep.isPrepare for dep in deps]
 
-                        for dep in deps:
-
-                            isPrepare = dep.taskState() == Task.STATE_PREPARE
-                            isInProc = dep.taskState == Task.STATE_IN_PROC
-
-                            if isPrepare or isInProc:
-                                continue
+                        if True in dep_state:
+                            continue
 
                 await self._dispatch_logging("Remove task " + ident)
                 cast(TaskTracker, self._taskTracker).untrack(ident)

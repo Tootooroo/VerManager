@@ -27,7 +27,7 @@ import typing
 from manager.basic.letter import CommandLetter
 from manager.worker.processor import Processor
 from manager.worker.procUnit import ProcUnit
-from manager.worker.proc_common import ChannelReceiver
+from manager.worker.channel import ChannelReceiver
 
 
 # Things that used by ProcessorTestcases

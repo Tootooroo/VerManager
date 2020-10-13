@@ -917,7 +917,7 @@ async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     writer.write(l.toBytesWithLength())
 
     if writer.is_closing():
-        raise Exception
+        raise ConnectionError
 
     await writer.drain()
 

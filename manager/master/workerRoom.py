@@ -128,7 +128,6 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
         # Init Worker
         try:
             propLetter = await receving(r, timeout=3)
-            print(propLetter)
 
             if propLetter is None:
                 return

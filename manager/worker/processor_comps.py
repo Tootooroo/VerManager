@@ -28,7 +28,8 @@ from manager.worker.procUnit import \
     ProcUnit, PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 from manager.basic.letter import Letter
 from manager.worker.proc_common import \
-    ChannelReceiver, PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE
+    PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE
+from manager.worker.channel import ChannelReceiver
 
 
 class Dispatcher:

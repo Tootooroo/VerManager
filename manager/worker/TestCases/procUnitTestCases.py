@@ -34,7 +34,8 @@ from manager.basic.letter import CommandLetter, NewLetter,\
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE,\
     PostProcUnit, PostTaskLetter
-from manager.worker.proc_common import Output, ChannelEntry
+from manager.worker.proc_common import Output
+from manager.worker.channel import ChannelEntry
 
 
 handled = False

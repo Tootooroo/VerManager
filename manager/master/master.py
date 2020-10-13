@@ -125,10 +125,11 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        #revSyncner = RevSync()
-        #await revSyncner.revDBInit()
-        #self.addModule(revSyncner)
-        #print("Done")
+        revSyncner = RevSync()
+        print("RevDB Init is in processing")
+        await revSyncner.revDBInit()
+        self.addModule(revSyncner)
+        print("RevDB Init Done")
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -169,7 +170,7 @@ class ServerInst(Thread):
     def run(self) -> None:
 
         # Load configuration
-        cfg.config = Info("./config.yaml")
+        cfg.config = Info("./config_test.yaml")
 
         # Start this server instance
         asyncio.run(self._execute())

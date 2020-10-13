@@ -29,7 +29,8 @@ import manager.worker.configs as configs
 from typing import Optional, cast, Dict, BinaryIO, List, \
     Callable
 from manager.basic.letter import Letter
-from .proc_common import Output, ChannelEntry
+from .proc_common import Output
+from .channel import ChannelEntry
 
 # Need by JobProcUnit
 import os
@@ -296,15 +297,24 @@ async def notify_job_state(tid: str, state: str, rtn: Callable) -> None:
 
 
 class JobProcUnit(ProcUnit):
-    """ ProcUnit to process job from server """
+    """
+    ProcUnit to process job from server
+
+    JobProcUnit process only one job at a time.
+    """
 
     def __init__(self, ident: str) -> None:
         ProcUnit.__init__(self, ident)
         self._config = configs.config
-        self._job_refs = {}  # type: Dict[str, subprocess.Popen]
+        self._job_refs = None  # type: Optional[subprocess.Popen]
+        self._isInWork = False  # type: bool
 
     async def reset(self) -> None:
-        return
+        """
+        Stop in processing jobs
+        """
+        if self._job_refs is not None:
+            self._job_refs.terminate()
 
     async def _do_job(self, job: NewLetter) -> None:
         assert(self._config is not None)
@@ -347,16 +357,21 @@ class JobProcUnit(ProcUnit):
 
         # If already exists then cover
         # the old one with the new.
-        self._job_refs[tid] = job_ref
+        self._job_refs = job_ref
 
         # Wait for the job
         while True:
             # Prevent stuck from call of wait
             try:
                 ret_code = job_ref.wait(timeout=0)
+                # Remove Job refs
+                self._job_refs = None
                 break
             except subprocess.TimeoutExpired:
                 await asyncio.sleep(1)
+
+        print("Command Done")
+        print(ret_code)
 
         # Error code handle
         if ret_code != 0:
@@ -364,7 +379,12 @@ class JobProcUnit(ProcUnit):
             if ret_code != 128:
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE)
+
+                # Cleanup
+                shutil.rmtree("./Builds")
                 return
+            else:
+                pass
 
         # Transfer job result to Target destination
         # if the job need a post-processing then send
@@ -395,6 +415,9 @@ class JobProcUnit(ProcUnit):
 
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
+        # Cleanup
+        shutil.rmtree("./Builds")
+
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
 
@@ -405,8 +428,27 @@ class JobProcUnit(ProcUnit):
         output = cast(Output, self._output_space)
         await notify_job_state(tid, state, output.send)
 
+    def msg_gen(self) -> None:
+        """
+        Update info on channel
+        """
+        if self._channel is None:
+            return
+
+        # Basic info generate
+        ProcUnit.msg_gen(self)
+
+        # JobProcUnit's info
+        if self._isInWork:
+            inWork = 'true'
+        else:
+            inWork = 'false'
+
+        self._channel.update('isProcessing', inWork)
+
     async def run(self) -> None:
 
+        # Resources need by JobProcUnit
         assert(self._output_space is not None)
         assert(self._channel is not None)
         assert(self._config is not None)
@@ -414,16 +456,22 @@ class JobProcUnit(ProcUnit):
         if not os.path.exists("./Builds"):
             os.mkdir("./Builds")
 
+        # Channel information init
+        self.msg_gen()
+
         while True:
             job = cast(NewLetter, await self.job_retrive())
             if not isinstance(job, NewLetter):
                 continue
 
-            # Notify components who intrest JobProcUnit
-            # is working.
+            # Update channel data
             await self._channel.update_and_notify('isProcessing', 'true')
 
+            # Do job
             await self._do_job(job)
+
+            # Update channel data
+            await self._channel.update_and_notify('isProcessing', 'false')
 
 
 class Post:
@@ -511,6 +559,9 @@ class PostProcUnit(ProcUnit):
         self._post_dir = configs.config.getConfig('POST_DIR')
 
     async def reset(self) -> None:
+        """
+        Stop processing jobs and remove all frags, posts.
+        """
         return
 
     async def _frag_collect(self, letter: BinaryLetter) -> None:

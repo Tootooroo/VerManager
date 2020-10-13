@@ -1,12 +1,12 @@
 Address: "127.0.0.1"
-Port: 8024
+Port: 30000
 
 LogDir: ./log
 ResultDir: ./data
 Storage: ./Storage
 PostStorage: ./PostStorage
 
-GitlabUrl: http://gpon.git.com:8011
+GitlabUrl: http://10.5.4.211:8011
 Project_ID: 34
 
 PrivateToken: 4mU2joxotSkzTqLPhvgu

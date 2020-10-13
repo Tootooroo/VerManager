@@ -103,7 +103,7 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Exercise
         # If a ProcUnit is throw an exception
-        # Processor sho
+        # Processor should not be stoped.
         self.sut.install_unit(unit1)
         self.sut.start()
         await asyncio.sleep(1)

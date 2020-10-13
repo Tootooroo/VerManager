@@ -110,7 +110,6 @@ class RevSync(ModuleDaemon):
     @staticmethod
     def timeFormat(timeStr: str, offset: str) -> str:
         return timeStr
-        print(timeStr)
         pattern = "([0-9]*-[0-9]*-[0-9]*T[0-9]*:[0-9]*:[0-9]*)"
 
         m = re.search(pattern, timeStr)
@@ -125,7 +124,6 @@ class RevSync(ModuleDaemon):
         loop = asyncio.get_running_loop()
         e = ProcessPoolExecutor()
         revisions = await loop.run_in_executor(e, self._retrive_revisions)
-        print(1)
 
         if revisions is None:
             raise VERSION_DB_INIT_FAILED()
@@ -144,6 +142,7 @@ class RevSync(ModuleDaemon):
 
             for rev in revisions:
                 await RevSync.revTransfer(rev, tz)
+
         except django.db.utils.ProgrammingError:
             return False
         except Exception:

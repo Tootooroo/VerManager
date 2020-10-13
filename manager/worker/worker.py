@@ -82,6 +82,10 @@ class Worker:
         jobProcUnit = JobProcUnit("Job")
         processor.install_unit(jobProcUnit)
 
+        # Connector need info of JobProcUnit
+        # so register an channel between them
+        processor.register("Job", connector)
+
         # Setup dispatch
         processor.set_type_dispatch_to_unit(Letter.NewTask, "Job")
 

@@ -195,7 +195,7 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         # normal is not.
         self.assertTrue(self.m.in_doing_task and self.n.in_doing_task is None)
 
-    @unittest.skip("")
+    @unittest.skip("Outdated")
     async def test_Dispatcher_Dispatch_SuperTask(self) -> None:
         """
         Dispatch a SuperTask.
@@ -260,7 +260,8 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_Dispatcher_Aging_SuperTask_CASE_1(self) -> None:
         """
-        All SingleTask of a SuperTask is in Fin and Post is not.
+        All SingleTask of a SuperTask is in Fin and Post is IN_PROC
+        Those SingleTask should not be aging.
         """
 
         # Setup
@@ -269,5 +270,23 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         # Exercise
         bs = BuildSet(cfg.config.getConfig("BuildSet"))
         t = SuperTask("S", "V", "R", bs, {})
+        self.sut._taskTracker.track(t)  # type: ignore
 
         # Set state of tasks
+        t.state = Task.STATE_IN_PROC
+        for task in t.getChildren():
+            if isinstance(task, SingleTask):
+                task.state = Task.STATE_FINISHED
+            elif isinstance(task, PostTask):
+                task.state = Task.STATE_IN_PROC
+
+            self.sut._taskTracker.track(task)  # type: ignore
+
+        self.sut.start()
+
+        # Verify
+        await asyncio.sleep(5)
+        for task in t.getChildren():
+            self.assertTrue(
+                self.sut._taskTracker.isInTrack(task.id())  # type: ignore
+            )

@@ -29,14 +29,14 @@ import manager.master.configs as cfg
 from django.utils import timezone
 
 from collections import namedtuple
-from typing import Callable, Any, Dict, List, Optional, Coroutine
+from typing import Callable, Any, Dict, List, Coroutine
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.letter import Letter
 
 # Test imports
-from manager.basic.letter import CmdResponseLetter, HeartbeatLetter
+from manager.basic.letter import HeartbeatLetter
 
 M_NAME = "EventListener"
 
