@@ -228,21 +228,21 @@ async def job_result_transfer(target: str, job: NewLetter,
     extra = job.getExtra()
     tid = job.getTid()
     version = job.getContent('vsn')
+    build_dir = cast(Info, configs.config).getConfig("BUILD_DIR")
 
     projName = cast(Info, configs.config).getConfig("PROJECT_NAME")
-    result_path = "./Builds/" + projName + '/' + extra['resultPath']
+    result_path = build_dir + "/" + projName + '/' + extra['resultPath']
     fileName = result_path.split(pathSeperator())[-1]
 
     await do_job_result_transfer(
         result_path, tid, target, version, fileName,
         send_rtn)
 
-
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
-
     result_file = open(path, "rb")
+
     for line in result_file:
         line_bin = BinaryLetter(
             tid=tid, bStr=line, parent=version,
@@ -323,12 +323,14 @@ class JobProcUnit(ProcUnit):
         needPost = job.needPost()
         tid = job.getTid()
         cmds = extra['cmds']
+        build_dir = self._config.getConfig('BUILD_DIR')
 
         repo_url = self._config.getConfig("REPO_URL")
         projName = self._config.getConfig("PROJECT_NAME")
         revision = job.getContent('sn')
 
         commands = [
+            "cd " + build_dir,
             # Go into project root
             "cd " + projName,
             # Fetch from server
@@ -337,8 +339,8 @@ class JobProcUnit(ProcUnit):
             "git checkout -f " + revision
         ] + cmds
 
-        if not os.path.exists(projName):
-            commands = ["cd Builds", "git clone -b master " + repo_url] + commands
+        if not os.path.exists(build_dir+"/"+projName):
+            commands.insert(1, "git clone -b master " + repo_url)
 
         # Pack all building commands into a single string
         # so all of them will be executed in the same shell
@@ -370,21 +372,15 @@ class JobProcUnit(ProcUnit):
             except subprocess.TimeoutExpired:
                 await asyncio.sleep(1)
 
-        print("Command Done")
-        print(ret_code)
-
         # Error code handle
         if ret_code != 0:
-
             if ret_code != 128:
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE)
 
                 # Cleanup
-                shutil.rmtree("./Builds")
+                self.cleanup()
                 return
-            else:
-                pass
 
         # Transfer job result to Target destination
         # if the job need a post-processing then send
@@ -397,6 +393,7 @@ class JobProcUnit(ProcUnit):
         try:
             await self._job_result_transfer(linkid, job)
         except Exception:
+            await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             # fixme: Job is not be cleanup in this situation.
 
             # Create task that will resend letter
@@ -416,7 +413,12 @@ class JobProcUnit(ProcUnit):
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
         # Cleanup
-        shutil.rmtree("./Builds")
+        self.cleanup()
+
+    def cleanup(self) -> None:
+        build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
+        projName = cast(Info, self._config).getConfig('PROJECT_NAME')
+        shutil.rmtree(build_dir+"/"+projName)
 
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
@@ -447,31 +449,37 @@ class JobProcUnit(ProcUnit):
         self._channel.update('isProcessing', inWork)
 
     async def run(self) -> None:
-
         # Resources need by JobProcUnit
         assert(self._output_space is not None)
         assert(self._channel is not None)
         assert(self._config is not None)
 
-        if not os.path.exists("./Builds"):
-            os.mkdir("./Builds")
+        # Create build directory
+        build_dir = self._config.getConfig('BUILD_DIR')
+        if not os.path.exists(build_dir):
+            os.mkdir(build_dir)
 
         # Channel information init
         self.msg_gen()
 
-        while True:
-            job = cast(NewLetter, await self.job_retrive())
-            if not isinstance(job, NewLetter):
-                continue
+        try:
+            while True:
+                job = cast(NewLetter, await self.job_retrive())
 
-            # Update channel data
-            await self._channel.update_and_notify('isProcessing', 'true')
+                if not isinstance(job, NewLetter):
+                    continue
 
-            # Do job
-            await self._do_job(job)
+                # Update channel data
+                await self._channel.update_and_notify('isProcessing', 'true')
 
-            # Update channel data
-            await self._channel.update_and_notify('isProcessing', 'false')
+                # Do job
+                await self._do_job(job)
+
+                # Update channel data
+                await self._channel.update_and_notify('isProcessing', 'false')
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
 
 class Post:
@@ -634,7 +642,6 @@ class PostProcUnit(ProcUnit):
 
         assert(self._output_space is not None)
         assert(self._channel is not None)
-
         # Directory Frags is used to contain all
         # Binaries that need by Posts
         if not os.path.exists("./Post"):
