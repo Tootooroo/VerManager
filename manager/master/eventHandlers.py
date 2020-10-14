@@ -191,10 +191,8 @@ class EVENT_HANDLER_TOOLS:
         if isinstance(t, SingleTask) or isinstance(t, PostTask):
 
             if t.isAChild():
-                dispatcher = env.modules.getModule(DISPATCHER_M_NAME)\
+                dispatcher = env.modules.getModule(DISPATCHER_M_NAME) \
                     # type: Dispatcher
-
-                assert(dispatcher is not None)
 
                 parent = t.getParent()
                 if isinstance(parent, SuperTask):
@@ -211,7 +209,7 @@ async def responseHandler(
     taskId = letter.getHeader('tid')
     state = int(letter.getContent('state'))
 
-    wr = cast(WorkerRoom, env.modules.getModule('WorkerRoom'))
+    wr = env.modules.getModule('WorkerRoom')  # type: WorkerRoom
     task = wr.getTaskOfWorker(ident, taskId)
 
     if task is None or not Task.isValidState(state):
