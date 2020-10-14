@@ -59,6 +59,7 @@ class Processor(ModuleDaemon):
         self._output.setConnector(conn)
 
     def req(self, letter: Letter) -> None:
+        print(letter)
         self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
@@ -149,6 +150,9 @@ class Processor(ModuleDaemon):
         for unit in self._unit_container.values():
             await unit.reset()
         self._output.ready()
+
+    async def CMD_H_CANCEL_JOB(self, cl: CommandLetter) -> None:
+        pass
 
 
 class UNIT_NOT_FOUND(Exception):
