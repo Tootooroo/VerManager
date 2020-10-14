@@ -43,7 +43,7 @@ CMD_LIS_ADDR_UPDATE = "lis_addr_update"
 CMD_REWORK_TASK = "REWORK"
 CMD_CLEAN = "CLEAN"
 CMD_LIS_LOST = "LISLOST"
-CMD_CANCEL = "cancel"
+CMD_CANCEL = "cancel_job"
 
 
 class Command:
@@ -68,11 +68,14 @@ class JobCancelCommand(Command):
     def __init__(self, tid: str) -> None:
         Command.__init__(self, CMD_CANCEL, target=tid)
 
+    def taskId(self) -> str:
+        return self.target
+
     def toLetter(self) -> Letter:
         return CommandLetter(self.type, target=self.target)
 
     def fromLetter(cl: CommandLetter) -> Optional['Command']:
-        target = cl.target
+        target = cl.getTarget()
 
         return JobCancelCommand(target)
 

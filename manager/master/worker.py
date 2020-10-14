@@ -29,6 +29,7 @@ import traceback
 import unittest
 import asyncio
 
+from manager.basic.commands import JobCancelCommand
 from typing import Tuple, Optional, List, Dict, Callable
 from .task import Task, TaskGroup, SingleTask, PostTask
 from datetime import datetime
@@ -200,19 +201,13 @@ class Worker:
     async def cancel(self, id: str) -> None:
 
         task = self.inProcTask.search(id)
+
+        # Task doesn not exist.
         if task is None:
             return None
 
-        letter = CancelLetter(id, CancelLetter.TYPE_SINGLE)
-
-        if isinstance(task, SingleTask):
-            await self._send(letter)
-
-        elif isinstance(task, PostTask):
-            letter.setType(CancelLetter.TYPE_POST)
-            await self._send(letter)
-
-        self.inProcTask.remove(id)
+        cmd = JobCancelCommand(id)
+        await self.control(cmd)
 
     def status(self) -> Dict:
         status_dict = {

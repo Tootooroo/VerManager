@@ -152,7 +152,7 @@ class Processor(ModuleDaemon):
         self._output.ready()
 
     async def CMD_H_CANCEL_JOB(self, cl: CommandLetter) -> None:
-        pass
+        print("Cancel Job" + cl.getTarget())
 
 
 class UNIT_NOT_FOUND(Exception):
