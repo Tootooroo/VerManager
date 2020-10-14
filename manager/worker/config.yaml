@@ -31,3 +31,4 @@ ROLE: MERGER
 
 FRAG_DIR: ./Frags
 POST_DIR: ./Post
+BUILD_DIR: ./Build
