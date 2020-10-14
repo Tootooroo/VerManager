@@ -43,6 +43,6 @@ BuildSet:
 
   Merge:
     cmd:
-      - cat * <version> <datetime> > <version>total
+      - cat * > <version>total
     output:
       - ./<version>total
