@@ -208,6 +208,7 @@ class Linker:
                 letter = await receving(reader)
             except Exception:
                 del self._links[ident]
+                break
 
             if isinstance(letter, HeartbeatLetter):
                 await self.heartbeat_proc(letter)
