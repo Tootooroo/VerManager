@@ -234,6 +234,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             worker = workers[0]
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
+            await self._dispatch_logging(
+                "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
         except Exception:
             await self._dispatch_logging("Task " + task.id() +
                                          " dispatch failed: Worker is\
@@ -541,20 +543,16 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             if deps == []:
                 # This task is not depend on another task
                 # just redispatch this task again.
-                self.redispatch(t)
+                await self.redispatch(t)
             else:
-                """
-                This task is depend on another tasks
-                need to restart it by following steps:
+                # This task is depend on another tasks
+                # need to restart it by following steps:
 
-                First: Redispatch task
-                """
+                # First: Redispatch task
                 await self.redispatch(t)
 
-                """
-                Second: Redispatch tasks that is
-                        already done by listener
-                """
+                # Second: Redispatch tasks that is
+                #         already done by listener
                 tasksOnLost = cast(TaskTracker, self._taskTracker).\
                     tasksOfWorker(worker.getIdent())
 
@@ -565,10 +563,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 for task in doneTasks:
                     await self.redispatch(task)
 
-                """
-                Third: Send RE_WORK command to workers that dealing
-                       dependence of this task.
-                """
+                # Third: Send RE_WORK command to workers that dealing
+                #        dependence of this task.
                 pairs = [
                     (cast(TaskTracker, self._taskTracker).whichWorker(dep.id()),
                      dep.id()) for dep in deps]
