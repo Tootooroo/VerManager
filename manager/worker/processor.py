@@ -23,7 +23,8 @@
 import typing
 import asyncio
 
-from manager.worker.procUnit import ProcUnit
+from manager.worker.procUnit import ProcUnit, \
+    JobProcUnitProto, PostProcUnitProto
 from manager.basic.mmanager import ModuleDaemon
 from manager.basic.letter import Letter, CommandLetter
 from manager.worker.processor_comps import Dispatcher, UnitMaintainer
@@ -126,13 +127,13 @@ class Processor(ModuleDaemon):
         """ Command process entry """
         type = cl.getType().upper()
 
-        h = self.CMD_MATCH(type)
+        h = self.CMD_SEARCH_HANDLER(type)
         if h is None:
             return None
 
         await h(cl)
 
-    def CMD_MATCH(self, type) -> typing.Optional[typing.Callable]:
+    def CMD_SEARCH_HANDLER(self, type) -> typing.Optional[typing.Callable]:
         try:
             return getattr(self, 'CMD_H_'+type)
         except AttributeError:
@@ -152,7 +153,21 @@ class Processor(ModuleDaemon):
         self._output.ready()
 
     async def CMD_H_CANCEL_JOB(self, cl: CommandLetter) -> None:
-        print("Cancel Job" + cl.getTarget())
+
+        tid = cl.getTarget()
+
+        for unit in self._unit_container.values():
+            if isinstance(unit, JobProcUnitProto):
+                jobUnit = typing.cast(JobProcUnitProto, unit)
+
+                if jobUnit.exists(tid):
+                    jobUnit.cancel(tid)
+
+            elif isinstance(unit, PostProcUnitProto):
+                postUnit = typing.cast(PostProcUnitProto, unit)
+
+                if postUnit.exists(tid):
+                    postUnit.cancel(tid)
 
 
 class UNIT_NOT_FOUND(Exception):

@@ -26,7 +26,7 @@ import typing
 
 from manager.basic.letter import CommandLetter
 from manager.worker.processor import Processor
-from manager.worker.procUnit import ProcUnit
+from manager.worker.procUnit import ProcUnit, UNIT_TYPE_JOB_PROC
 from manager.worker.channel import ChannelReceiver
 
 
@@ -55,7 +55,7 @@ class ProcessorMock(Processor):
 class ProcUnitStub(ProcUnit):
 
     def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
+        ProcUnit.__init__(self, ident, UNIT_TYPE_JOB_PROC)
 
     async def reset(self) -> None:
         return None
@@ -72,7 +72,7 @@ class ProcUnitStub(ProcUnit):
 class ProcUnitStub_Except(ProcUnit):
 
     def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
+        ProcUnit.__init__(self, ident, UNIT_TYPE_JOB_PROC)
 
     async def reset(self) -> None:
         return None

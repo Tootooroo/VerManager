@@ -33,7 +33,7 @@ from manager.basic.letter import CommandLetter, NewLetter,\
     BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE,\
-    PostProcUnit, PostTaskLetter
+    PostProcUnit, PostTaskLetter, UNIT_TYPE_JOB_PROC
 from manager.worker.proc_common import Output
 from manager.worker.channel import ChannelEntry
 
@@ -52,7 +52,7 @@ async def handler(unit: ProcUnit, letter: CommandLetter) -> None:
 class ProcUnitMock(ProcUnit):
 
     def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
+        ProcUnit.__init__(self, ident, UNIT_TYPE_JOB_PROC)
 
         self.procLogic = None  # type: typing.Any
         self.result = False
@@ -201,6 +201,59 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(b'job\n', letter.getContent('bytes'))
             break
+
+    async def test_JobProcUnit_Exists(self) -> None:
+        # Setup
+        self.sut.start()
+
+        # Exercise
+        job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["sleep 10", "echo job > job_result"],
+                         'resultPath': "./job_result"})
+        job1 = NewLetter("Job1", "123456", "v1", "",
+                         {'cmds': ["sleep 10", "echo job > job_result"],
+                          'resultPath': "./job_result"})
+        job2 = NewLetter("Job2", "123456", "v1", "",
+                         {'cmds': ["sleep 10", "echo job > job_result"],
+                          'resultPath': "./job_result"})
+
+        await self.sut._normal_space.put(job)
+        await self.sut._normal_space.put(job1)
+        await self.sut._normal_space.put(job2)
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(self.sut.exists("Job"))
+        self.assertTrue(self.sut.exists("Job1"))
+        self.assertTrue(self.sut.exists("Job2"))
+
+    async def test_JobProcUnit_Cancel(self) -> None:
+        # Setup
+        self.sut.start()
+
+        # Exercise
+        job = NewLetter("Job", "123456", "v1", "",
+                        {'cmds': ["sleep 10", "echo job > job_result"],
+                         'resultPath': "./job_result"})
+        job1 = NewLetter("Job1", "123456", "v1", "",
+                         {'cmds': ["sleep 10", "echo job > job_result"],
+                          'resultPath': "./job_result"})
+        job2 = NewLetter("Job2", "123456", "v1", "",
+                         {'cmds': ["sleep 10", "echo job > job_result"],
+                          'resultPath': "./job_result"})
+
+        await self.sut._normal_space.put(job)
+        await self.sut._normal_space.put(job1)
+        await self.sut._normal_space.put(job2)
+        await asyncio.sleep(1)
+
+        # Cancel
+        await self.sut.cancel("Job1")
+
+        # Verify
+        self.assertTrue(self.sut.exists("Job"))
+        self.assertTrue(self.sut.exists("Job2"))
+        self.assertFalse(self.sut.exists("Job1"))
 
 
 class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):

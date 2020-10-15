@@ -47,6 +47,10 @@ from manager.basic.info import Info
 from manager.basic.letter import PostTaskLetter
 
 
+UNIT_TYPE_JOB_PROC = 0
+UNIT_TYPE_POST_PROC = 1
+
+
 class ProcUnit(abc.ABC):
 
     PROC_UNIT_STATE = int
@@ -63,8 +67,9 @@ class ProcUnit(abc.ABC):
     # A ProcUnit is stop cause of exception
     STATE_EXCEP = 4
 
-    def __init__(self, ident: str) -> None:
+    def __init__(self, ident: str, type: int) -> None:
         self._unitIdent = ident
+        self._type = type
 
         self._state = self.STATE_STOP
 
@@ -296,7 +301,35 @@ async def notify_job_state(tid: str, state: str, rtn: Callable) -> None:
     await rtn(response)
 
 
-class JobProcUnit(ProcUnit):
+class JobProcUnitProto(ProcUnit):
+
+    def __init__(self, ident: str, type: int) -> None:
+        ProcUnit.__init__(self, ident, type)
+
+    @abc.abstractmethod
+    async def cancel(self, tid: str) -> None:
+        """ Cancel a job specified by tid """
+
+    @abc.abstractmethod
+    def exists(self, tid: str) -> bool:
+        """ Is a job processed on a JobProcUnit """
+
+
+class PostProcUnitProto(ProcUnit):
+
+    def __init__(self, ident: str, type: int) -> None:
+        ProcUnit.__init__(self, ident, type)
+
+    @abc.abstractmethod
+    async def cancel(self, tid: str) -> None:
+        """ Cancel a post specified by tid """
+
+    @abc.abstractmethod
+    def exists(self, tid: str) -> bool:
+        """ Is a post processed on a PostProcUnit """
+
+
+class JobProcUnit(JobProcUnitProto):
     """
     ProcUnit to process job from server
 
@@ -304,17 +337,79 @@ class JobProcUnit(ProcUnit):
     """
 
     def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
+        JobProcUnitProto.__init__(self, ident, UNIT_TYPE_JOB_PROC)
         self._config = configs.config
         self._job_refs = None  # type: Optional[subprocess.Popen]
         self._isInWork = False  # type: bool
+        self._inProcTid = ""  # type: str
 
     async def reset(self) -> None:
         """
         Stop in processing jobs
         """
+        # Clear request space
+        self._normal_space._queue.clear()
+        self._reserved_space._queue.clear()
+        await self.stopCurrentJob()
+
+    async def stopCurrentJob(self) -> None:
         if self._job_refs is not None:
             self._job_refs.terminate()
+            self._job_refs = None
+            self._isInWork = False
+
+            if self._channel is not None:
+                await self._channel.update_and_notify('isProcessing', 'false')
+
+    async def cancel(self, tid: str) -> None:
+        """ Cancel a job """
+        if tid == self._inProcTid:
+            # The job is in processing
+            self.stopCurrentJob()
+        else:
+            # The job is in queue
+            self._remove_job_from_queue(tid)
+
+    def exists(self, tid: str) -> bool:
+        if self._inProcTid == tid:
+            return True
+        elif self._find_job_in_queue(tid) is not None:
+            return True
+
+        return False
+
+    def _remove_job_from_queue(self, tid: str) -> None:
+        job = self._find_job_in_queue(tid)
+        if job is not None:
+            if self._normal_space.qsize() > 0:
+                try:
+                    self._normal_space._queue.remove(job)
+                except ValueError:
+                    pass
+
+            if self._reserved_space.qsize() > 0:
+                try:
+                    self._reserved_space._queue.remove(job)
+                except ValueError:
+                    pass
+
+    def _find_job_in_queue(self, tid: str) -> Optional[Letter]:
+        if self._normal_space.qsize() == 0:
+            return None
+
+        for job in self._normal_space._queue:
+            job_tid = cast(NewLetter, job).getTid()
+
+            if tid == job_tid:
+                return job
+
+        for job in self._reserved_space._queue:
+            job_tid = cast(NewLetter, job).getTid()
+
+            if tid == job_tid:
+                return job
+
+        return None
 
     async def _do_job(self, job: NewLetter) -> None:
         assert(self._config is not None)
@@ -472,6 +567,8 @@ class JobProcUnit(ProcUnit):
                 # Update channel data
                 await self._channel.update_and_notify('isProcessing', 'true')
 
+                self._inProcTid = job.getTid()
+
                 # Do job
                 await self._do_job(job)
 
@@ -482,6 +579,15 @@ class JobProcUnit(ProcUnit):
             traceback.print_exc()
 
 
+class Frag:
+
+    def __init__(self, ident: str) -> None:
+        self.ident = ident
+        self.filename = ""
+        self.fd = None  # type: Optional[BinaryIO]
+        self.ready = False
+
+
 class Post:
 
     def __init__(self, ident: str, frags: List[str], cmd: List[str],
@@ -490,8 +596,8 @@ class Post:
         assert(configs.config is not None)
 
         self._ident = ident
-        self._frags = {frag: [None, False, ""] for frag in frags}  \
-            # type: Dict[str, List]
+        self._frags = {frag: Frag(frag) for frag in frags}  \
+            # type: Dict[str, Frag]
 
         self._result_path = result_path
         # Additional process if it's a relative path
@@ -528,19 +634,19 @@ class Post:
             return ""
 
     def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
-        self._frags[frag_id][2] = fileName
+        self._frags[frag_id].filename = fileName
 
     def get_frag_fileName(self, frag_id: str) -> str:
-        return self._frags[frag_id][2]
+        return self._frags[frag_id].filename
 
     def set_frag_fd(self, frag_id: str, fd: BinaryIO) -> None:
-        self._frags[frag_id][0] = fd
+        self._frags[frag_id].fd = fd
 
     def get_frag_fd(self, frag_id: str) -> Optional[BinaryIO]:
-        return self._frags[frag_id][0]
+        return self._frags[frag_id].fd
 
     def set_frag_ready(self, frag_id: str) -> None:
-        self._frags[frag_id][1] = True
+        self._frags[frag_id].ready = True
 
     def cleanup(self) -> None:
         assert(configs.config is not None)
@@ -552,15 +658,15 @@ class Post:
         isReady = True
 
         for frag in self._frags.values():
-            isReady &= frag[1]
+            isReady &= frag.ready
 
         return isReady
 
 
-class PostProcUnit(ProcUnit):
+class PostProcUnit(PostProcUnitProto):
 
     def __init__(self, ident: str) -> None:
-        ProcUnit.__init__(self, ident)
+        PostProcUnitProto.__init__(self, ident, UNIT_TYPE_POST_PROC)
         self._posts = {}  # type: Dict[str, Post]
 
         assert(configs.config is not None)
@@ -571,6 +677,12 @@ class PostProcUnit(ProcUnit):
         Stop processing jobs and remove all frags, posts.
         """
         return
+
+    async def cancel(self, tid: str) -> None:
+        return
+
+    def exists(self, tid: str) -> bool:
+        return True
 
     async def _frag_collect(self, letter: BinaryLetter) -> None:
         assert(configs.config is not None)
@@ -591,7 +703,7 @@ class PostProcUnit(ProcUnit):
 
         content = letter.getContent('bytes')
         if content == b'':
-            # Last byte so file transfer done.
+            # Transfer done.
             post.set_frag_ready(tid)
             fd.close()
 
@@ -611,10 +723,12 @@ class PostProcUnit(ProcUnit):
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send)  # type: ignore
 
-            await self._notify_job_state(post.ident(), Letter.RESPONSE_STATE_FINISHED)
+            await self._notify_job_state(
+                post.ident(), Letter.RESPONSE_STATE_FINISHED)
         else:
             # Failed
-            await self._notify_job_state(post.ident(), Letter.RESPONSE_STATE_FAILURE)
+            await self._notify_job_state(
+                post.ident(), Letter.RESPONSE_STATE_FAILURE)
 
         # Cleanup
         post.cleanup()
@@ -656,4 +770,6 @@ class PostProcUnit(ProcUnit):
                 elif isinstance(job, PostTaskLetter):
                     await self._new_post(job)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 print(e)

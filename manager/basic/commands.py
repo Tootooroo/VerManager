@@ -72,7 +72,7 @@ class JobCancelCommand(Command):
         return self.target
 
     def toLetter(self) -> Letter:
-        return CommandLetter(self.type, target=self.target)
+        return CommandLetter(self.type, {}, target=self.target)
 
     def fromLetter(cl: CommandLetter) -> Optional['Command']:
         target = cl.getTarget()
