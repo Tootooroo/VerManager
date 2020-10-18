@@ -27,7 +27,7 @@ import manager.master.configs as cfg
 
 from manager.basic.info import Info
 from manager.master.dispatcher import Dispatcher, WaitArea, \
-    WaitAreaSpec
+    WaitAreaSpec, theListener, viaOverhead
 from manager.master.workerRoom import WorkerRoom
 from manager.master.taskTracker import TaskTracker
 from manager.master.TestCases.misc.workerStub import WorkerStub
@@ -142,6 +142,9 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         self.sut.setWorkerRoom(self.wr)
         self.sut.setTaskTracker(self.tt)
 
+        self.sut.add_worker_search_cond(SingleTask, viaOverhead)
+        self.sut.add_worker_search_cond(PostTask, theListener)
+
         # Add Workers
         self.n = normal_worker = WorkerStub("Normal", Worker.ROLE_NORMAL)
         normal_worker.setState(Worker.STATE_ONLINE)
@@ -213,6 +216,11 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.n.postCount, 0)
         self.assertEqual(self.m.postCount, 1)
         self.assertEqual(self.n.singleCount+self.m.singleCount, 4)
+
+    async def test_Dispatcher_DispatchSuperTask_MergerLost(self) -> None:
+        """
+        Merger lost while when dispatch SuperTask
+        """
 
     async def test_Dispatcher_Aging_SingleTask(self) -> None:
         """

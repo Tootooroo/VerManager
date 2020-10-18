@@ -26,14 +26,15 @@
 # iEntryTestCases, \
 # EventListenerTestCases
 
+
+from manager.master.TestCases.dispatcherTestCases import \
+    WaitAreaTestCases, DispatcherUnitTest
+
 #from manager.functionalTest import FunctionalTestCases
 # from manager.master.TestCases.verControlTestcases import VerControlTestCases
 
 from manager.master.task import \
     TaskTestCases
-
-from manager.master.TestCases.dispatcherTestCases import \
-    WaitAreaTestCases, DispatcherUnitTest
 
 from manager.master.TestCases.workerRoomTestCases import \
     WorkerRoomTestCases
