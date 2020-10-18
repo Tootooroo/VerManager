@@ -217,6 +217,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         # No workers satisfiy the condition.
         if worker is None:
+            print(task.id())
             await self._log("Task " + task.id() +
                             " dispatch failed: No available worker")
             return False
@@ -224,6 +225,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         try:
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
+            print("Dispatch " + task.id())
             await self._log(
                 "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
         except Exception:
@@ -365,7 +367,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                     if isinstance(task_peek, PostTask):
                         parent = cast(SuperTask, task_peek.getParent())
-                        self.cancel(parent.id())
+                        await self.cancel(parent.id())
 
                     continue
 
@@ -635,7 +637,10 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
 
 
 def theListener(workers: List[Worker]) -> List[Worker]:
-    return list(filter(lambda w: w._role == Worker.ROLE_MERGER, workers))
+    return [
+        w for w in workers
+        if w.isOnline() and w._role == Worker.ROLE_MERGER
+    ]
 
 
 condChooser = {
