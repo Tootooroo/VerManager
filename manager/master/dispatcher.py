@@ -217,7 +217,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         # No workers satisfiy the condition.
         if worker is None:
-            print(task.id())
             await self._log("Task " + task.id() +
                             " dispatch failed: No available worker")
             return False
@@ -225,10 +224,10 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         try:
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
-            await self._dispatch_logging(
+            await self._log(
                 "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
         except Exception:
-            await self._dispatch_logging(
+            await self._log(
                 "Task " + task.id() + " dispatch failed: Worker is\
                 unable to do the task.")
             return False

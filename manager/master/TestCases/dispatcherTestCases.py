@@ -157,7 +157,6 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         self.wr.addWorker(normal_worker)
         self.wr.addWorker(merger)
 
-    @unittest.skip("")
     async def test_Dispatcher_Dispatch(self) -> None:
         """
         Dispatch a SingleTask to Workers.
@@ -184,7 +183,6 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
             self.m.in_doing_task is None
         )
 
-    @unittest.skip("")
     async def test_Dispatcher_DispatchPostTask(self) -> None:
         """
         Dispatch a PostTask to workers.
@@ -200,7 +198,6 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         # normal is not.
         self.assertTrue(self.m.in_doing_task and self.n.in_doing_task is None)
 
-    @unittest.skip("")
     async def test_Dispatcher_Dispatch_SuperTask(self) -> None:
         """
         Dispatch a SuperTask.
@@ -225,7 +222,7 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_Dispatcher_DispatchSuperTask_MergerLost(self) -> None:
         """
-        Merger lost while when dispatch SuperTask
+        Merger lost while dispatch SuperTask
         """
 
         # Setup
@@ -243,9 +240,12 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(3)
 
         # Verify
-        self.assertTrue(len(self.n.cancel_jobs) > 0)
+        self.assertTrue(len(self.n.cancel_jobs) == 4)
+        self.assertTrue('S__GL5610' in self.n.cancel_jobs)
+        self.assertTrue('S__GL5610-v3' in self.n.cancel_jobs)
+        self.assertTrue('S__GL8900_line' in self.n.cancel_jobs)
+        self.assertTrue('S__GL8900_ctrl' in self.n.cancel_jobs)
 
-    @unittest.skip("")
     async def test_Dispatcher_Aging_SingleTask(self) -> None:
         """
         Aging SingleTask
@@ -267,7 +267,6 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
             self.sut._taskTracker.isInTrack("S")  # type: ignore
         )
 
-    @unittest.skip("")
     async def test_Dispatcher_Aging_SuperTask_INPROC(self) -> None:
         # Setup
         cfg.config = Info("./config.yaml")
@@ -291,7 +290,6 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
             self.sut._taskTracker.isInTrack("S__GL5610")  # type: ignore
         )
 
-    @unittest.skip("")
     async def test_Dispatcher_Aging_SuperTask_CASE_1(self) -> None:
         """
         All SingleTask of a SuperTask is in Fin and Post is IN_PROC
