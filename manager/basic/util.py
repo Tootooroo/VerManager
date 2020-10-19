@@ -22,6 +22,7 @@
 
 # util.py
 
+import os
 import platform
 import subprocess
 import socket
@@ -109,7 +110,9 @@ def excepHandle(excep, handler: Callable) -> Callable:
 
 def execute_shell(command: str) -> Optional[subprocess.Popen]:
     try:
-        return subprocess.Popen(command, shell=True)
+        output_buf = open(os.devnull, "w")
+        return subprocess.Popen(command, shell=True,
+                                stdout=output_buf, stderr=output_buf)
     except FileNotFoundError:
         return None
 
@@ -128,6 +131,7 @@ async def execute_shell_until_complete(command: str) -> int:
             continue
 
         return ret_code
+
 
 # If shell command is not executed success then return None
 # otherwise return returncode of the shell command.
