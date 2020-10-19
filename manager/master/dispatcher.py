@@ -234,12 +234,13 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             worker = workers[0]
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
+
             await self._dispatch_logging(
                 "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
         except Exception:
-            await self._dispatch_logging("Task " + task.id() +
-                                         " dispatch failed: Worker is\
-                                         unable to do the task.")
+            await self._dispatch_logging(
+                "Task " + task.id() + " dispatch failed: Worker is\
+                unable to do the task.")
             return False
 
         return True
@@ -527,6 +528,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 child.lastUpdate()
 
     async def workerLost_redispatch(self, worker: Worker) -> None:
+
+        # No workers to dispatch task just return
+        # and tasks on this worker will be drop by aging.
+        if cast(WorkerRoom, self._workers).getNumOfWorkers() == 0:
+            return None
 
         tasks = worker.inProcTasks()
 
