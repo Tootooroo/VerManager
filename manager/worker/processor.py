@@ -60,7 +60,6 @@ class Processor(ModuleDaemon):
         self._output.setConnector(conn)
 
     def req(self, letter: Letter) -> None:
-        print(letter)
         self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
@@ -161,13 +160,13 @@ class Processor(ModuleDaemon):
                 jobUnit = typing.cast(JobProcUnitProto, unit)
 
                 if jobUnit.exists(tid):
-                    jobUnit.cancel(tid)
+                    await jobUnit.cancel(tid)
 
             elif isinstance(unit, PostProcUnitProto):
                 postUnit = typing.cast(PostProcUnitProto, unit)
 
                 if postUnit.exists(tid):
-                    postUnit.cancel(tid)
+                    await postUnit.cancel(tid)
 
 
 class UNIT_NOT_FOUND(Exception):

@@ -243,6 +243,7 @@ async def job_result_transfer(target: str, job: NewLetter,
         result_path, tid, target, version, fileName,
         send_rtn)
 
+
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
@@ -365,7 +366,7 @@ class JobProcUnit(JobProcUnitProto):
         """ Cancel a job """
         if tid == self._inProcTid:
             # The job is in processing
-            self.stopCurrentJob()
+            await self.stopCurrentJob()
         else:
             # The job is in queue
             self._remove_job_from_queue(tid)
