@@ -27,12 +27,14 @@ import manager.master.configs as cfg
 from typing import Optional, List
 from threading import Thread
 
+from manager.master.task import PostTask, SingleTask
 from manager.basic.type import State, Error
 from manager.basic.mmanager import MManager, Module
 from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
-from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME
+from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
+    viaOverhead, theListener
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
@@ -100,9 +102,13 @@ class ServerInst(Thread):
         tracker = TaskTracker()
         self.addModule(tracker)
 
+        # Dispatcher init
         dispatcher = Dispatcher()
         dispatcher.setWorkerRoom(workerRoom)
         dispatcher.setTaskTracker(tracker)
+        # Setup task's worker search condition
+        dispatcher.add_worker_search_cond(SingleTask, viaOverhead)
+        dispatcher.add_worker_search_cond(PostTask, theListener)
         self.addModule(dispatcher)
 
         eventListener = EventListener()

@@ -24,7 +24,7 @@ import asyncio
 
 from functools import reduce
 from typing import Any, List, Optional, Callable, \
-    Dict, Tuple, cast
+    Dict, Tuple, cast, Type
 from datetime import datetime
 from collections import namedtuple
 from threading import Condition
@@ -171,15 +171,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         # An Event to indicate that there is some task in taskWait queue
         self.taskEvent = asyncio.Event()
-
         self.dispatchLock = asyncio.Lock()
-
         self._taskTracker = None  # type: Optional[TaskTracker]
-
         self._workers = None  # type: Optional[WorkerRoom]
-
-        self._numOfWorkers = 0
         self._loop = asyncio.get_running_loop()
+        self._search_cond = {}  # type: Dict[str, Callable]
 
     async def begin(self) -> None:
         return None
@@ -193,7 +189,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     def setTaskTracker(self, tt: TaskTracker) -> None:
         self._taskTracker = tt
 
-    async def _dispatch_logging(self, msg: str) -> None:
+    async def _log(self, msg: str) -> None:
         await self.notify(Dispatcher.NOTIFY_LOG, ("dispatcher", msg))
 
     # Dispatch a task to a worker of
@@ -204,7 +200,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         ret = False
 
         if isinstance(task, SuperTask):
-            await self._dispatch_logging(
+            await self._log(
                 "Task " + task.id() + " is a SuperTask.")
             return await self._dispatchSuperTask(task)
 
@@ -212,29 +208,23 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return ret
 
     async def _do_dispatch(self, task: Task) -> bool:
-        # First to find a acceptable worker
-        # if found then assign task to the worker
-        # and _tasks otherwise append to taskWait
-        cond = viaOverhead
-        workers = []  # type: List[Worker]
-
-        if isinstance(task, PostTask):
-            cond = theListener
-
-        workers = cast(WorkerRoom, self._workers)\
-            .getWorkerWithCond_nosync(cond)
+        """
+        First to find a acceptable worker
+        if found then assign task to the worker
+        and _tasks otherwise append to taskWait
+        """
+        worker = self._search_proc_worker(task)
 
         # No workers satisfiy the condition.
-        if workers == []:
-            await self._dispatch_logging(
-                "Task " + task.id() + " dispatch failed: No available worker")
+        if worker is None:
+            print(task.id())
+            await self._log("Task " + task.id() +
+                            " dispatch failed: No available worker")
             return False
 
         try:
-            worker = workers[0]
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
-
             await self._dispatch_logging(
                 "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
         except Exception:
@@ -244,6 +234,26 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             return False
 
         return True
+
+    def _search_proc_worker(self, task: Task) -> Optional[Worker]:
+        cond = self._search_cond[type(task).__name__]
+        workers = cast(WorkerRoom, self._workers)\
+            .getWorkerWithCond_nosync(cond)
+        if workers == []:
+            return None
+        else:
+            return workers[0]
+
+    def add_worker_search_cond(self, task_type: Type[Task], cond: Callable) -> None:
+        """
+        Add a filter function to filter out wokrer that is able to
+        process a type of tasks.
+
+        If add multiple cond to a task type then the cond last added is work
+        another is not.
+        """
+        t_typeName = task_type.__name__
+        self._search_cond[t_typeName] = cond
 
     async def _dispatchSuperTask(self, task: SuperTask) -> bool:
         subTasks = task.getChildren()
@@ -267,7 +277,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         """
         Dispatch a task to workers.
         """
-        await self._dispatch_logging("Dispatch task " + task.id())
+        await self._log("Dispatch task " + task.id())
 
         async with self.dispatchLock:
             if await self._dispatch(task) is False:
@@ -295,7 +305,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     async def redispatch(self, task: Task) -> bool:
         taskId = task.id()
 
-        await self._dispatch_logging("Redispatch task " + taskId)
+        await self._log("Redispatch task " + taskId)
 
         # Set task's state to prepare and remove worker
         # deal with it before from record.
@@ -353,6 +363,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 cond = condChooser[type(task_peek).__name__]
                 if cast(WorkerRoom, self._workers).\
                    getWorkerWithCond(cond) == []:
+
+                    if isinstance(task_peek, PostTask):
+                        parent = cast(SuperTask, task_peek.getParent())
+                        await self.cancel(parent.id())
+
                     continue
 
                 # Dispatch task to worker
@@ -395,7 +410,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                         if True in dep_state:
                             continue
 
-                await self._dispatch_logging("Remove task " + ident)
+                await self._log("Remove task " + ident)
                 cast(TaskTracker, self._taskTracker).untrack(ident)
 
     # Cancel a task
@@ -538,8 +553,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         for t in tasks:
             # Clean record in TaskTracker
-            # so status of TaskTracker is up to date
-            # and will able to perform action depend on it.
             cast(TaskTracker, self._taskTracker).onWorker(t.id(), None)
 
         for t in tasks:
@@ -628,7 +641,10 @@ def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
 
 
 def theListener(workers: List[Worker]) -> List[Worker]:
-    return list(filter(lambda w: w._role == Worker.ROLE_MERGER, workers))
+    return [
+        w for w in workers
+        if w.isOnline() and w._role == Worker.ROLE_MERGER
+    ]
 
 
 condChooser = {

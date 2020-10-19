@@ -37,6 +37,7 @@ class WorkerStub(Worker):
         self.in_doing_task = None  # type: typing.Optional[Task]
         self.postCount = 0
         self.singleCount = 0
+        self.cancel_jobs = []  # type: typing.List[str]
 
     async def do(self, task: Task) -> None:
         self.in_doing_task = task
@@ -45,6 +46,9 @@ class WorkerStub(Worker):
             self.singleCount += 1
         elif isinstance(task, PostTask):
             self.postCount += 1
+
+    async def cancel(self, id: str) -> None:
+        self.cancel_jobs.append(id)
 
 
 class WorkerStubSendBinary(Worker):
