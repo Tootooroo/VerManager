@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import asyncio
+import socket
 import manager.worker.configs as configs
 
 from typing import Callable
@@ -75,7 +76,10 @@ class Worker:
 
         # Create Link to Merger if exists.
         if merger_address != '':
-            await connector.open_connection('Poster', merger_address['host'],
+            host_addr = merger_address['host']
+            if host_addr == '0.0.0.0':
+                host_addr = socket.gethostbyname(socket.gethostname())
+            await connector.open_connection('Poster', host_addr,
                                             merger_address['port'])
 
         # Create ProcUnits and
