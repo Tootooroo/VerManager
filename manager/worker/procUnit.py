@@ -516,7 +516,7 @@ class JobProcUnit(JobProcUnitProto):
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
         # Cleanup
-        self.cleanup()
+        #self.cleanup()
 
     def cleanup(self) -> None:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
