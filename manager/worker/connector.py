@@ -152,6 +152,10 @@ class Linker:
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
+                import sys
+                print("Heartbeat Timeout")
+                sys.stdout.flush()
+
                 # Wait a while
                 await asyncio.sleep(1)
                 self._link_rebuild_helper(linkid)

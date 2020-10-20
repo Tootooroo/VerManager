@@ -47,7 +47,7 @@ class Processor(ModuleDaemon):
         self._channel = Channel()
         self._t = None  # type: typing.Optional[asyncio.Task]
         self._dispatcher = Dispatcher()
-        self._reqQ = asyncio.Queue(256)  # type: asyncio.Queue[Letter]
+        self._reqQ = asyncio.Queue(4096)  # type: asyncio.Queue[Letter]
         self._output = Output()
 
     async def begin(self) -> None:

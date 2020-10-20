@@ -722,9 +722,10 @@ class PostProcUnit(PostProcUnitProto):
 
     async def _do_post(self, post: Post) -> None:
         import sys
-
+        print("Post_DO")
         path = await post.do()
         print(path)
+        sys.stdout.flush()
 
         if path != '':
             # Success
