@@ -142,6 +142,8 @@ class RevSync(ModuleDaemon):
 
             for rev in revisions:
                 await RevSync.revTransfer(rev, tz)
+                print(rev)
+            print("Done")
 
         except django.db.utils.ProgrammingError:
             return False
