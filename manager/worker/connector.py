@@ -69,6 +69,7 @@ class Linker:
 
     def __init__(self) -> None:
         self._links = {}  # type: typing.Dict[str, Link]
+        self._links_passive = {}  # type: typing.Dict[str, Link]
         self._lis = {}  # type: typing.Dict[str, typing.Any]
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
         self._loop = asyncio.get_running_loop()
@@ -114,7 +115,6 @@ class Linker:
     async def _active_link(self, reader: asyncio.StreamReader,
                            writer: asyncio.StreamWriter,
                            linkid: str) -> None:
-
         assert(cfg.config is not None)
 
         link = self._links[linkid]
@@ -148,9 +148,9 @@ class Linker:
                 break
 
             try:
-                letter = await receving(reader, timeout=3)
                 if self._heartbeat_check(link) is False:
                     raise ConnectionError()
+                letter = await receving(reader, timeout=3)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 # Wait a while
                 await asyncio.sleep(1)
@@ -161,7 +161,7 @@ class Linker:
                 continue
 
             if isinstance(letter, HeartbeatLetter):
-                await self.heartbeat_proc(letter)
+                await self.heartbeat_proc_active(linkid, letter)
             else:
                 if self.msg_callback is None:
                     raise LINK_MSG_CALLBACK_NOT_EXISTS()
@@ -201,7 +201,7 @@ class Linker:
             if ident in self._links:
                 return
 
-            self._links[ident] = Link(
+            self._links_passive[ident] = Link(
                 ident, "", 0, reader, writer, Link.PASSIVE)
         else:
             return
@@ -210,14 +210,12 @@ class Linker:
             try:
                 letter = await receving(reader)
             except Exception:
-                del self._links[ident]
+                writer.close()
+                del self._links_passive[ident]
                 break
 
             if isinstance(letter, HeartbeatLetter):
-                import sys
-                print(letter)
-                sys.stdout.flush()
-                await self.heartbeat_proc(letter)
+                await self.heartbeat_proc_passive(letter)
             else:
                 if self.msg_callback is None:
                     raise LINK_MSG_CALLBACK_NOT_EXISTS()
@@ -234,26 +232,35 @@ class Linker:
 
         await sending(link.writer, letter)
 
-    async def heartbeat_proc(self, heartbeat: HeartbeatLetter) -> None:
-        if not isinstance(heartbeat, HeartbeatLetter):
+    async def heartbeat_proc_active(self, linkid: str,
+                                    heartbeat: HeartbeatLetter) -> None:
+        if linkid not in self._links:
             return
 
-        ident = heartbeat.getIdent()
-        if ident not in self._links:
-            return
-
-        link = self._links[ident]
+        link = self._links[linkid]
         seq = heartbeat.getSeq()
 
         if link.hbCount != seq:
             return
-        else:
-            link.hbCount += 1
 
-        if link.isActive:
-            self._loop.create_task(self._next_heartbeat(link, 2))
-        else:
-            await sending(link.writer, heartbeat)
+        link.hbCount += 1
+        self._loop.create_task(self._next_heartbeat(link, 2))
+
+    async def heartbeat_proc_passive(self, heartbeat: HeartbeatLetter) -> None:
+        ident = heartbeat.getIdent()
+        if ident not in self._links_passive:
+            return
+
+        link = self._links_passive[ident]
+        seq = heartbeat.getSeq()
+
+        if link.hbCount != seq:
+            return
+
+        link.hbCount += 1
+
+        heartbeat.setIdent(self._hostname)
+        await sending(link.writer, heartbeat)
 
     async def _next_heartbeat(self, link: Link, delay: int) -> None:
         await asyncio.sleep(delay)
