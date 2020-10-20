@@ -516,7 +516,7 @@ class JobProcUnit(JobProcUnitProto):
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
         # Cleanup
-        #self.cleanup()
+        # self.cleanup()
 
     def cleanup(self) -> None:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
@@ -721,22 +721,30 @@ class PostProcUnit(PostProcUnitProto):
             fd.write(content)
 
     async def _do_post(self, post: Post) -> None:
+        import sys
+
         path = await post.do()
+        print(path)
 
         if path != '':
             # Success
             fileName = path.split(pathSeperator())[-1]
+            print(fileName)
 
             await do_job_result_transfer(
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send)  # type: ignore
 
+            print("Transfer done")
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FINISHED)
         else:
+            print("Failed")
             # Failed
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FAILURE)
+
+        sys.stdout.flush()
 
         # Cleanup
         post.cleanup()

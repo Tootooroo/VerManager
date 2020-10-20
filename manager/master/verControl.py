@@ -144,7 +144,6 @@ class RevSync(ModuleDaemon):
 
             for rev in revisions:
                 await RevSync.revTransfer(rev, tz)
-                print(rev)
             print("Done")
             sys.stdout.flush()
 
