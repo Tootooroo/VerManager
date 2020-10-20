@@ -53,13 +53,13 @@ class Worker:
 
         # Create Link to Master
         master_address = self.cfg.getConfig('MASTER_ADDRESS')
-        print(master_address)
         await connector.open_connection('Master', master_address['host'],
                                         master_address['port'])
 
         # Merger Setup
         role = self.cfg.getConfig('ROLE')
         merger_address = self.cfg.getConfig('MERGER_ADDRESS')
+        print(merger_address)
 
         if role == 'MERGER':
             # Setup PostProcUnit
