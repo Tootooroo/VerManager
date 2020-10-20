@@ -214,6 +214,9 @@ class Linker:
                 break
 
             if isinstance(letter, HeartbeatLetter):
+                import sys
+                print(letter)
+                sys.stdout.flush()
                 await self.heartbeat_proc(letter)
             else:
                 if self.msg_callback is None:
