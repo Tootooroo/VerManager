@@ -732,9 +732,13 @@ class PostProcUnit(PostProcUnitProto):
             fileName = path.split(pathSeperator())[-1]
             print(fileName)
 
-            await do_job_result_transfer(
-                path, post.ident(), "Master", post.version(),
-                fileName, self._output_space.send)  # type: ignore
+            try:
+                await do_job_result_transfer(
+                    path, post.ident(), "Master", post.version(),
+                    fileName, self._output_space.send)  # type: ignore
+            except Exception:
+                import traceback
+                traceback.print_exc()
 
             print("Transfer done")
             await self._notify_job_state(
