@@ -53,6 +53,7 @@ class Worker:
 
         # Create Link to Master
         master_address = self.cfg.getConfig('MASTER_ADDRESS')
+        print(master_address)
         await connector.open_connection('Master', master_address['host'],
                                         master_address['port'])
 
