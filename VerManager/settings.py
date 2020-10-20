@@ -28,7 +28,7 @@ DEBUG = True
 HOST = os.environ.get('ALLOWED_HOST')
 if HOST is None:
     HOST = 'localhost'
-ALLOWED_HOSTS = ['HOST']
+ALLOWED_HOSTS = [HOST]
 
 
 # Application definition
