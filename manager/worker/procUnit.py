@@ -267,13 +267,14 @@ async def do_job_result_transfer(path, tid: str, linkid: str,
 async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLetter,
                                          send_rtn: Callable, timeout=None) -> None:
 
-    # Wait until link rebuild or timeout
-    while output.link_state(linkid) != Link.CONNECTED:
-        await asyncio.sleep(1)
-        timeout = timeout - 1
+    if timeout is not None:
+        # Wait until link rebuild or timeout
+        while output.link_state(linkid) != Link.CONNECTED:
+            await asyncio.sleep(1)
+            timeout = timeout - 1
 
-        if timeout < 0:
-            raise asyncio.exceptions.TimeoutError()
+            if timeout < 0:
+                raise asyncio.exceptions.TimeoutError()
 
     await job_result_transfer(linkid, job, send_rtn)
 
