@@ -482,7 +482,7 @@ class JobProcUnit(JobProcUnitProto):
                     tid, Letter.RESPONSE_STATE_FAILURE)
 
                 # Cleanup
-                self.cleanup()
+                # self.cleanup()
                 return
 
         # Transfer job result to Target destination

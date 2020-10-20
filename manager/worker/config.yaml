@@ -3,7 +3,7 @@ MASTER_ADDRESS:
   port: 30000
 
 MERGER_ADDRESS:
-  host: "127.0.0.1"
+  host: "0.0.0.0"
   port: 8025
 
 WORKER_NAME: WORKER_EXAMPLE
