@@ -133,6 +133,7 @@ class RevSync(ModuleDaemon):
         # different with datas in database so just remove these data and
         # load from server again
         import traceback
+        import sys
 
         try:
             await sync_to_async(Revisions.objects.all().delete)()
@@ -145,6 +146,7 @@ class RevSync(ModuleDaemon):
                 await RevSync.revTransfer(rev, tz)
                 print(rev)
             print("Done")
+            sys.stdout.flush()
 
         except django.db.utils.ProgrammingError:
             traceback.print_exc()
