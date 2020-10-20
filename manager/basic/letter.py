@@ -919,7 +919,10 @@ async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     if writer.is_closing():
         raise ConnectionError
 
-    await writer.drain()
+    try:
+        await writer.drain()
+    except AssertionError:
+        return
 
 
 # UnitTest
