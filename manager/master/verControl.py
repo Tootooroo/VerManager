@@ -132,6 +132,7 @@ class RevSync(ModuleDaemon):
         # repository may be rebased so that the structure of it is very
         # different with datas in database so just remove these data and
         # load from server again
+        import traceback
 
         try:
             await sync_to_async(Revisions.objects.all().delete)()
@@ -146,8 +147,10 @@ class RevSync(ModuleDaemon):
             print("Done")
 
         except django.db.utils.ProgrammingError:
+            traceback.print_exc()
             return False
         except Exception:
+            traceback.print_exc()
             pass
 
         return True
