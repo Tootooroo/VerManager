@@ -206,6 +206,9 @@ class Worker:
         if task is None:
             return None
 
+        # Remove task from this worker
+        self.inProcTask.remove(id)
+
         cmd = JobCancelCommand(id)
         await self.control(cmd)
 
