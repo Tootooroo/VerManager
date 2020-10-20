@@ -289,7 +289,7 @@ async def job_result_transfer_check_link_forever(
     except (ConnectionError, BrokenPipeError):
         asyncio.get_running_loop().create_task(
             job_result_transfer_check_link_forever(
-                output, linkid, job, send_rtn)
+                output, linkid, job, send_rtn, timeout=timeout)
         )
 
     except asyncio.exceptions.TimeoutError:
