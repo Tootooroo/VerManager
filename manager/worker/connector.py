@@ -23,6 +23,7 @@
 
 import asyncio
 import typing
+import platform
 import manager.worker.configs as cfg
 
 from datetime import datetime
@@ -74,6 +75,8 @@ class Linker:
 
         assert(cfg.config is not None)
         self._hostname = cfg.config.getConfig('WORKER_NAME')
+        if self._hostname == "":
+            self._hostname = platform.node()
         self.channel_data = None  # type: typing.Optional[typing.Dict]
 
     def set_host_name(self, name: str) -> None:

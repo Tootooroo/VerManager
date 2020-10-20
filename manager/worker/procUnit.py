@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import os
+import platform
 import abc
 import asyncio
 import datetime
@@ -296,8 +297,13 @@ async def job_result_transfer_check_link_forever(
 
 async def notify_job_state(tid: str, state: str, rtn: Callable) -> None:
     assert(configs.config is not None)
-    response = ResponseLetter(
-        configs.config.getConfig('WORKER_NAME'), tid, state)
+
+    # Get worker name
+    workerName = configs.config.getConfig('WORKER_NAME')
+    if workerName == '':
+        workerName = platform.node()
+
+    response = ResponseLetter(workerName, tid, state)
     response.setHeader('linkid', 'Master')
     await rtn(response)
 
