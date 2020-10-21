@@ -513,7 +513,7 @@ class JobProcUnit(JobProcUnitProto):
         path = build_dir+"/"+projName
 
         if platform.system() == "Windows":
-            os.system("Remove-Item -Recurse -Force " + path)
+            os.system("powershell.exe Remove-Item -Recurse -Force " + path)
         else:
             shutil.rmtree(path)
 
