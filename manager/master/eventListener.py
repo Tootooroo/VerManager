@@ -109,8 +109,6 @@ class Entry:
 
         try:
             event = await self._worker.waitLetter(timeout=2)
-            print(event)
-            sys.stdout.flush()
         except asyncio.exceptions.TimeoutError:
             return
 
