@@ -481,7 +481,7 @@ class JobProcUnit(JobProcUnitProto):
                     tid, Letter.RESPONSE_STATE_FAILURE)
 
                 # Cleanup
-                self.cleanup()
+                # self.cleanup()
                 return
 
         # Transfer job result to Target destination
@@ -499,13 +499,13 @@ class JobProcUnit(JobProcUnitProto):
             sys.stdout.flush()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             # fixme: Job is not be cleanup in this situation.
-            self.cleanup()
+            # self.cleanup()
             return
 
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
         # Cleanup
-        self.cleanup()
+        # self.cleanup()
 
     def cleanup(self) -> None:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
@@ -737,7 +737,7 @@ class PostProcUnit(PostProcUnitProto):
                 post.ident(), Letter.RESPONSE_STATE_FAILURE)
 
         # Cleanup
-        post.cleanup()
+        # post.cleanup()
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
