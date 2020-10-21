@@ -116,6 +116,7 @@ class Entry:
             return None
 
         if isinstance(event, HeartbeatLetter):
+            print(event)
             await self._heartbeatProc(event)
             return None
 
