@@ -248,20 +248,24 @@ async def job_result_transfer(target: str, job: NewLetter,
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
-    result_file = open(path, "rb")
+    try:
+        result_file = open(path, "rb")
 
-    for line in result_file:
-        line_bin = BinaryLetter(
-            tid=tid, bStr=line, parent=version,
-            fileName=fileName)
-        line_bin.setHeader("linkid", linkid)
+        for line in result_file:
+            line_bin = BinaryLetter(
+                tid=tid, bStr=line, parent=version,
+                fileName=fileName)
+            line_bin.setHeader("linkid", linkid)
 
-        await send_rtn(line_bin)
+            await send_rtn(line_bin)
 
-    end_bin = BinaryLetter(
-        tid=tid, bStr=b"", parent=version, fileName=fileName)
-    end_bin.setHeader("linkid", linkid)
-    await send_rtn(end_bin)
+        end_bin = BinaryLetter(
+            tid=tid, bStr=b"", parent=version, fileName=fileName)
+        end_bin.setHeader("linkid", linkid)
+        await send_rtn(end_bin)
+    except Exception:
+        import traceback
+        traceback.print_exc()
 
 
 async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLetter,
