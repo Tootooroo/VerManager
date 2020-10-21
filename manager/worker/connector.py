@@ -23,6 +23,7 @@
 import asyncio
 import typing
 import platform
+import traceback
 import manager.worker.configs as cfg
 
 from manager.basic.letter import BinaryLetter, sending_sock
@@ -151,12 +152,8 @@ class Linker:
 
             try:
                 if self._heartbeat_check(link) is False:
-                    print("Heartbeat Timeout" + str(link.hb_timer_diff()))
-                    import sys
-                    sys.stdout.flush()
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
-                print(letter)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 # Wait a while
                 await asyncio.sleep(1)
@@ -164,7 +161,6 @@ class Linker:
                 # Exit
                 return
             except asyncio.exceptions.TimeoutError:
-                print("NEXT TURN")
                 continue
 
             if isinstance(letter, HeartbeatLetter):
@@ -259,6 +255,8 @@ class Linker:
             end_bin.setHeader("linkid", linkid)
             sending_sock(sock, end_bin)
         except Exception:
+            import traceback
+            traceback.print_exc()
             return False
 
         return True
@@ -311,15 +309,12 @@ class Linker:
         hb = HeartbeatLetter(self._hostname, link.hbCount)
         try:
             await sending(link.writer, hb)
-            print("SendHeart: " + str(hb) + " to " + link.ident)
         except ConnectionError:
-            print("SendHeart: " + str(hb) + " to " + link.ident + " failed")
             # Just return
             # that link will be rebuild while timer
             # timeout in wrost situation.
             return
         except Exception:
-            import traceback
             traceback.print_exc()
 
     def _heartbeat_check(self, link: Link) -> bool:
