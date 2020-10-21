@@ -432,6 +432,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 .whichWorker(task.id())
             if theWorker is not None:
                 await theWorker.cancel(task.id())
+                await self._log("Cancel task " + task.id())
 
         elif isinstance(task, PostTask):
             # PostTask must a member of a SuperTask
@@ -450,9 +451,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
                 child.stateChange(Task.STATE_FAILURE)
                 cast(TaskTracker, self._taskTracker).untrack(ident)
+                await self._log("Cancel task " + ident)
 
         task.stateChange(Task.STATE_FAILURE)
         cast(TaskTracker, self._taskTracker).untrack(task.id())
+        await self._log("Cancel task " + task.id())
 
     # Cancel all tasks processing on a worker
     def cancelOnWorker(self, wId: str) -> None:
