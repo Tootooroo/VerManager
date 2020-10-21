@@ -482,7 +482,7 @@ class JobProcUnit(JobProcUnitProto):
                     tid, Letter.RESPONSE_STATE_FAILURE)
 
                 # Cleanup
-                # self.cleanup()
+                self.cleanup()
                 return
 
         # Transfer job result to Target destination
@@ -498,30 +498,24 @@ class JobProcUnit(JobProcUnitProto):
         except Exception:
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             # fixme: Job is not be cleanup in this situation.
-
-            # Create task that will resend letter
-            # if link with master is rebuild.
-            # If timeout then the job on this worker
-            # is treat as unavailable job just drop it.
-            loop = asyncio.get_running_loop()
-            loop.create_task(
-                job_result_transfer_check_link_forever(
-                    self._output_space, linkid, job,
-                    self._output_space.send,  # type: ignore
-                    timeout=10)
-            )
-
+            self.cleanup()
             return
 
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
         # Cleanup
-        # self.cleanup()
+        self.cleanup()
 
     def cleanup(self) -> None:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
         projName = cast(Info, self._config).getConfig('PROJECT_NAME')
-        shutil.rmtree(build_dir+"/"+projName)
+
+        path = build_dir+"/"+projName
+
+        if platform.system() == "Windows":
+            os.system("Remove-Item -Recurse -Force " + path)
+        else:
+            shutil.rmtree(path)
 
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
