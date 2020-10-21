@@ -748,7 +748,7 @@ class PostProcUnit(PostProcUnitProto):
         sys.stdout.flush()
 
         # Cleanup
-        post.cleanup()
+        # post.cleanup()
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
