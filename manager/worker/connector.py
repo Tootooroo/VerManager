@@ -272,6 +272,7 @@ class Linker:
         await asyncio.sleep(delay)
 
         hb = HeartbeatLetter(self._hostname, link.hbCount)
+        print("SendHeart: " + str(hb))
         try:
             await sending(link.writer, hb)
         except ConnectionError:
