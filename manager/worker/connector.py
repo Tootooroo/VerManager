@@ -149,7 +149,7 @@ class Linker:
 
             try:
                 if self._heartbeat_check(link) is False:
-                    print("Heartbeat Timeout")
+                    print("Heartbeat Timeout" + str(link.hb_timer_diff()))
                     import sys
                     sys.stdout.flush()
                     raise ConnectionError()
@@ -164,6 +164,7 @@ class Linker:
                 continue
 
             if isinstance(letter, HeartbeatLetter):
+                link.hb_timeer_udpate()
                 await self.heartbeat_proc_active(linkid, letter)
             else:
                 if self.msg_callback is None:
@@ -271,7 +272,6 @@ class Linker:
         hb = HeartbeatLetter(self._hostname, link.hbCount)
         try:
             await sending(link.writer, hb)
-            link.hb_timeer_udpate()
         except ConnectionError:
             # Just return that link
             # will be rebuild while timer
