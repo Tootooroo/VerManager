@@ -735,7 +735,7 @@ class PostProcUnit(PostProcUnitProto):
             fileName = path.split(pathSeperator())[-1]
             print(fileName)
 
-            self._output_space.sendfile(
+            await self._output_space.sendfile(
                 "Master", path, post.ident(), post.version(), fileName)
 
             print("Transfer done")
