@@ -288,7 +288,7 @@ class Linker:
             return
 
         link.hbCount += 1
-        self._loop.create_task(self._next_heartbeat(link, 3))
+        self._loop.create_task(self._next_heartbeat(link, 5))
 
     async def heartbeat_proc_passive(self, heartbeat: HeartbeatLetter) -> None:
         ident = heartbeat.getIdent()
@@ -324,7 +324,7 @@ class Linker:
             traceback.print_exc()
 
     def _heartbeat_check(self, link: Link) -> bool:
-        return link.hb_timer_diff() < 15
+        return link.hb_timer_diff() < 30
 
     def link_state(self, linkid: str) -> int:
         try:

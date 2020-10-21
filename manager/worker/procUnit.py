@@ -24,9 +24,9 @@ import os
 import platform
 import abc
 import asyncio
-import datetime
 import manager.worker.configs as configs
 
+from datetime import datetime
 from typing import Optional, cast, Dict, BinaryIO, List, \
     Callable
 from manager.basic.letter import Letter
@@ -247,24 +247,34 @@ async def job_result_transfer(target: str, job: NewLetter, send_rtn: Callable) -
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
-    try:
-        result_file = open(path, "rb")
 
-        for line in result_file:
-            line_bin = BinaryLetter(
-                tid=tid, bStr=line, parent=version,
-                fileName=fileName)
-            line_bin.setHeader("linkid", linkid)
+    n = 0
+    last = datetime.utcnow()
 
-            await send_rtn(line_bin)
+    result_file = open(path, "rb")
 
-        end_bin = BinaryLetter(
-            tid=tid, bStr=b"", parent=version, fileName=fileName)
-        end_bin.setHeader("linkid", linkid)
-        await send_rtn(end_bin)
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    for line in result_file:
+        line_bin = BinaryLetter(
+            tid=tid, bStr=line, parent=version,
+            fileName=fileName)
+        line_bin.setHeader("linkid", linkid)
+
+        await send_rtn(line_bin)
+
+        n += 1
+
+        # Rlease cpu for 1 second
+        if n > 100:
+            n = 0
+            current = datetime.utcnow()
+            if (current - last).seconds > 5:
+                await asyncio.sleep(1)
+
+
+    end_bin = BinaryLetter(
+        tid=tid, bStr=b"", parent=version, fileName=fileName)
+    end_bin.setHeader("linkid", linkid)
+    await send_rtn(end_bin)
 
 
 
