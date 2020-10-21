@@ -500,7 +500,9 @@ class JobProcUnit(JobProcUnitProto):
         try:
             await self._job_result_transfer(linkid, job)
         except Exception:
+            import sys
             print("Job Trans failed")
+            sys.stdout.flush()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             # fixme: Job is not be cleanup in this situation.
             self.cleanup()
