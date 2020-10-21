@@ -33,7 +33,7 @@ from typing import Callable, Any, Dict, List, Coroutine
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
-from manager.basic.letter import Letter
+from manager.basic.letter import Letter, BinaryLetter
 
 # Test imports
 from manager.basic.letter import HeartbeatLetter
@@ -113,10 +113,12 @@ class Entry:
         if event is None:
             return None
 
-        if isinstance(event, HeartbeatLetter):
+        if not isinstance(event, BinaryLetter):
             print(event)
             import sys
             sys.stdout.flush()
+
+        if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)
             return None
 
