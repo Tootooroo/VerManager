@@ -20,12 +20,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import asyncio
 import typing
 import platform
 import manager.worker.configs as cfg
 
+from letter import BinaryLetter
+from socket import socket
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from manager.worker.channel import ChannelReceiver
 from manager.basic.letter import receving, sending, HeartbeatLetter, Letter,\
@@ -238,6 +240,40 @@ class Linker:
 
         await sending(link.writer, letter)
 
+    @staticmethod
+    def _do_send_file(sock: socket, linkid: str,
+                      path: str, tid: str,
+                      version: str, fileName: str) -> bool:
+        try:
+            file = open(path, "rb")
+
+            for line in file:
+                line_bin = BinaryLetter(
+                    tid=tid, bStr=line, parent=version,
+                    fileName=fileName)
+                line_bin.setHeader("linkid", linkid)
+                sock.send(line_bin.toBytesWithLength())
+
+            end_bin = BinaryLetter(tid=tid, bStr=b"",
+                                   parent=version, fileName=fileName)
+            end_bin.setHeader("linkid", linkid)
+            sock.send(end_bin.toBytesWithLength())
+        except Exception:
+            return False
+
+        return True
+
+    async def sendfile(self, linkid: str, tid: str, path: str,
+                       version: str, fileName: str) -> bool:
+        if linkid not in self._links:
+            raise LINK_NOT_EXISTS(linkid)
+
+        link = self._links[linkid]
+        sock = link.writer.get_extra_info('socket')
+        e = ProcessPoolExecutor(max_workers=1)
+        return await self._loop.run_in_executor(
+            e, self._do_send_file, (sock, path))
+
     async def heartbeat_proc_active(self, linkid: str,
                                     heartbeat: HeartbeatLetter) -> None:
         if linkid not in self._links:
@@ -325,6 +361,11 @@ class Connector(ChannelReceiver):
 
         await asyncio.wait_for(
             self._linker.sendLetter(linkid, letter), timeout=timeout)
+
+    async def sendFile(self, linkid: str, tid: str, path: str,
+                       version: str, fileName: str) -> bool:
+        return await self._linker.sendfile(
+            linkid, tid, path, version, fileName)
 
     def link_state(self, linkid: str) -> int:
         return self._linker.link_state(linkid)

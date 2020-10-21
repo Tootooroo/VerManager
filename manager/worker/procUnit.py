@@ -721,6 +721,9 @@ class PostProcUnit(PostProcUnitProto):
             fd.write(content)
 
     async def _do_post(self, post: Post) -> None:
+
+        assert(self._output_space is not None)
+
         import sys
         print("Post_DO")
         path = await post.do()
@@ -732,13 +735,8 @@ class PostProcUnit(PostProcUnitProto):
             fileName = path.split(pathSeperator())[-1]
             print(fileName)
 
-            try:
-                await do_job_result_transfer(
-                    path, post.ident(), "Master", post.version(),
-                    fileName, self._output_space.send)  # type: ignore
-            except Exception:
-                import traceback
-                traceback.print_exc()
+            self._output_space.sendfile(
+                "Master", path, post.ident(), post.version(), fileName)
 
             print("Transfer done")
             await self._notify_job_state(

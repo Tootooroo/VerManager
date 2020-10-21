@@ -62,6 +62,12 @@ class Output:
         assert(self._connector is not None)
         await self._connector.sendLetter(letter, timeout=timeout)
 
+    async def sendfile(self, linkid: str, path: str,
+                       tid: str, version: str, fileName: str) -> bool:
+        assert(self._connector is not None)
+        return await self._connector.sendFile(
+            linkid, tid, path, version, fileName)
+
     def isReady(self) -> bool:
         return self._state == self.STATE_READY
 
