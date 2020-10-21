@@ -76,6 +76,7 @@ class Linker:
         self._lis = {}  # type: typing.Dict[str, typing.Any]
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
         self._loop = asyncio.get_running_loop()
+        self._lock = asyncio.Lock()
 
         assert(cfg.config is not None)
         self._hostname = cfg.config.getConfig('WORKER_NAME')
@@ -237,7 +238,7 @@ class Linker:
         except KeyError:
             raise LINK_NOT_EXISTS(linkid)
 
-        await sending(link.writer, letter)
+        await sending(link.writer, letter, lock=self._lock)
 
     @staticmethod
     def _do_send_file(sock: socket, linkid: str,

@@ -914,18 +914,22 @@ async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Lette
     return Letter.parse(content)
 
 
-async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
-    writer.write(l.toBytesWithLength())
+async def sending(writer: asyncio.StreamWriter,
+                  letter: Letter,
+                  lock: asyncio.Lock = None) -> None:
+    writer.write(letter.toBytesWithLength())
 
     if writer.is_closing():
         raise ConnectionError
 
-    try:
+    # Lock to protect call of drain()
+    # concurrent call to drain will
+    # cause AssertionError
+    if lock is not None:
+        async with lock:
+            await writer.drain()
+    else:
         await writer.drain()
-    except AssertionError:
-        print("Drain() assertionerror")
-        import sys
-        sys.stdout.flush()
 
 # Function to receive a letter from a socket
 def receving_sock(sock: socket.socket) -> Optional[Letter]:
