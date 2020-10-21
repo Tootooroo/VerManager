@@ -967,11 +967,16 @@ def sending_sock(sock: socket.socket, l: Letter) -> None:
     while totalSent < length:
         try:
             sent = sock.send(jBytes[totalSent:])
-            if sent == 0:
-                raise Exception
-            totalSent += sent
         except BlockingIOError:
             continue
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+        if sent == 0:
+            raise Exception
+        totalSent += sent
+
 
 
 
