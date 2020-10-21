@@ -923,8 +923,9 @@ async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     try:
         await writer.drain()
     except AssertionError:
-        pass
-
+        print("Drain() assertionerror")
+        import sys
+        sys.stdout.flush()
 
 # Function to receive a letter from a socket
 def receving_sock(sock: socket.socket) -> Optional[Letter]:
