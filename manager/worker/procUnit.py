@@ -243,6 +243,7 @@ async def job_result_transfer(target: str, job: NewLetter, send_rtn: Callable) -
         result_path, tid, target, version, fileName,
         send_rtn)
 
+
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
@@ -684,7 +685,6 @@ class PostProcUnit(PostProcUnitProto):
     async def cancel(self, tid: str) -> None:
         return
 
-
     def exists(self, tid: str) -> bool:
         return True
 
@@ -726,7 +726,7 @@ class PostProcUnit(PostProcUnitProto):
             fileName = path.split(pathSeperator())[-1]
 
             await do_job_result_transfer(
-                path, post.ident, "Master", post.version(),
+                path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send
             )
 
