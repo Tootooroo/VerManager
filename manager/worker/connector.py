@@ -269,7 +269,7 @@ class Linker:
             raise LINK_NOT_EXISTS(linkid)
 
         link = self._links[linkid]
-        sock = link.writer.get_extra_info('socket')
+        sock = link.writer.transport.get_extra_info('socket')
         e = ProcessPoolExecutor(max_workers=1)
         return await self._loop.run_in_executor(
             e, self._do_send_file, (sock, path))
