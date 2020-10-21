@@ -105,8 +105,6 @@ class Entry:
             await self.stop()
 
     async def eventProc(self) -> None:
-        import sys
-
         try:
             event = await self._worker.waitLetter(timeout=2)
         except asyncio.exceptions.TimeoutError:

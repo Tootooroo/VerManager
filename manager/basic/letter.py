@@ -920,6 +920,7 @@ async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     if writer.is_closing():
         raise ConnectionError
 
+
 # Function to receive a letter from a socket
 def receving_sock(sock: socket.socket) -> Optional[Letter]:
     content = b''
@@ -954,10 +955,13 @@ def sending_sock(sock: socket.socket, l: Letter) -> None:
     length = len(jBytes)
 
     while totalSent < length:
-        sent = sock.send(jBytes[totalSent:])
-        if sent == 0:
-            raise Exception
-        totalSent += sent
+        try:
+            sent = sock.send(jBytes[totalSent:])
+            if sent == 0:
+                raise Exception
+            totalSent += sent
+        except BlockingIOError:
+            continue
 
 
 
