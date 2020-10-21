@@ -85,7 +85,7 @@ class ProcUnit(abc.ABC):
         # Will be setup while install into Processor.
         self._output_space = None  # type: Optional[Output]
 
-        self._start_at = datetime.datetime.utcnow()
+        self._start_at = datetime.utcnow()
         self._channel = None  # type: Optional[ChannelEntry]
         self._t = None  # type: Optional[asyncio.Task]
 
@@ -174,7 +174,7 @@ class ProcUnit(abc.ABC):
         self._channel.update('ident', self._unitIdent)
         self._channel.update('failureCount', 0)
 
-        uptime = (datetime.datetime.utcnow() - self._start_at).seconds
+        uptime = (datetime.utcnow() - self._start_at).seconds
         self._channel.update('uptime', uptime)
 
     def _notify(self) -> None:
