@@ -147,9 +147,6 @@ class Entry:
                 await self.stop()
                 return
 
-            await asyncio.sleep(0.1)
-
-
 class EventListener(ModuleDaemon, Subject, Observer):
 
     NOTIFY_LOG = "log"
