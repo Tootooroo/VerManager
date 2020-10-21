@@ -264,10 +264,11 @@ async def do_job_result_transfer(path, tid: str, linkid: str,
         n += 1
 
         # Rlease cpu for 1 second
-        if n > 100:
+        if n > 1000:
             n = 0
             current = datetime.utcnow()
             if (current - last).seconds > 5:
+                last = current
                 await asyncio.sleep(1)
 
 
