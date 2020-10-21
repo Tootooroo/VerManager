@@ -229,8 +229,7 @@ class PROC_UNIT_IS_IN_DENY_MODE(Exception):
 
 
 # Concrete ProcUnits
-async def job_result_transfer(target: str, job: NewLetter,
-                              send_rtn: Callable) -> None:
+async def job_result_transfer(target: str, job: NewLetter, output: Output) -> None:
     extra = job.getExtra()
     tid = job.getTid()
     version = job.getContent('vsn')
@@ -240,32 +239,7 @@ async def job_result_transfer(target: str, job: NewLetter,
     result_path = build_dir + "/" + projName + '/' + extra['resultPath']
     fileName = result_path.split(pathSeperator())[-1]
 
-    await do_job_result_transfer(
-        result_path, tid, target, version, fileName,
-        send_rtn)
-
-
-async def do_job_result_transfer(path, tid: str, linkid: str,
-                                 version: str, fileName: str,
-                                 send_rtn: Callable) -> None:
-    try:
-        result_file = open(path, "rb")
-
-        for line in result_file:
-            line_bin = BinaryLetter(
-                tid=tid, bStr=line, parent=version,
-                fileName=fileName)
-            line_bin.setHeader("linkid", linkid)
-
-            await send_rtn(line_bin)
-
-        end_bin = BinaryLetter(
-            tid=tid, bStr=b"", parent=version, fileName=fileName)
-        end_bin.setHeader("linkid", linkid)
-        await send_rtn(end_bin)
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    await output.sendfile(target, result_path, tid, version, fileName)
 
 
 async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLetter,
@@ -280,7 +254,7 @@ async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLe
             if timeout < 0:
                 raise asyncio.exceptions.TimeoutError()
 
-    await job_result_transfer(linkid, job, send_rtn)
+    await job_result_transfer(linkid, job, output)
 
 
 async def job_result_transfer_check_link_forever(
@@ -501,7 +475,6 @@ class JobProcUnit(JobProcUnitProto):
             await self._job_result_transfer(linkid, job)
         except Exception:
             import sys
-            print("Job Trans failed")
             sys.stdout.flush()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             # fixme: Job is not be cleanup in this situation.
@@ -528,7 +501,7 @@ class JobProcUnit(JobProcUnitProto):
                                    job: NewLetter) -> None:
 
         assert(self._output_space is not None)
-        await job_result_transfer(target, job, self._output_space.send)
+        await job_result_transfer(target, job, self._output_space)
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
@@ -566,26 +539,22 @@ class JobProcUnit(JobProcUnitProto):
         # Channel information init
         self.msg_gen()
 
-        try:
-            while True:
-                job = cast(NewLetter, await self.job_retrive())
+        while True:
+            job = cast(NewLetter, await self.job_retrive())
 
-                if not isinstance(job, NewLetter):
-                    continue
+            if not isinstance(job, NewLetter):
+                continue
 
-                # Update channel data
-                await self._channel.update_and_notify('isProcessing', 'true')
+            # Update channel data
+            await self._channel.update_and_notify('isProcessing', 'true')
 
-                self._inProcTid = job.getTid()
+            self._inProcTid = job.getTid()
 
-                # Do job
-                await self._do_job(job)
+            # Do job
+            await self._do_job(job)
 
-                # Update channel data
-                await self._channel.update_and_notify('isProcessing', 'false')
-        except Exception:
-            import traceback
-            traceback.print_exc()
+            # Update channel data
+            await self._channel.update_and_notify('isProcessing', 'false')
 
 
 class Frag:
@@ -724,35 +693,24 @@ class PostProcUnit(PostProcUnitProto):
     async def _do_post(self, post: Post) -> None:
 
         assert(self._output_space is not None)
-
-        import sys
-        print("Post_DO")
         path = await post.do()
-        print(path)
-        sys.stdout.flush()
 
         if path != '':
             # Success
             fileName = path.split(pathSeperator())[-1]
-            print(fileName)
 
-            await do_job_result_transfer(
-                path, post.ident(), "Master", post.version(),
-                fileName, self._output_space.send)
+            self._output_space.sendfile(
+                "Master", path, post.ident(), post.version(), fileName)
 
-            print("Transfer done")
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FINISHED)
         else:
-            print("Failed")
             # Failed
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FAILURE)
 
-        sys.stdout.flush()
-
         # Cleanup
-        # post.cleanup()
+        post.cleanup()
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
@@ -791,6 +749,4 @@ class PostProcUnit(PostProcUnitProto):
                 elif isinstance(job, PostTaskLetter):
                     await self._new_post(job)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
                 print(e)
