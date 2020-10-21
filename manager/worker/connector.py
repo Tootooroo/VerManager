@@ -25,7 +25,7 @@ import typing
 import platform
 import manager.worker.configs as cfg
 
-from manager.basic.letter import BinaryLetter
+from manager.basic.letter import BinaryLetter, sending_sock
 from socket import socket
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
@@ -252,12 +252,12 @@ class Linker:
                     tid=tid, bStr=line, parent=version,
                     fileName=fileName)
                 line_bin.setHeader("linkid", linkid)
-                sock.send(line_bin.toBytesWithLength())
+                sending_sock(sock, line_bin)
 
             end_bin = BinaryLetter(tid=tid, bStr=b"",
                                    parent=version, fileName=fileName)
             end_bin.setHeader("linkid", linkid)
-            sock.send(end_bin.toBytesWithLength())
+            sending_sock(sock, end_bin)
         except Exception:
             return False
 
