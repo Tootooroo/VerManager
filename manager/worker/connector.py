@@ -309,6 +309,7 @@ class Linker:
         hb = HeartbeatLetter(self._hostname, link.hbCount)
         try:
             await sending(link.writer, hb)
+            print("SendHB to " + link.ident)
         except ConnectionError:
             # Just return
             # that link will be rebuild while timer
