@@ -920,6 +920,11 @@ async def sending(writer: asyncio.StreamWriter, l: Letter) -> None:
     if writer.is_closing():
         raise ConnectionError
 
+    try:
+        await writer.drain()
+    except AssertionError:
+        pass
+
 
 # Function to receive a letter from a socket
 def receving_sock(sock: socket.socket) -> Optional[Letter]:
