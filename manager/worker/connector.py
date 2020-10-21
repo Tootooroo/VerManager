@@ -145,13 +145,14 @@ class Linker:
             return
 
         while True:
-
+            import sys
             if link.state == Link.REMOVED:
                 del self._links[linkid]
                 break
 
             try:
                 if self._heartbeat_check(link) is False:
+                    print(link.ident + " Timeout")
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
@@ -161,6 +162,8 @@ class Linker:
                 # Exit
                 return
             except asyncio.exceptions.TimeoutError:
+                print(link.ident + " Turn")
+                sys.stdout.flush()
                 continue
 
             if isinstance(letter, HeartbeatLetter):
@@ -309,7 +312,9 @@ class Linker:
         hb = HeartbeatLetter(self._hostname, link.hbCount)
         try:
             await sending(link.writer, hb)
-            print("SendHB to " + link.ident)
+            print("SendHB " + str(hb) +  " to " + link.ident)
+            import sys
+            sys.stdout.flush()
         except ConnectionError:
             # Just return
             # that link will be rebuild while timer
