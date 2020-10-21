@@ -740,7 +740,9 @@ class PostProcUnit(PostProcUnitProto):
                 path, post.ident(), "Master", post.version(),
                 fileName, self._output_space.send
             )
-
+            # Success
+            await self._notify_job_state(
+                post.ident(), Letter.RESPONSE_STATE_FINISHED)
         else:
             # Failed
             await self._notify_job_state(
