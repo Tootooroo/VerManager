@@ -272,13 +272,13 @@ class Linker:
         await asyncio.sleep(delay)
 
         hb = HeartbeatLetter(self._hostname, link.hbCount)
-        print("SendHeart: " + str(hb) + " to " + link.ident)
         try:
             await sending(link.writer, hb)
+            print("SendHeart: " + str(hb) + " to " + link.ident)
         except ConnectionError:
             print("SendHeart: " + str(hb) + " to " + link.ident + " failed")
-            # Just return that link
-            # will be rebuild while timer
+            # Just return
+            # that link will be rebuild while timer
             # timeout in wrost situation.
             return
         except Exception:
