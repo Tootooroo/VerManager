@@ -60,7 +60,7 @@ class Entry:
         self._env = env
         self._hbCount = 0
         self._hbTimer = timezone.now()
-        self._hbTimerLimit = 10
+        self._hbTimerLimit = 15
         self._stop = False
 
     def getIdent(self) -> str:
@@ -115,6 +115,8 @@ class Entry:
 
         if isinstance(event, HeartbeatLetter):
             print(event)
+            import sys
+            sys.stdout.flush()
             await self._heartbeatProc(event)
             return None
 
