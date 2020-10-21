@@ -699,7 +699,7 @@ class PostProcUnit(PostProcUnitProto):
             # Success
             fileName = path.split(pathSeperator())[-1]
 
-            self._output_space.sendfile(
+            await self._output_space.sendfile(
                 "Master", path, post.ident(), post.version(), fileName)
 
             await self._notify_job_state(
