@@ -60,7 +60,6 @@ class Worker:
         # Merger Setup
         role = self.cfg.getConfig('ROLE')
         merger_address = self.cfg.getConfig('MERGER_ADDRESS')
-        print(merger_address)
 
         if role == 'MERGER':
             # Setup PostProcUnit
