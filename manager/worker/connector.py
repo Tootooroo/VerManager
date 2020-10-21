@@ -25,7 +25,7 @@ import typing
 import platform
 import manager.worker.configs as cfg
 
-from letter import BinaryLetter
+from manager.basic.letter import BinaryLetter
 from socket import socket
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
