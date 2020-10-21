@@ -154,6 +154,7 @@ class Linker:
                     sys.stdout.flush()
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
+                print(letter)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 # Wait a while
                 await asyncio.sleep(1)
@@ -161,6 +162,7 @@ class Linker:
                 # Exit
                 return
             except asyncio.exceptions.TimeoutError:
+                print("NEXT TURN")
                 continue
 
             if isinstance(letter, HeartbeatLetter):
