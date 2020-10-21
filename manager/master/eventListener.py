@@ -60,7 +60,7 @@ class Entry:
         self._env = env
         self._hbCount = 0
         self._hbTimer = timezone.now()
-        self._hbTimerLimit = 300
+        self._hbTimerLimit = 10
         self._stop = False
 
     def getIdent(self) -> str:
@@ -146,6 +146,7 @@ class Entry:
                 traceback.print_exc()
                 await self.stop()
                 return
+
 
 class EventListener(ModuleDaemon, Subject, Observer):
 
