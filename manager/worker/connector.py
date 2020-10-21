@@ -272,7 +272,7 @@ class Linker:
         sock = link.writer.transport.get_extra_info('socket')
         e = ProcessPoolExecutor(max_workers=1)
         return await self._loop.run_in_executor(
-            e, self._do_send_file, (sock, path))
+            e, self._do_send_file, (sock._sock, path))
 
     async def heartbeat_proc_active(self, linkid: str,
                                     heartbeat: HeartbeatLetter) -> None:
