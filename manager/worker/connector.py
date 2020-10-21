@@ -276,10 +276,14 @@ class Linker:
         try:
             await sending(link.writer, hb)
         except ConnectionError:
+            print("SendHeart: " + str(hb) + " to " + link.ident + " failed")
             # Just return that link
             # will be rebuild while timer
             # timeout in wrost situation.
             return
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     def _heartbeat_check(self, link: Link) -> bool:
         return link.hb_timer_diff() < 15
