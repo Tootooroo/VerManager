@@ -684,7 +684,7 @@ class PostProcUnit(PostProcUnitProto):
 
     def exists(self, tid: str) -> bool:
         """
-        Is a post in _posts
+        Is a post in deal by the PostProcUnit.
         """
         return tid in self._posts
 
