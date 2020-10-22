@@ -133,9 +133,6 @@ class ProcUnit(abc.ABC):
                 raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
 
         except asyncio.QueueFull:
-            print("NORMAL SPACE FULL")
-            import sys
-            sys.stdout.flush()
             raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
 
     async def job_retrive(self, timeout=None) -> Letter:

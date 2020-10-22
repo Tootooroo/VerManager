@@ -49,7 +49,6 @@ class Processor(ModuleDaemon):
         self._dispatcher = Dispatcher()
         self._reqQ = asyncio.Queue(4096)  # type: asyncio.Queue[Letter]
         self._output = Output()
-        self._binary = {}  # type: typing.Dict[str, typing.BinaryIO]
 
     async def begin(self) -> None:
         return None
@@ -60,21 +59,7 @@ class Processor(ModuleDaemon):
     def setup_output(self, conn: Connector) -> None:
         self._output.setConnector(conn)
 
-    def file_check_sys(self, letter: BinaryLetter) -> None:
-        fName = letter.getFileName()
-        if fName not in self._binary:
-            f = open(fName, "wb")
-            self._binary[fName] = f
-
-        bStr = letter.getContent('bytes')
-        if bStr == b"":
-            self._binary[fName].close()
-        else:
-            self._binary[fName].write(bStr)
-
     def req(self, letter: Letter) -> None:
-        if isinstance(letter, BinaryLetter):
-            self.file_check_sys(letter)
         self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
