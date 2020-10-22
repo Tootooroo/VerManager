@@ -23,6 +23,7 @@
 import asyncio
 import unittest
 import typing
+import functools
 import manager.master.configs as cfg
 
 from manager.basic.info import Info
@@ -150,11 +151,26 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         normal_worker.setState(Worker.STATE_ONLINE)
         normal_worker.max = 1
 
+        self.n1 = normal_worker1 = WorkerStub("Normal1", Worker.ROLE_NORMAL)
+        normal_worker1.setState(Worker.STATE_ONLINE)
+        normal_worker1.max = 1
+
+        self.n2 = normal_worker2 = WorkerStub("Normal2", Worker.ROLE_NORMAL)
+        normal_worker2.setState(Worker.STATE_ONLINE)
+        normal_worker2.max = 1
+
+        self.n3 = normal_worker3 = WorkerStub("Normal3", Worker.ROLE_NORMAL)
+        normal_worker3.setState(Worker.STATE_ONLINE)
+        normal_worker3.max = 1
+
         self.m = merger = WorkerStub("Merger", Worker.ROLE_MERGER)
         merger.setState(Worker.STATE_ONLINE)
         merger.max = 1
 
         self.wr.addWorker(normal_worker)
+        self.wr.addWorker(normal_worker1)
+        self.wr.addWorker(normal_worker2)
+        self.wr.addWorker(normal_worker3)
         self.wr.addWorker(merger)
 
     async def test_Dispatcher_Dispatch(self) -> None:
@@ -218,7 +234,12 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertEqual(self.n.postCount, 0)
         self.assertEqual(self.m.postCount, 1)
-        self.assertEqual(self.n.singleCount+self.m.singleCount, 4)
+        self.assertEqual(
+            self.n.singleCount +
+            self.n1.singleCount +
+            self.n2.singleCount +
+            self.n3.singleCount +
+            self.m.singleCount, 4)
 
     async def test_Dispatcher_DispatchSuperTask_MergerLost(self) -> None:
         """
@@ -240,11 +261,16 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(3)
 
         # Verify
-        self.assertTrue(len(self.n.cancel_jobs) == 4)
-        self.assertTrue('S__GL5610' in self.n.cancel_jobs)
-        self.assertTrue('S__GL5610-v3' in self.n.cancel_jobs)
-        self.assertTrue('S__GL8900_line' in self.n.cancel_jobs)
-        self.assertTrue('S__GL8900_ctrl' in self.n.cancel_jobs)
+        cancel_jobs = functools.reduce(
+            lambda l, r: l+r,
+            [self.n.cancel_jobs, self.n1.cancel_jobs,
+             self.n2.cancel_jobs, self.n3.cancel_jobs], [])  # type: typing.List
+
+        self.assertTrue(len(cancel_jobs) == 4)
+        self.assertTrue('S__GL5610' in cancel_jobs)
+        self.assertTrue('S__GL5610-v3' in cancel_jobs)
+        self.assertTrue('S__GL8900_line' in cancel_jobs)
+        self.assertTrue('S__GL8900_ctrl' in cancel_jobs)
 
     async def test_Dispatcher_Aging_SingleTask(self) -> None:
         """
@@ -322,3 +348,76 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 self.sut._taskTracker.isInTrack(task.id())  # type: ignore
             )
+
+    async def test_Dispatcher_Redispatch_SingleTask(self) -> None:
+        """
+        Dispatcher a single task then disconnect the worker that
+        handling the task.
+        After that that task should be dispatch to another worker
+        """
+
+        # Setup
+        cfg.config = Info("./config_test.yaml")
+
+        # Exercise
+        build = Build("B", {"cmd": ["sleep 5", "echo REDISPATCH > result"],
+                            "output": ["result"]})
+        t = SingleTask("S", "SN", "REV", build)
+        self.sut.dispatch(t)
+        self.sut.start()
+        await asyncio.sleep(1)
+
+        # Let the worker offline
+        worker = self.sut._taskTracker.whichWorker(t.id())  # type: ignore
+        assert(worker is not None)
+        worker.setState(Worker.STATE_OFFLINE)
+
+        # Notify Dispatcher a worker is lost
+        # cause WorkerRoom notify to Dispatcher
+        # will trigger workerLost_redispatch()
+        # so call this function directly here.
+        await self.sut.workerLost_redispatch(worker)
+
+        # Verify
+        # Task is handle by another worker
+        worker_another = self.sut._taskTracker.whichWorker(t.id())  # type: ignore
+        self.assertTrue(worker_another is not None)
+        self.assertTrue(worker_another, worker)
+
+    async def test_Dispatcher_Redispatch_SuperTask(self) -> None:
+        """
+        Dispatcher a SuperTask then disconnect a normal worker.
+        A result is expected that SingleTask on the worker is redispatch
+        to another worker.
+        """
+
+        # Setup
+        cfg.config = Info("./config_test.yaml")
+        tracker = typing.cast(TaskTracker, self.sut._taskTracker)
+
+        # Exercise
+        bs = BuildSet(cfg.config.getConfig("BuildSet_TWO"))
+        t = SuperTask("S", "V", "R", bs, {})
+
+        # Dispatch SuperTask
+        self.sut.dispatch(t)
+        self.sut.start()
+        await asyncio.sleep(1)
+
+        # Let a worker offline
+        single = [task for task in t.getChildren()
+                  if isinstance(task, SingleTask)][0]
+        worker = tracker.whichWorker(single.id())
+        assert(worker is not None)
+        worker.setState(Worker.STATE_OFFLINE)
+        await self.sut.workerLost_redispatch(worker)
+
+        # Verify
+        # The SingleTask we choose is dispatch to another
+        # worker and another task's states is not been changed.
+        for c in t.getChildren():
+            self.assertTrue(tracker.isInTrack(c.id()))
+
+        new_worker = tracker.whichWorker(single.id())
+        self.assertTrue(new_worker is not None)
+        self.assertNotEqual(new_worker, worker)

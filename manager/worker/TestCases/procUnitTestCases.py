@@ -112,8 +112,8 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
                 # Verify
                 self.pu._stop = True
                 self.assertTrue(ProcUnit.STATE_OVERLOAD, self.pu.state())
-                self.assertTrue(self.pu._normal_space.full())
-
+                self.assertTrue(self.pu._normal_space.qsize() >
+                                self.pu._hightwaterlevel)
                 return
 
         self.fail("No overload exception is raised")
@@ -135,7 +135,6 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
                 self.pu._stop = True
                 self.assertTrue(ProcUnit.STATE_DENY, self.pu.state())
                 self.assertTrue(self.pu._normal_space.full())
-                self.assertTrue(self.pu._reserved_space.full())
 
                 return
 
@@ -182,6 +181,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         self.sut.setChannel(ChannelEntry("JobProcUnit"))
 
+    @unittest.skip("Use sendfile instead of sendLetter")
     async def test_JobProcUnit_JobProc(self) -> None:
         # Setup
         self.sut.start()

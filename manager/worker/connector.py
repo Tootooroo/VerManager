@@ -226,7 +226,7 @@ class Linker:
                 await self.msg_callback(letter)
 
     def exists(self, linkid: str) -> bool:
-        return linkid in self._links
+        return linkid in self._links or linkid in self._links_passive
 
     async def sendLetter(self, linkid: str, letter: Letter) -> None:
         try:

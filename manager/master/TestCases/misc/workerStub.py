@@ -47,6 +47,11 @@ class WorkerStub(Worker):
         elif isinstance(task, PostTask):
             self.postCount += 1
 
+        try:
+            self.inProcTask.newTask(task)
+        except Exception as e:
+            print(e)
+
     async def cancel(self, id: str) -> None:
         self.cancel_jobs.append(id)
 

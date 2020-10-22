@@ -528,32 +528,28 @@ class TaskGroup:
         # {Type: Tasks}
         self._tasks = {}  # type:  Dict[TaskType, Dict[str, Task]]
         self._numOfTasks = 0
-        self._lock = Lock()
 
     def newTask(self, task:  Task) -> None:
         type = task.getType()
         tid = task.id()
 
-        with self._lock:
+        if self._isExists(tid):
+            return None
 
-            if self.__isExists(tid):
-                return None
+        if type not in self._tasks:
+            self._tasks[type] = {}
 
-            if type not in self._tasks:
-                self._tasks[type] = {}
+        tasks = self._tasks[type]
 
-            tasks = self._tasks[type]
+        tasks[task.id()] = task
 
-            tasks[task.id()] = task
-
-            if not isinstance(task, PostTask):
-                self._numOfTasks += 1
+        if not isinstance(task, PostTask):
+            self._numOfTasks += 1
 
     def remove(self, id:  str) -> State:
-        with self._lock:
-            return self.__remove(id)
+        return self._remove(id)
 
-    def __remove(self, id: str) -> State:
+    def _remove(self, id: str) -> State:
         for tasks in self._tasks.values():
 
             if id not in tasks:
@@ -578,8 +574,7 @@ class TaskGroup:
         return Ok
 
     def toList(self) -> List[Task]:
-        with self._lock:
-            return self._toList_non_lock()
+        return self._toList_non_lock()
 
     def _toList_non_lock(self) -> List[Task]:
         task_dicts = list(self._tasks.values())
@@ -594,10 +589,9 @@ class TaskGroup:
         return list(l_id)
 
     def isExists(self, ident: str) -> bool:
-        with self._lock:
-            return self.__isExists(ident)
+        return self.__isExists(ident)
 
-    def __isExists(self, ident: str) -> bool:
+    def _isExists(self, ident: str) -> bool:
         task_dicts = list(self._tasks.values())
 
         for tasks in task_dicts:
@@ -609,12 +603,11 @@ class TaskGroup:
         return False
 
     def removeTasks(self, predicate: Callable[[Task], bool]) -> None:
-        with self._lock:
-            for t in self._toList_non_lock():
-                ret = predicate(t)
+        for t in self._toList_non_lock():
+            ret = predicate(t)
 
-                if ret is True:
-                    self.__remove(t.id())
+            if ret is True:
+                self.__remove(t.id())
 
     def markPre(self, id:  str) -> State:
         return self._mark(id, Task.STATE_PREPARE)
@@ -629,16 +622,15 @@ class TaskGroup:
         return self._mark(id, Task.STATE_FAILURE)
 
     def search(self, id:  str) -> Union[Task, None]:
-        with self._lock:
-            tasks_dicts = list(self._tasks.values())
+        tasks_dicts = list(self._tasks.values())
 
-            for tasks in tasks_dicts:
-                if id not in tasks:
-                    continue
+        for tasks in tasks_dicts:
+            if id not in tasks:
+                continue
 
-                return tasks[id]
+            return tasks[id]
 
-            return None
+        return None
 
     def numOfTasks(self) -> int:
         return self._numOfTasks

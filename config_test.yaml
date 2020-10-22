@@ -46,3 +46,22 @@ BuildSet:
       - cat * > <version>total
     output:
       - ./<version>total
+
+BuildSet_TWO:
+  Builds:
+    GL5610:
+        cmd:
+        - echo ll <version> <datetime> > ll
+        output:
+        - ./ll
+
+    GL5610-v2:
+        cmd:
+        - echo ll2 <version> <datetime> > ll2
+        output:
+        - ./ll2
+  Merge:
+    cmd:
+      - cat * > <version>total
+    output:
+      - ./<version>total

@@ -430,7 +430,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
             theWorker = cast(TaskTracker, self._taskTracker)\
                 .whichWorker(task.id())
-            if theWorker is not None:
+            if theWorker is not None and theWorker.isOnline():
                 await theWorker.cancel(task.id())
                 await self._log("Cancel task " + task.id())
 
@@ -446,7 +446,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 theWorker = cast(TaskTracker, self._taskTracker)\
                     .whichWorker(ident)
 
-                if theWorker is not None:
+                if theWorker is not None and theWorker.isOnline():
                     await theWorker.cancel(ident)
 
                 child.stateChange(Task.STATE_FAILURE)
@@ -566,55 +566,14 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 # just redispatch this task again.
                 await self.redispatch(t)
             else:
-                # This task is depend on another tasks
-                # need to restart it by following steps:
+                # A Merger is lost cancel SuperTask.
 
-                # First: Redispatch task
-                await self.redispatch(t)
+                # t must be a PostTask
+                st = cast(PostTask, t).getParent()
+                assert(st is not None)
 
-                # Second: Redispatch tasks that is
-                #         already done by listener
-                tasksOnLost = cast(TaskTracker, self._taskTracker).\
-                    tasksOfWorker(worker.getIdent())
-
-                # Find tasks that is done and depended by this task.
-                doneTasks = [task for task in tasksOnLost
-                             if task.isFinished() and t in task.dependedBy()]
-
-                for task in doneTasks:
-                    await self.redispatch(task)
-
-                # Third: Send RE_WORK command to workers that dealing
-                #        dependence of this task.
-                pairs = [
-                    (cast(TaskTracker, self._taskTracker).whichWorker(dep.id()),
-                     dep.id()) for dep in deps]
-
-                workers = {w.getIdent(): w for w, t_id in pairs
-                           if w is not None}
-
-                d = {}  # type: Dict[str, List[str]]
-
-                for p in pairs:
-                    if p[0] is None:
-                        continue
-
-                    w_id = p[0].getIdent()
-
-                    if w_id not in d:
-                        d[w_id] = []
-
-                    d[w_id].append(p[1])
-
-                for w in d:
-                    assert(w in workers)
-
-                    c = ReWorkCommand(d[w])
-
-                    try:
-                        await workers[w].control(c)
-                    except BrokenPipeError:
-                        continue
+                # Cancel SuperTask
+                self.cancel(st.id())
 
 
 # Misc
