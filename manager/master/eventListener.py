@@ -113,11 +113,6 @@ class Entry:
         if event is None:
             return None
 
-        if not isinstance(event, BinaryLetter):
-            print(event)
-            import sys
-            sys.stdout.flush()
-
         if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)
             return None
