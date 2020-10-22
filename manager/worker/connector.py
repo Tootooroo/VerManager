@@ -124,14 +124,15 @@ class Linker:
         link = self._links[linkid]
 
         # Link Init
-        proc = 0
         max_proc_job = cfg.config.getConfig('MAX_TASK_CAN_PROC')
         role = cfg.config.getConfig('ROLE')
 
         try:
             # Send Property LEtter
+            # RST command will sended by master
+            # so proc must be 0.
             await sending(writer, PropLetter(
-                self._hostname, max_proc_job, str(proc), role))
+                self._hostname, max_proc_job, str(0), role))
 
             # Send First heartbeat
             await sending(writer, HeartbeatLetter(self._hostname, 0))

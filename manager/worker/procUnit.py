@@ -591,6 +591,9 @@ class Post:
         else:
             return ""
 
+    def stop(self) -> None:
+        pass
+
     def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
         self._frags[frag_id].filename = fileName
 
