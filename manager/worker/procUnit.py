@@ -426,22 +426,22 @@ class JobProcUnit(JobProcUnitProto):
         # Wait for the job
         while True:
             # Prevent stuck from call of wait
-            try:
-                ret_code = job_ref.wait(timeout=0)
-                # Remove Job refs
-                self._job_refs = None
+            ret_code = job_ref.poll()
+            if ret_code is not None:
                 break
-            except subprocess.TimeoutExpired:
-                await asyncio.sleep(1)
+
+            # Remove Job refs
+            self._job_refs = None
+
+            await asyncio.sleep(1)
 
         # Error code handle
         if ret_code != 0:
             if ret_code != 128:
-                await self._notify_job_state(
-                    tid, Letter.RESPONSE_STATE_FAILURE)
-
                 # Cleanup
                 self.cleanup()
+                await self._notify_job_state(
+                    tid, Letter.RESPONSE_STATE_FAILURE)
                 return
 
         # Transfer job result to Target destination
@@ -455,16 +455,14 @@ class JobProcUnit(JobProcUnitProto):
         try:
             await self._job_result_transfer(linkid, job)
         except Exception:
-            import sys
-            sys.stdout.flush()
-            await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             self.cleanup()
+            await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             return
 
-        await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
-
         # Cleanup
+        # Cleanup should be done before notify master job is finished.
         self.cleanup()
+        await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
     def cleanup(self) -> None:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
@@ -475,7 +473,12 @@ class JobProcUnit(JobProcUnitProto):
         if platform.system() == "Windows":
             os.system("powershell.exe Remove-Item -Recurse -Force " + path)
         else:
-            shutil.rmtree(path)
+            try:
+                # Ignore FileNotFoundError
+                # cause there is noting to cleanup.
+                shutil.rmtree(path)
+            except FileNotFoundError:
+                pass
 
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
@@ -553,6 +556,7 @@ class Post:
 
         assert(configs.config is not None)
 
+        self._execute_ref = None  # type: Optional[subprocess.Popen]
         self._ident = ident
         self._frags = {frag: Frag(frag) for frag in frags}  \
             # type: Dict[str, Frag]
@@ -581,18 +585,41 @@ class Post:
         self._cmd.insert(0, "cd Post/" + self._version)
         cmd_str = packShellCommands(self._cmd)
 
-        try:
-            await execute_shell_until_complete(cmd_str)
-        except Exception:
+        ref = execute_shell(cmd_str)
+        if ref is None:
             return ""
+
+        # Set up _execute_ref
+        # it can be a flag to indicate
+        # that the Post is in work
+        self._execute_ref = ref
+
+        # Wait for execute result
+        while True:
+            ret = ref.poll()
+            if ret is not None:
+                break
+            await asyncio.sleep(1)
+
+        # After done _execute_ref need to
+        # reset to indicate that not in work.
+        self._execute_ref = None
 
         if os.path.exists(self._result_path):
             return self._result_path
         else:
             return ""
 
+    def isInWork(self) -> bool:
+        return self._execute_ref is not None
+
     def stop(self) -> None:
-        pass
+        """
+        Stop execution
+        """
+        if self._execute_ref is not None:
+            self._execute_ref.terminate()
+            self._execute_ref = None
 
     def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
         self._frags[frag_id].filename = fileName
@@ -613,7 +640,11 @@ class Post:
         assert(configs.config is not None)
 
         post_dir = configs.config.getConfig('POST_DIR')
-        shutil.rmtree(os.path.join(post_dir, self._version))
+
+        try:
+            shutil.rmtree(os.path.join(post_dir, self._version))
+        except FileNotFoundError:
+            pass
 
     def ready(self) -> bool:
         isReady = True
@@ -635,15 +666,27 @@ class PostProcUnit(PostProcUnitProto):
 
     async def reset(self) -> None:
         """
-        Stop processing jobs and remove all frags, posts.
+        Cancel all Posts
         """
-        return
+        for pid in self._posts:
+            self.cancel(pid)
 
     async def cancel(self, tid: str) -> None:
-        return
+        """
+        Findout from _posts, stop if in work, and remove.
+        """
+        if tid in self._posts:
+            post = self._posts[tid]
+            if post.isInWork():
+                post.stop()
+            post.cleanup()
+            del self._posts[tid]
 
     def exists(self, tid: str) -> bool:
-        return True
+        """
+        Is a post in _posts
+        """
+        return tid in self._posts
 
     async def _frag_collect(self, letter: BinaryLetter) -> None:
         assert(configs.config is not None)
@@ -690,16 +733,17 @@ class PostProcUnit(PostProcUnitProto):
             await self._output_space.sendfile(
                 "Master", path, post.ident(), post.version(), fileName)
 
+            # Cleanup
+            post.cleanup()
             # Success
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FINISHED)
         else:
+            # Cleanup
+            post.cleanup()
             # Failed
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FAILURE)
-
-        # Cleanup
-        post.cleanup()
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
