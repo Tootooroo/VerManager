@@ -34,7 +34,6 @@ from .proc_common import Output
 from .channel import ChannelEntry
 
 # Need by JobProcUnit
-import os
 import subprocess
 import shutil
 from manager.basic.util import packShellCommands, execute_shell,\
@@ -76,9 +75,8 @@ class ProcUnit(abc.ABC):
 
         self._install = False
 
-        self._normal_space = asyncio.Queue(256)  # type: asyncio.Queue[Letter]
-        self._reserved_space = asyncio.Queue(128)  \
-            # type: asyncio.Queue[Letter]
+        self._normal_space = asyncio.Queue(4096)  # type: asyncio.Queue[Letter]
+        self._hightwaterlevel = self._normal_space.maxsize * (2/3)
 
         # Queue that hold letter generate by ProcUnit
         # should be transfered to master.
@@ -131,43 +129,18 @@ class ProcUnit(abc.ABC):
         try:
             self._normal_space.put_nowait(letter)
 
+            if self._normal_space.qsize() > self._hightwaterlevel:
+                raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
+
         except asyncio.QueueFull:
             print("NORMAL SPACE FULL")
             import sys
             sys.stdout.flush()
-            await self._store_job_to_reserved_space(letter)
-            raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
+            raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
 
     async def job_retrive(self, timeout=None) -> Letter:
-
-        # Flush letters from reserved space
-        # to normal space if there is any
-        # letters within reserved space
-        self._flush()
-
         return await asyncio.wait_for(
             self._normal_space.get(), timeout=timeout)
-
-    def _flush(self) -> None:
-        reserved_empty = self._reserved_space.empty()
-        noSpace = self._normal_space.full()
-
-        if reserved_empty or noSpace:
-            return None
-
-        while True:
-
-            try:
-                self._normal_space.put_nowait(
-                    self._reserved_space.get_nowait())
-            except (asyncio.QueueEmpty, asyncio.QueueFull):
-                return None
-
-    async def _store_job_to_reserved_space(self, letter: Letter) -> None:
-        try:
-            self._reserved_space.put_nowait(letter)
-        except asyncio.QueueFull:
-            raise PROC_UNIT_IS_IN_DENY_MODE(self._unitIdent)
 
     def msg_gen(self) -> None:
         if self._channel is None:
@@ -359,7 +332,6 @@ class JobProcUnit(JobProcUnitProto):
         """
         # Clear request space
         self._normal_space._queue.clear()
-        self._reserved_space._queue.clear()
         await self.stopCurrentJob()
 
     async def stopCurrentJob(self) -> None:
@@ -397,23 +369,11 @@ class JobProcUnit(JobProcUnitProto):
                 except ValueError:
                     pass
 
-            if self._reserved_space.qsize() > 0:
-                try:
-                    self._reserved_space._queue.remove(job)
-                except ValueError:
-                    pass
-
     def _find_job_in_queue(self, tid: str) -> Optional[Letter]:
         if self._normal_space.qsize() == 0:
             return None
 
         for job in self._normal_space._queue:
-            job_tid = cast(NewLetter, job).getTid()
-
-            if tid == job_tid:
-                return job
-
-        for job in self._reserved_space._queue:
             job_tid = cast(NewLetter, job).getTid()
 
             if tid == job_tid:

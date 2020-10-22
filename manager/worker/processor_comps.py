@@ -52,8 +52,8 @@ class Dispatcher:
         # Dispatcher is focus on work of dispatch.
         try:
             await self._units[type_].proc(cl)
-        except (PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE):
-            pass
+        except (PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE) as e:
+            print(e)
 
 
 class UnitMaintainer(ChannelReceiver):
