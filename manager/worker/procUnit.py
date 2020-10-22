@@ -132,6 +132,9 @@ class ProcUnit(abc.ABC):
             self._normal_space.put_nowait(letter)
 
         except asyncio.QueueFull:
+            print("NORMAL SPACE FULL")
+            import sys
+            sys.stdout.flush()
             await self._store_job_to_reserved_space(letter)
             raise PROC_UNIT_HIGHT_OVERLOAD(self._unitIdent)
 
