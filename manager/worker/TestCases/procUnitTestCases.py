@@ -33,7 +33,7 @@ from manager.basic.letter import CommandLetter, NewLetter,\
     BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE,\
-    PostProcUnit, PostTaskLetter, UNIT_TYPE_JOB_PROC
+    PostProcUnit, PostTaskLetter, UNIT_TYPE_JOB_PROC, Post
 from manager.worker.proc_common import Output
 from manager.worker.channel import ChannelEntry
 
@@ -168,8 +168,7 @@ class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        configs.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
-                              "TestCases/misc/jobprocunit_config.yaml")
+        configs.config = Info("manager/worker/TestCases/misc/jobprocunit_config.yaml")
 
         self.sut = JobProcUnit("JobUnit")
         self.queue = asyncio.Queue(10)  # type: asyncio.Queue
@@ -259,8 +258,7 @@ class JobProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        configs.config = Info("/home/ayden/Codebase/VerManager/manager/worker/" +
-                              "TestCases/misc/jobprocunit_config.yaml")
+        configs.config = Info("manager/worker/TestCases/misc/jobprocunit_config.yaml")
         self.sut = PostProcUnit("PostProcUnit")
         self.queue = asyncio.Queue(10)  # type: asyncio.Queue
 
@@ -310,3 +308,22 @@ class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertTrue(os.path.exists("./Post/Version/file3"))
+
+    async def test_PostProcUnit_PostStop(self) -> None:
+        """
+        Start a post and then stop it
+        after that Post should not in work.
+        """
+
+        # Setup
+        post = Post("P", [""], ["sleep 10"], "/", "")
+        if not os.path.exists("Post"):
+            os.mkdir("Post")
+
+        # Exercise
+        asyncio.get_running_loop().create_task(post.do())
+        await asyncio.sleep(1)
+        post.stop()
+
+        # Verify
+        self.assertFalse(post.isInWork())
