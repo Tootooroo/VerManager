@@ -51,6 +51,20 @@ UNIT_TYPE_JOB_PROC = 0
 UNIT_TYPE_POST_PROC = 1
 
 
+class CommandExecutor:
+
+    def __init__(self, cmds: List[str]) -> None:
+        self._cmds = cmds
+        self._max_stucked_time = 3600
+        self._running = False
+
+    async def run(self) -> None:
+        pass
+
+    def isRunning(self) -> bool:
+        return self._running
+
+
 class ProcUnit(abc.ABC):
 
     PROC_UNIT_STATE = int
