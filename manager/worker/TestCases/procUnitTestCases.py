@@ -28,12 +28,14 @@ import typing
 import manager.worker.TestCases.misc.procunit as misc
 import manager.worker.configs as configs
 
+from datetime import datetime
 from manager.basic.info import Info
 from manager.basic.letter import CommandLetter, NewLetter,\
     BinaryLetter
 from manager.worker.procUnit import ProcUnit, JobProcUnit,\
     PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE,\
-    PostProcUnit, PostTaskLetter, UNIT_TYPE_JOB_PROC, Post
+    PostProcUnit, PostTaskLetter, UNIT_TYPE_JOB_PROC, Post,\
+    CommandExecutor
 from manager.worker.proc_common import Output
 from manager.worker.channel import ChannelEntry
 
@@ -327,3 +329,39 @@ class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertFalse(post.isInWork())
+
+    async def test_CommandExecutor_NormalCommand(self) -> None:
+        """
+        Run a normal,non-stucked command.
+        """
+
+        # Setup
+        cmd = CommandExecutor(["echo ll > CommandExecutor"])
+
+        # Exercise
+        await cmd.run()
+
+        # Verify
+        self.assertTrue(os.path.exists("CommandExecutor"))
+        self.assertFalse(cmd.isRunning())
+
+        # Teardown
+        os.remove("CommandExecutor")
+
+    async def test_CommandExecutor_StuckedCommand(self) -> None:
+        """
+        Run a command that will stucked a long time.
+        """
+
+        # Setup
+        cmd = CommandExecutor(["echo Hello", "sleep 20"])
+        cmd.setStuckedLimit(5)
+
+        # Exercise
+        before = datetime.utcnow()
+        await cmd.run()
+        after = datetime.utcnow()
+
+        # Verify
+        self.assertEqual(-1, cmd.return_code())
+        self.assertLessEqual((after-before).seconds, 12)

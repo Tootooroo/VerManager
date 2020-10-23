@@ -22,13 +22,14 @@
 
 import os
 import platform
+import tempfile
 import abc
 import asyncio
 import manager.worker.configs as configs
 
 from datetime import datetime
 from typing import Optional, cast, Dict, BinaryIO, List, \
-    Callable
+    Callable, IO
 from manager.basic.letter import Letter
 from .proc_common import Output
 from .channel import ChannelEntry
@@ -53,16 +54,100 @@ UNIT_TYPE_POST_PROC = 1
 
 class CommandExecutor:
 
-    def __init__(self, cmds: List[str]) -> None:
-        self._cmds = cmds
+    def __init__(self, cmds: List[str] = None) -> None:
+        self._cmds = cmds  # type: Optional[List[str]]
         self._max_stucked_time = 3600
         self._running = False
+        self._last_stucked = None  # type: Optional[datetime]
+        self._last_pos = 0
+        self._ret = 0
+        self._ref = None  # type: Optional[subprocess.Popen]
 
-    async def run(self) -> None:
-        pass
+    def _reset(self) -> None:
+        self._running = False
+        self._last_pos = 0
+        self._last_stucked = None
+
+    def stop(self) -> None:
+        if self._ref is not None:
+            self._ref.terminate()
+            self._reset()
+
+    async def run(self) -> int:
+
+        if self._cmds is None:
+            return -1
+
+        command_str = packShellCommands(self._cmds)
+        output = tempfile.TemporaryFile("w")
+
+        self._running = True
+
+        ref = execute_shell(command_str, stdout=output)
+        if ref is None:
+            self._ret = -1
+            self._reset()
+            return -1
+        else:
+            self._ref = ref
+
+        while True:
+            # Check whether the command done
+            ret = ref.poll()
+            if ret is not None:
+                self._ret = ret
+                break
+
+            # Check whether the command is stucked
+            if self.isStucked(output):
+                self._ret = -1
+                ref.terminate()
+                break
+
+            await asyncio.sleep(3)
+
+        self._ref = None
+        self._running = False
+
+        if ret is None:
+            return -1
+
+        self._reset()
+        return ret
+
+    def return_code(self) -> int:
+        return self._ret
 
     def isRunning(self) -> bool:
         return self._running
+
+    def isStucked(self, output: IO[str]) -> bool:
+        current_pos = output.tell()
+
+        # Stucked from last position
+        if current_pos == self._last_pos:
+            current = datetime.utcnow()
+            if self._last_stucked is None:
+                self._last_stucked = datetime.utcnow()
+            else:
+                # Stucked timeout
+                return (current - self._last_stucked).seconds > \
+                    self._max_stucked_time
+        else:
+            if self._last_stucked is not None:
+                self._last_stucked = None
+            self._last_pos = current_pos
+
+        return False
+
+    def getStuckedLimit(self) -> int:
+        return self._max_stucked_time
+
+    def setStuckedLimit(self, limit: int) -> None:
+        self._max_stucked_time = limit
+
+    def setCommand(self, cmds: List[str]) -> None:
+        self._cmds = cmds
 
 
 class ProcUnit(abc.ABC):
@@ -333,9 +418,9 @@ class JobProcUnit(JobProcUnitProto):
     def __init__(self, ident: str) -> None:
         JobProcUnitProto.__init__(self, ident, UNIT_TYPE_JOB_PROC)
         self._config = configs.config
-        self._job_refs = None  # type: Optional[subprocess.Popen]
         self._isInWork = False  # type: bool
         self._inProcTid = ""  # type: str
+        self._cmd_executor = CommandExecutor()
 
     async def reset(self) -> None:
         """
@@ -346,9 +431,8 @@ class JobProcUnit(JobProcUnitProto):
         await self.stopCurrentJob()
 
     async def stopCurrentJob(self) -> None:
-        if self._job_refs is not None:
-            self._job_refs.terminate()
-            self._job_refs = None
+        if self._cmd_executor.isRunning():
+            self._cmd_executor.stop()
             self._isInWork = False
 
             if self._channel is not None:
@@ -418,36 +502,12 @@ class JobProcUnit(JobProcUnitProto):
         if not os.path.exists(build_dir+"/"+projName):
             commands.insert(1, "git clone -b master " + repo_url)
 
-        # Pack all building commands into a single string
-        # so all of them will be executed in the same shell
-        # environment.
-        cmds_str = packShellCommands(commands)
-
         # notify job state
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
 
-        # Doing the job
-        job_ref = execute_shell(cmds_str)
-        if job_ref is None:
-            # Job failed need to notify master
-            await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
-            return
-
-        # If already exists then cover
-        # the old one with the new.
-        self._job_refs = job_ref
-
-        # Wait for the job
-        while True:
-            # Prevent stuck from call of wait
-            ret_code = job_ref.poll()
-            if ret_code is not None:
-                break
-
-            # Remove Job refs
-            self._job_refs = None
-
-            await asyncio.sleep(1)
+        # Run commands
+        self._cmd_executor.setCommand(commands)
+        ret_code = await self._cmd_executor.run()
 
         # Error code handle
         if ret_code != 0:
@@ -570,7 +630,7 @@ class Post:
 
         assert(configs.config is not None)
 
-        self._execute_ref = None  # type: Optional[subprocess.Popen]
+        self._cmd_executor = CommandExecutor()
         self._ident = ident
         self._frags = {frag: Frag(frag) for frag in frags}  \
             # type: Dict[str, Frag]
@@ -597,27 +657,8 @@ class Post:
         assert(configs.config is not None)
 
         self._cmd.insert(0, "cd Post/" + self._version)
-        cmd_str = packShellCommands(self._cmd)
-
-        ref = execute_shell(cmd_str)
-        if ref is None:
-            return ""
-
-        # Set up _execute_ref
-        # it can be a flag to indicate
-        # that the Post is in work
-        self._execute_ref = ref
-
-        # Wait for execute result
-        while True:
-            ret = ref.poll()
-            if ret is not None:
-                break
-            await asyncio.sleep(1)
-
-        # After done _execute_ref need to
-        # reset to indicate that not in work.
-        self._execute_ref = None
+        self._cmd_executor.setCommand(self._cmd)
+        await self._cmd_executor.run()
 
         if os.path.exists(self._result_path):
             return self._result_path
@@ -625,15 +666,14 @@ class Post:
             return ""
 
     def isInWork(self) -> bool:
-        return self._execute_ref is not None
+        return self._cmd_executor.isRunning()
 
     def stop(self) -> None:
         """
         Stop execution
         """
-        if self._execute_ref is not None:
-            self._execute_ref.terminate()
-            self._execute_ref = None
+        if self._cmd_executor.isRunning():
+            self._cmd_executor.stop()
 
     def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
         self._frags[frag_id].filename = fileName

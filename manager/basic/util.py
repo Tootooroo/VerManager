@@ -108,17 +108,16 @@ def excepHandle(excep, handler: Callable) -> Callable:
     return handle
 
 
-def execute_shell(command: str) -> Optional[subprocess.Popen]:
+def execute_shell(command: str, stdout=None) -> Optional[subprocess.Popen]:
     try:
-        # devnull = open(os.devnull, "w")
-        return subprocess.Popen(command, shell=True)
+        return subprocess.Popen(command, shell=True, stdout=stdout)
     except FileNotFoundError:
         return None
 
 
-async def execute_shell_until_complete(command: str) -> int:
+async def execute_shell_until_complete(command: str, stdout=None) -> int:
     try:
-        ref = subprocess.Popen(command, shell=True)
+        ref = subprocess.Popen(command, shell=True, stdout=stdout)
     except FileNotFoundError:
         return -1
 
