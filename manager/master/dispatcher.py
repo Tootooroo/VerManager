@@ -446,6 +446,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             children = task.getChildren()
 
             for child in children:
+
                 ident = child.id()
                 theWorker = cast(TaskTracker, self._taskTracker)\
                     .whichWorker(ident)
@@ -577,7 +578,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 assert(st is not None)
 
                 # Cancel SuperTask
-                self.cancel(st.id())
+                await self.cancel(st.id())
 
 
 # Misc
@@ -592,12 +593,19 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
 
     # Find out the worker with lowest overhead on a
     # collection of online acceptable workers
+    normal_workers = findNormalWorkers(onlineWorkers)
+    if normal_workers == []:
+        return []
+
     def f(acc, w):
-        return acc if acc.numOfTaskProc() <= w.numOfTaskProc() \
-            and w._role == Worker.ROLE_NORMAL else w
-    theWorker = reduce(f, onlineWorkers)
+        return acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
+    theWorker = reduce(f, normal_workers)
 
     return [theWorker]
+
+
+def findNormalWorkers(workers: List[Worker]) -> List[Worker]:
+    return [w for w in workers if w._role == Worker.ROLE_NORMAL]
 
 
 def acceptableWorkers(workers: List[Worker]) -> List[Worker]:
