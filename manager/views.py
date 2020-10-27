@@ -101,7 +101,7 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['put'])
     def generate(self, request, pk=None) -> Response:
 
-        assert(cfg is not None)
+        assert(cfg.config is not None)
 
         if len(request.data) == 0:
             extra = {}
@@ -137,7 +137,7 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['put'])
     def temporaryGen(self, request, pk=None) -> Response:
 
-        assert(cfg is not None)
+        assert(cfg.config is not None)
         assert(S.ServerInstance is not None)
 
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
