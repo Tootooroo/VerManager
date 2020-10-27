@@ -60,7 +60,7 @@ class Entry:
         self._env = env
         self._hbCount = 0
         self._hbTimer = timezone.now()
-        self._hbTimerLimit = 30
+        self._hbTimerLimit = 60
         self._stop = False
 
     def getIdent(self) -> str:
