@@ -235,7 +235,11 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return True
 
     def _search_proc_worker(self, task: Task) -> Optional[Worker]:
-        cond = self._search_cond[type(task).__name__]
+        idx = type(task).__name__
+        if idx not in self._search_cond:
+            return None
+
+        cond = self._search_cond[idx]
         workers = cast(WorkerRoom, self._workers)\
             .getWorkerWithCond_nosync(cond)
         if workers == []:

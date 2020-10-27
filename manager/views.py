@@ -101,6 +101,8 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['put'])
     def generate(self, request, pk=None) -> Response:
 
+        assert(cfg is not None)
+
         if len(request.data) == 0:
             extra = {}
         else:
@@ -135,7 +137,9 @@ class VersionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['put'])
     def temporaryGen(self, request, pk=None) -> Response:
 
+        assert(cfg is not None)
         assert(S.ServerInstance is not None)
+
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
         revision = pk
@@ -146,6 +150,9 @@ class VersionViewSet(viewsets.ModelViewSet):
 
         task = Task(version, revision, version,
                     extra={"Temporary": "true"})
+        bs = BuildSet(cfg.config.getConfig("BuildSet"))
+        task.setBuild(bs)
+        task = task.transform()
 
         if not task.isValid():
             return HttpResponseBadRequest()
@@ -156,7 +163,9 @@ class VersionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def gen_status_query(self, request, pk=None) -> Response:
+
         assert(S.ServerInstance is not None)
+
         dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
 
         if not dispatcher.isTaskExists(pk):
