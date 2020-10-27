@@ -27,6 +27,7 @@
 import json
 import asyncio
 import socket
+import time
 
 import traceback
 from typing import Optional, Dict, \
@@ -968,6 +969,7 @@ def sending_sock(sock: socket.socket, l: Letter) -> None:
         try:
             sent = sock.send(jBytes[totalSent:])
         except BlockingIOError:
+            time.sleep(0.1)
             continue
         except Exception:
             import traceback

@@ -593,7 +593,8 @@ def viaOverhead(workers: List[Worker]) -> List[Worker]:
     # Find out the worker with lowest overhead on a
     # collection of online acceptable workers
     def f(acc, w):
-        return acc if acc.numOfTaskProc() <= w.numOfTaskProc() else w
+        return acc if acc.numOfTaskProc() <= w.numOfTaskProc() \
+            and w._role == Worker.ROLE_NORMAL else w
     theWorker = reduce(f, onlineWorkers)
 
     return [theWorker]
