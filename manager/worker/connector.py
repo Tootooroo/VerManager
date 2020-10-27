@@ -187,6 +187,7 @@ class Linker:
 
             try:
                 if self._heartbeat_check(link) is False:
+                    print("Heartbeat Timeout")
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
@@ -304,9 +305,9 @@ class Linker:
         link = self._links[linkid]
         sock = link.writer.transport.get_extra_info('socket')
 
-        with ProcessPoolExecutor(max_workers=1) as e:
+        with ProcessPoolExecutor() as e:
             ret = await self._loop.run_in_executor(
-                e, self._do_send_file,
+                e, self._do_send_file(sock, linkid, path, tid, version, fileName)_file,
                 sock._sock, linkid, path, tid, version, fileName)
 
         return ret
