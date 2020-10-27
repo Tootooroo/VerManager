@@ -26,7 +26,9 @@ import platform
 import traceback
 import abc
 import manager.worker.configs as cfg
+import multiprocessing
 
+from manager.basic.storage import Storage
 from manager.basic.letter import BinaryLetter, sending_sock
 from socket import socket
 from concurrent.futures import ProcessPoolExecutor
@@ -69,6 +71,57 @@ class Link:
         return (datetime.utcnow() - self.last).seconds
 
 
+class DataLink:
+
+    def __init__(self, host: str, port: int) -> None:
+        self._host = host
+        self._port = port
+
+        assert(cfg.config is not None)
+        self._storage = Storage(cfg.config.getConfig('PostStorage'), None)
+
+    @staticmethod
+    def start(host: str, port: int) -> None:
+        p = multiprocessing.Process(
+            target=lambda: DataLink(host, port).run())
+
+        p.start()
+
+    async def run(self) -> None:
+        server = await asyncio.start_server(
+            self._dataReceive, self._host, self._port)
+        async with server:
+            server.serve_forever()
+
+    async def _dataReceive(self, reader: asyncio.StreamReader,
+                           writer: asyncio.StreamWriter) -> None:
+        # From beginLetter the information about how to
+        # manage the received file
+        beginLetter = await receving(reader)
+        if beginLetter is None:
+            writer.close()
+            return
+
+        assert(isinstance(beginLetter, BinaryLetter))
+
+        version = beginLetter.getParent()
+        fileName = beginLetter.getFileName()
+
+        chooser = self._storage.create(version, fileName)
+        if chooser is None:
+            writer.close()
+            return
+
+        while True:
+            piece = await reader.read(1024)
+            if piece == b"":
+                break
+            chooser.store(piece)
+
+        chooser.close()
+        writer.close()
+
+
 class LinkTunnel(abc.ABC):
 
     def __init__(self, size: int) -> None:
@@ -106,6 +159,7 @@ class Linker:
     def __init__(self) -> None:
         self._links = {}  # type: typing.Dict[str, Link]
         self._links_passive = {}  # type: typing.Dict[str, Link]
+        self._datalinks = {}  # type: typing.Dict[str, Link]
         self._linktunnels = {}  # type: typing.Dict[str, LinkTunnel]
         self._lis = {}  # type: typing.Dict[str, typing.Any]
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
@@ -131,6 +185,14 @@ class Linker:
             linkid, host, port, reader, writer, Link.ACTIVE)
 
         self._loop.create_task(self._active_link(reader, writer, linkid))
+
+    async def data_link_create(self, host: str, port: int,
+                               handle: typing.Callable) -> None:
+        """
+        Data link will be maintain by another process so
+        manage event can gain stability.
+        """
+        DataLink.start(host, port)
 
     async def rebuild_link(self, link: Link) -> None:
 
@@ -273,23 +335,15 @@ class Linker:
         await sending(link.writer, letter, lock=self._lock)
 
     @staticmethod
-    def _do_send_file(sock: socket, linkid: str,
-                      path: str, tid: str,
-                      version: str, fileName: str) -> bool:
+    def _do_send_file(sock: socket, path: str) -> bool:
         try:
-            file = open(path, "rb")
+            with open(path, "rb") as f:
+                while True:
+                    bytes = f.read(1024)
+                    if not bytes:
+                        break
+                    sock.sendall(bytes)
 
-            for line in file:
-                line_bin = BinaryLetter(
-                    tid=tid, bStr=line, parent=version,
-                    fileName=fileName)
-                line_bin.setHeader("linkid", linkid)
-                sending_sock(sock, line_bin)
-
-            end_bin = BinaryLetter(tid=tid, bStr=b"",
-                                   parent=version, fileName=fileName)
-            end_bin.setHeader("linkid", linkid)
-            sending_sock(sock, end_bin)
         except Exception:
             import traceback
             traceback.print_exc()
@@ -299,18 +353,33 @@ class Linker:
 
     async def sendfile(self, linkid: str, tid: str, path: str,
                        version: str, fileName: str) -> bool:
-        if linkid not in self._links:
-            raise LINK_NOT_EXISTS(linkid)
+        """
+        First, open a datalink to target then transfer file.
+        """
 
-        link = self._links[linkid]
-        sock = link.writer.transport.get_extra_info('socket')
+        assert(cfg.config is not None)
 
-        with ProcessPoolExecutor() as e:
-            ret = await self._loop.run_in_executor(
-                e, self._do_send_file,
-                sock._sock, linkid, path, tid, version, fileName)
+        if linkid == 'Master':
+            address = cfg.config.getConfig('MASTER_ADDRESS')
+        elif linkid == 'Poster':
+            address = cfg.config.getConfig('MERGER_ADDRESS')
 
-        return ret
+        r, w = await asyncio.open_connection(
+            address['host'], address['dataPort'])
+        sock = w.transport.get_extra_info('socket')
+
+        try:
+            # Tell to target that we will begin to transfer
+            # a file.
+            await sending(w, BinaryLetter(tid=tid, bStr=b"",
+                                          parent=version, fileName=fileName))
+            with ProcessPoolExecutor() as e:
+                await self._loop.run_in_executor(
+                    e, self._do_send_file, sock._sock, path)
+        except Exception:
+            return False
+
+        return True
 
     async def heartbeat_proc_active(self, linkid: str,
                                     heartbeat: HeartbeatLetter) -> None:
