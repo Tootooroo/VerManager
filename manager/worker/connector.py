@@ -187,7 +187,6 @@ class Linker:
 
             try:
                 if self._heartbeat_check(link) is False:
-                    print("HB TIMEOUT")
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
@@ -346,7 +345,6 @@ class Linker:
         await asyncio.sleep(delay)
 
         hb = HeartbeatLetter(self._hostname, link.hbCount)
-        print("Send HB " + str(hb) + " to " + link.ident)
 
         import sys
         sys.stdout.flush()
