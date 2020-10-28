@@ -1,0 +1,58 @@
+# MIT License
+#
+# Copyright (c) 2020 Gcom
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+import unittest
+
+from manager.basic.notify import Notify, WSCNotify, \
+    WORKER_STATE_CHANGED
+
+from manager.basic.letter import NotifyLetter
+
+
+class NotifyTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def test_WSCNotify_FromLetter(self) -> None:
+        # Setup
+        nl = NotifyLetter("N", "T", {'state': "NS"})
+
+        # Exercise
+        notify = WSCNotify.fromLetter(nl)
+
+        # Verify
+        self.assertIsNotNone(notify)
+        self.assertEqual(notify.fromWho(), "N")
+        self.assertEqual(notify.state(), "NS")
+
+    async def test_WSCNotify_ToLetter(self) -> None:
+        # Setup
+        n = WSCNotify("W1", "NS")
+
+        # Exercise
+        nl = n.toLetter()
+
+        # Verify
+        self.assertEqual("W1", nl.notifyFrom())
+        self.assertEqual(WORKER_STATE_CHANGED, nl.notifyType())
+        self.assertEqual({'state': "NS"}, nl.notifyContent())
+
+    

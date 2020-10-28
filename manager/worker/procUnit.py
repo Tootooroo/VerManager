@@ -489,8 +489,17 @@ class JobProcUnit(JobProcUnitProto):
         projName = self._config.getConfig("PROJECT_NAME")
         revision = job.getContent('sn')
 
+        # Check is clean
+        if os.path.exists(build_dir+"/"+projName):
+            if self.cleanup() is False:
+                # Job unable to begin from dirty state.
+                await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+                return
+
         commands = [
             "cd " + build_dir,
+            # Clone
+            "git clone -b master " + repo_url,
             # Go into project root
             "cd " + projName,
             # Fetch from server
@@ -498,9 +507,6 @@ class JobProcUnit(JobProcUnitProto):
             # Checkout the version
             "git checkout -f " + revision
         ] + cmds
-
-        if not os.path.exists(build_dir+"/"+projName):
-            commands.insert(1, "git clone -b master " + repo_url)
 
         # notify job state
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_IN_PROC)
@@ -538,21 +544,25 @@ class JobProcUnit(JobProcUnitProto):
         self.cleanup()
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
-    def cleanup(self) -> None:
+    def cleanup(self) -> bool:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
         projName = cast(Info, self._config).getConfig('PROJECT_NAME')
 
         path = build_dir+"/"+projName
 
         if platform.system() == "Windows":
-            os.system("powershell.exe Remove-Item -Recurse -Force " + path)
+            ret = os.system("powershell.exe Remove-Item -Recurse -Force " + path)
+            if ret != 0:
+                return False
         else:
             try:
                 # Ignore FileNotFoundError
                 # cause there is noting to cleanup.
                 shutil.rmtree(path)
             except FileNotFoundError:
-                pass
+                return False
+
+        return True
 
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:

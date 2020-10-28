@@ -175,6 +175,8 @@ class Letter:
     """
     Heartbeat = "Hb"
 
+    Notify = "Notify"
+
     BINARY_HEADER_LEN = 260
     BINARY_MIN_HEADER_LEN = 6
     LETTER_TYPE_LEN = 2
@@ -569,6 +571,28 @@ class ResponseLetter(Letter):
 
     def setState(self, state: str) -> None:
         self.setContent('state', state)
+
+
+class NotifyLetter(Letter):
+
+    def __init__(self, ident: str, type: str, content: Dict) -> None:
+        Letter.__init__(self, Letter.Notify,
+                        {"ident": ident, "type": type}, content)
+
+    def notifyType(self) -> str:
+        return self.getHeader('type')
+
+    def notifyContent(self) -> Dict:
+        return self.content
+
+    @staticmethod
+    def parse(bs: bytes) -> Optional['NotifyLetter']:
+        (type_, header, content) = bytesDivide(bs)
+
+        if type_ != Letter.Notify:
+            return None
+
+        return NotifyLetter(header['ident'], header['type'], content)
 
 
 class PropLetter(Letter):

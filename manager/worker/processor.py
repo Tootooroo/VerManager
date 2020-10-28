@@ -60,6 +60,9 @@ class Processor(ModuleDaemon):
         self._output.setConnector(conn)
 
     def req(self, letter: Letter) -> None:
+        print(letter)
+        import sys
+        sys.stdout.flush()
         self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
