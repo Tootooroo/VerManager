@@ -490,10 +490,11 @@ class JobProcUnit(JobProcUnitProto):
         revision = job.getContent('sn')
 
         # Check is clean
-        if not os.path.exists(build_dir+"/"+projName):
+        if os.path.exists(build_dir+"/"+projName):
             if self.cleanup() is False:
                 # Job unable to begin from dirty state.
-                self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+                await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+                return
 
         commands = [
             "cd " + build_dir,
