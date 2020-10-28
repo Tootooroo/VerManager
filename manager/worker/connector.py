@@ -346,9 +346,6 @@ class Linker:
 
         hb = HeartbeatLetter(self._hostname, link.hbCount)
 
-        import sys
-        sys.stdout.flush()
-
         try:
             await sending(link.writer, hb)
         except ConnectionError:
