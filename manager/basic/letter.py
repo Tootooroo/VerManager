@@ -585,6 +585,15 @@ class NotifyLetter(Letter):
     def notifyContent(self) -> Dict:
         return self.content
 
+    @staticmethod
+    def parse(bs: bytes) -> Optional['NotifyLetter']:
+        (type_, header, content) = bytesDivide(bs)
+
+        if type_ != Letter.Notify:
+            return None
+
+        return NotifyLetter(header['ident'], header['type'], content)
+
 
 class PropLetter(Letter):
 
