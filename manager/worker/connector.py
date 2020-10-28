@@ -362,7 +362,7 @@ class Linker:
             traceback.print_exc()
 
     def _heartbeat_check(self, link: Link) -> bool:
-        return link.hb_timer_diff() < 60
+        return link.hb_timer_diff() < 30
 
     def link_state(self, linkid: str) -> int:
         try:
