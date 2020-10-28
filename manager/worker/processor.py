@@ -60,9 +60,6 @@ class Processor(ModuleDaemon):
         self._output.setConnector(conn)
 
     def req(self, letter: Letter) -> None:
-        print(letter)
-        import sys
-        sys.stdout.flush()
         self._reqQ.put_nowait(letter)
 
     def install_unit(self, unit: ProcUnit) -> None:
@@ -114,9 +111,6 @@ class Processor(ModuleDaemon):
 
     def register(self, uid: str, comp: ChannelReceiver) -> None:
         if self._channel.isChannelExists(uid):
-            msgSrc = self._channel.getChannelData(uid)
-            if msgSrc is not None:
-                comp.addTrack(uid, msgSrc)
             self._channel.addReceiver(uid, comp)
 
     def unitInfo(self, uid: str) -> typing.Optional[typing.Dict]:
