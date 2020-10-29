@@ -22,18 +22,82 @@
 
 import asyncio
 import multiprocessing
-from typing import Dict, List, Callable, Tuple, Any
+from typing import Dict, List, Callable, Tuple, Any, \
+    Optional
 
 
 address = str
 port = int
 
 
-class UNABLE_TO_ADD_PROCESSOR_TO_NON_EXISTS_DATA_LINK(Exception):
+class DATA_LINK_NOT_EXISTS(Exception):
 
     def __init__(self, host: str, port: int) -> None:
         self._host = host
         self._port = port
+
+    def __str__(self) -> str:
+        return "DataLink(" + self._host + "," + self._port  + ")" + \
+            "does not exists."
+
+
+class DATA_LINK_PROTO_NOT_SUPPORT(Exception):
+
+    def __init__(self, proto: str) -> None:
+        self._proto = proto
+
+    def __str__(self) -> str:
+        return "Protocol " + self._proto + " is not support."
+
+
+class DataLinkProcProtocol:
+
+    def __init__(self, processor: Callable) -> None:
+        "docstring"
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self._transport = transport
+
+    def datagram_received(self, data, addr) -> None:
+        pass
+
+
+class DataLink:
+
+    TCP_DATALINK = "tcp"
+    UDP_DATALINK = "udp"
+
+    def __init__(self, host: str, port: int, protocol: str) -> None:
+        """
+        protocol's value is TCP_DATALINK or UDP_DATALINK
+        """
+
+        self._host = host
+        self._port = port
+        self._proto = protocol
+
+        # Processor
+        self._processor = None  # type: Optional[Callable]
+
+    def start(self) -> None:
+        loop = asyncio.get_running_loop()
+        try:
+            f = getattr(self, 'create_'+self._proto+'datalink')
+        except AttributeError:
+            raise DATA_LINK_PROTO_NOT_SUPPORT(self._proto)
+        loop.create_task(f)
+
+    async def create_tcp_datalink(self) -> None:
+        assert(self._processor is not None)
+        server = await asyncio.start_server(
+            self._processor, self._host, self._port)
+        async with server:
+            await server.serve_forever()
+
+    async def create_udp_datalink(self) -> None:
+        loop = asyncio.get_running_loop()
+
+        transport, proto = await loop.create_datagram_endpoint()
 
 
 class DataLinker:
@@ -49,13 +113,12 @@ class DataLinker:
         if port not in self._links[host]:
             self._links[host].append(port)
 
-    def isLinkExists(self, host: str, port: int) -> None:
+    def isLinkExists(self, host: str, port: int) -> bool:
         return host in self._links and port in self._links[host]
 
     def addProcessor(self, host: str, port: int, pr: Callable, *args) -> None:
         if not self.isLinkExists(host, port):
-            return None
-
+            raise DATA_LINK_NOT_EXISTS(host, port)
 
     @staticmethod
     def start(host: str, port: int) -> None:
@@ -64,36 +127,10 @@ class DataLinker:
         p.start()
 
     async def run(self) -> None:
+
+        for addr in self._links:
+            processor = self._data_processors[addr]
         server = await asyncio.start_server(
             self._dataReceive, self._host, self._port)
         async with server:
             await server.serve_forever()
-
-    async def _dataReceive(self, reader: asyncio.StreamReader,
-                           writer: asyncio.StreamWriter) -> None:
-        print("Datalink Open")
-        # From beginLetter the information about how to
-        # manage the received file
-        beginLetter = await receving(reader)
-        if beginLetter is None:
-            writer.close()
-            return
-
-        assert(isinstance(beginLetter, BinaryLetter))
-
-        version = beginLetter.getParent()
-        fileName = beginLetter.getFileName()
-
-        chooser = self._storage.create(version, fileName)
-        if chooser is None:
-            writer.close()
-            return
-
-        while True:
-            piece = await reader.read(1024)
-            if piece == b"":
-                break
-            chooser.store(piece)
-
-        chooser.close()
-        writer.close()
