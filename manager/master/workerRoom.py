@@ -378,3 +378,11 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             return {}
 
         return worker.status()
+
+    def setState(self, ident: str, state: int) -> None:
+        worker = self.getWorker(ident)
+
+        if worker is None:
+            return None
+
+        worker.setState(state)

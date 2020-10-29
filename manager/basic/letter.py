@@ -579,6 +579,9 @@ class NotifyLetter(Letter):
         Letter.__init__(self, Letter.Notify,
                         {"ident": ident, "type": type}, content)
 
+    def notifyFrom(self) -> str:
+        return self.getHeader('ident')
+
     def notifyType(self) -> str:
         return self.getHeader('type')
 

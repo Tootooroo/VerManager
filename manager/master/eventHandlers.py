@@ -30,7 +30,7 @@ import zipfile
 import shutil
 import manager.master.configs as cfg
 
-from typing import List, Dict, Optional, cast
+from typing import List, Dict, Optional, cast, Callable
 from collections import namedtuple
 
 from manager.master.eventListener \
@@ -38,7 +38,7 @@ from manager.master.eventListener \
 
 from manager.basic.type import Error
 from manager.basic.letter import Letter, \
-    ResponseLetter, BinaryLetter
+    ResponseLetter, BinaryLetter, NotifyLetter
 
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
 from manager.master.dispatcher import Dispatcher
@@ -48,11 +48,12 @@ from manager.basic.storage import StoChooser
 from manager.master.dispatcher import M_NAME as DISPATCHER_M_NAME
 from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
-from manager.master.workerRoom import WorkerRoom
+from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
 
 from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
+from manager.basic.notify import Notify, WSCNotify
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 
@@ -367,3 +368,44 @@ async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
     logger = env.modules.getModule(LOGGER_M_NAME)
     logId = letter.getHeader('logId')
     logger.log_register(logId)
+
+
+###############################################################################
+#                               Notify Handlers                               #
+###############################################################################
+class NotifyHandleer:
+
+    def __init__(self, env: Entry.EntryEnv) -> None:
+        self._env = env
+
+    async def handle(self, nl: NotifyLetter) -> None:
+        handler = self._search_handler(nl)
+        if handler is None:
+            return None
+
+    def _search_handler(self, nl: NotifyLetter) -> Optional[Callable[[NotifyLetter], None]]:
+        type = nl.notifyType()
+        try:
+            return getattr(self, 'NOTIFY_H_'+type)
+        except AttributeError:
+            raise NOTIFY_NOT_MATCH_WITH_HANDLER(type)
+
+    async def NOTIFY_H_WSC(self, nl: NotifyLetter) -> None:
+        """
+        Change state of correspond worker.
+        """
+        wsc_notify = cast(WSCNotify, Notify.transform(nl))
+        who = wsc_notify.fromWho()
+        state = wsc_notify.state()
+
+        wr = self._env.modules.getModule(WR_M_NAME)  # type: WorkerRoom
+        wr.setState(who, int(state))
+
+
+class NOTIFY_NOT_MATCH_WITH_HANDLER(Exception):
+
+    def __init__(self, type: str) -> None:
+        self._type = type
+
+    def __str__(self) -> str:
+        return "Notify " + self._type + " not match with any handler"

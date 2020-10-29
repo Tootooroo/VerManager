@@ -53,6 +53,8 @@ class Worker:
     STATE_ONLINE = 0
     STATE_WAITING = 1
     STATE_OFFLINE = 2
+    STATE_DIRTY = 3
+    STATE_CLEAN = 4
 
     def __init__(self, ident: str,
                  reader: asyncio.StreamReader,

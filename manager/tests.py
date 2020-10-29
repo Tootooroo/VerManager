@@ -81,3 +81,6 @@ from manager.worker.TestCases.procUnitTestCases import \
     ProcUnitUnitTestCases, \
     JobProcUnitTestCases, \
     PostProcUnitTestCases
+
+from manager.basic.TestCases.notifyTestCases import \
+    NotifyTestCases
