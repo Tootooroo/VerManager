@@ -60,18 +60,18 @@ class DataLink:
     @staticmethod
     def start(host: str, port: int) -> None:
         p = multiprocessing.Process(
-            target=lambda: DataLink(host, port).run())
+            target=lambda: asyncio.run(DataLink(host, port).run()))
         p.start()
 
     async def run(self) -> None:
         server = await asyncio.start_server(
             self._dataReceive, self._host, self._port)
         async with server:
-            server.serve_forever()
+            await server.serve_forever()
 
     async def _dataReceive(self, reader: asyncio.StreamReader,
                            writer: asyncio.StreamWriter) -> None:
-
+        print("Datalink Open")
         # From beginLetter the information about how to
         # manage the received file
         beginLetter = await receving(reader)
@@ -165,6 +165,10 @@ class Entry:
 
         if event is None:
             return None
+
+        import datetime
+        current = datetime.datetime.now()
+        print(str(current) + " : " + str(event))
 
         if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)

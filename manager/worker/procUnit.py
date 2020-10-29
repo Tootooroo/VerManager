@@ -535,6 +535,10 @@ class JobProcUnit(JobProcUnitProto):
         try:
             await self._job_result_transfer(linkid, job)
         except Exception:
+
+            import traceback
+            traceback.print_exc()
+
             self.cleanup()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             return
@@ -629,7 +633,6 @@ class Frag:
     def __init__(self, ident: str) -> None:
         self.ident = ident
         self.filename = ""
-        self.fd = None  # type: Optional[BinaryIO]
         self.ready = False
 
 
@@ -690,12 +693,6 @@ class Post:
 
     def get_frag_fileName(self, frag_id: str) -> str:
         return self._frags[frag_id].filename
-
-    def set_frag_fd(self, frag_id: str, fd: BinaryIO) -> None:
-        self._frags[frag_id].fd = fd
-
-    def get_frag_fd(self, frag_id: str) -> Optional[BinaryIO]:
-        return self._frags[frag_id].fd
 
     def set_frag_ready(self, frag_id: str) -> None:
         self._frags[frag_id].ready = True
@@ -758,27 +755,15 @@ class PostProcUnit(PostProcUnitProto):
         version = letter.getParent()
         if version not in self._posts:
             return
-
-        tid = letter.getTid()
         post = self._posts[version]
 
-        fd = post.get_frag_fd(tid)
-        if fd is None:
-            path = os.path.join(self._post_dir, version, letter.getFileName())
-            fd = open(path, "wb")
-            post.set_frag_fd(tid, fd)
-            post.set_frag_fileName(tid, letter.getFileName())
+        tid = letter.getTid()
+        fileName = letter.getFileName()
+        post.set_frag_fileName(tid, fileName)
+        post.set_frag_ready(tid)
 
-        content = letter.getContent('bytes')
-        if content == b'':
-            # Transfer done.
-            post.set_frag_ready(tid)
-            fd.close()
-
-            if post.ready():
-                await self._do_post(post)
-        else:
-            fd.write(content)
+        if post.ready():
+            await self._do_post(post)
 
     async def _do_post(self, post: Post) -> None:
 

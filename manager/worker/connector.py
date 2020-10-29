@@ -78,12 +78,13 @@ class DataLink:
         self._port = port
 
         assert(cfg.config is not None)
-        self._storage = Storage(cfg.config.getConfig('PostStorage'), None)
+        post_dir = cfg.config.getConfig('POST_DIR')
+        self._storage = Storage(post_dir, None)
 
     @staticmethod
     def start(host: str, port: int) -> None:
         p = multiprocessing.Process(
-            target=lambda: DataLink(host, port).run())
+            target=lambda: asyncio.run(DataLink(host, port).run()))
 
         p.start()
 
@@ -91,7 +92,7 @@ class DataLink:
         server = await asyncio.start_server(
             self._dataReceive, self._host, self._port)
         async with server:
-            server.serve_forever()
+            await server.serve_forever()
 
     async def _dataReceive(self, reader: asyncio.StreamReader,
                            writer: asyncio.StreamWriter) -> None:
@@ -186,8 +187,7 @@ class Linker:
 
         self._loop.create_task(self._active_link(reader, writer, linkid))
 
-    async def data_link_create(self, host: str, port: int,
-                               handle: typing.Callable) -> None:
+    def data_link_create(self, host: str, port: int) -> None:
         """
         Data link will be maintain by another process so
         manage event can gain stability.
@@ -375,6 +375,15 @@ class Linker:
             with ProcessPoolExecutor() as e:
                 await self._loop.run_in_executor(
                     e, self._do_send_file, sock._sock, path)
+
+            # Close DataLink
+            w.close()
+
+            # Notify target transfer done.
+            link = self._links[linkid]
+            await sending(link.writer, BinaryLetter(
+                tid=tid, bStr=b"", parent=version, fileName=fileName))
+
         except Exception:
             return False
 
@@ -445,6 +454,9 @@ class Connector(ChannelReceiver):
 
     async def listen(self, lisId: str, host: str, port: int) -> None:
         await self._linker.new_listen(lisId, host, port)
+
+    def datalink_open(self, host: str, port: int) -> None:
+        self._linker.data_link_create(host, port)
 
     async def open_connection(self, linkId, host: str, port: int) -> None:
         await self._linker.new_link(linkId, host, port)

@@ -72,6 +72,9 @@ class Worker:
             # Listen to another workers
             await connector.listen("Poster", merger_address['host'],
                                    merger_address['port'])
+            # Open datalink
+            connector.datalink_open(
+                merger_address['host'], merger_address['dataPort'])
 
         # Create Link to Merger if exists.
         if merger_address != '':

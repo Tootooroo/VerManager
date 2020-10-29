@@ -285,8 +285,8 @@ async def responseHandler_ResultStore(
         taskId = task.id()
 
     extra = task.getExtra()
-    chooser = chooserSet[taskId]
 
+    chooser = chooserSet[taskId]
     resultDir = cfg.config.getConfig("ResultDir")
 
     fileName = chooser.path().split(seperator)[-1]
@@ -321,6 +321,7 @@ async def responseHandler_ResultStore(
 
 async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
 
+    """
     import traceback
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
@@ -352,6 +353,8 @@ async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
             chooser.store(content)
     except Exception:
         traceback.print_exc()
+    """
+    return None
 
 
 async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:

@@ -19,33 +19,33 @@ BuildSet:
   Builds:
     GL5610:
         cmd:
-        - echo ll <version> <datetime> > ll
+        - mv scancode-toolkit-3.1.1.zip scancode-toolkit-3.1.1_1.zip
         output:
-        - ./ll
+        - ./scancode-toolkit-3.1.1_1.zip
 
     GL5610-v2:
         cmd:
-        - echo ll2 <version> <datetime> > ll2
+        - mv scancode-toolkit-3.1.1.zip scancode-toolkit-3.1.1_2.zip
         output:
-        - ./ll2
+        - ./scancode-toolkit-3.1.1_2.zip
 
     GL5610-v3:
         cmd:
-        - echo ll3 <version> <datetime> > ll3
+        - mv scancode-toolkit-3.1.1.zip scancode-toolkit-3.1.1_3.zip
         output:
-        - ./ll3
+        - ./scancode-toolkit-3.1.1_3.zip
 
     GL8900:
         cmd:
-        - echo ll4 <version> <datetime> > ll4
+        - mv scancode-toolkit-3.1.1.zip scancode-toolkit-3.1.1_4.zip
         output:
-        - ./ll4
+        - ./scancode-toolkit-3.1.1_4.zip
 
   Merge:
     cmd:
-      - cat * > <version>total
+      - cat scancode-toolkit-3.1.1_1.zip scancode-toolkit-3.1.1_2.zip scancode-toolkit-3.1.1_3.zip scancode-toolkit-3.1.1_4.zip > scancode-toolkit-3.1.1.zip
     output:
-      - ./<version>total
+      - ./scancode-toolkit-3.1.1.zip
 
 BuildSet_TWO:
   Builds:
