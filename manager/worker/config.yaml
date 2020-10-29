@@ -1,10 +1,12 @@
 MASTER_ADDRESS:
   host: "127.0.0.1"
   port: 30000
+  dataPort: 8030
 
 MERGER_ADDRESS:
   host: "0.0.0.0"
   port: 8025
+  dataPort: 8030
 
 WORKER_NAME: WORKER_EXAMPLE
 

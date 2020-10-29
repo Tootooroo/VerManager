@@ -24,19 +24,34 @@ import typing
 import abc
 
 
+class ChannelBox:
+
+    def __init__(self) -> None:
+        self._content = {}  # type: typing.Dict
+
+    def set(self, key: str, val: str) -> None:
+        self._content[key] = val
+
+    def unset(self, key: str) -> None:
+        del self._content[key]
+
+    def data(self) -> typing.Dict[str, str]:
+        return self._content
+
+
 class ChannelEntry:
 
     def __init__(self, uid: str) -> None:
         self.uid = uid
-        self.info = {}  # type: typing.Dict[str, typing.Any]
+        self.info = ChannelBox()  # type: ChannelBox
         self._recvers = []  # type: typing.List[ChannelReceiver]
 
     async def update_and_notify(self, key: str, val: typing.Any) -> None:
         self.update(key, val)
         await self.push()
 
-    def update(self, key: str, val: typing.Any) -> None:
-        self.info[key] = val
+    def update(self, key: str, val: str) -> None:
+        self.info.set(key, val)
 
     async def push(self) -> None:
         for r in self._recvers:
@@ -64,12 +79,14 @@ class Channel:
         if uid not in self._channels:
             raise Exception
 
-        self._channels[uid].addReceiver(comp)
+        pUnit = self._channels[uid]
+        pUnit.addReceiver(comp)
+        comp.addTrack(uid, pUnit.info)
 
     def getChannelData(self, ident: str) -> typing.Optional[typing.Dict]:
         if ident not in self._channels:
             return None
-        return self._channels[ident].info
+        return self._channels[ident].info.data()
 
     def isChannelExists(self, uid: str) -> bool:
         return uid in self._channels
@@ -78,16 +95,16 @@ class Channel:
 class ChannelReceiver(abc.ABC):
 
     def __init__(self) -> None:
-        self.channel_data = {}  # type: typing.Dict[str, typing.Dict]
+        self.channel_data = {}  # type: typing.Dict[str, ChannelBox]
 
-    def addTrack(self, uid: str, msgSrc: typing.Dict) -> None:
+    def addTrack(self, uid: str, box: ChannelBox) -> None:
         if uid in self.channel_data:
             return None
-        self.channel_data[uid] = msgSrc
+        self.channel_data[uid] = box
 
     def last(self, uid: str) -> typing.Optional[typing.Dict]:
         if uid in self.channel_data:
-            return self.channel_data[uid]
+            return self.channel_data[uid].data()
         return None
 
     @abc.abstractmethod
