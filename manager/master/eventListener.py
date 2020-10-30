@@ -36,6 +36,7 @@ from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.letter import Letter, BinaryLetter, receving
+from manager.basic.dataLink import DataLinker, DataLink
 
 # Test imports
 from manager.basic.letter import HeartbeatLetter

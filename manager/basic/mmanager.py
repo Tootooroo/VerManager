@@ -24,15 +24,31 @@
 
 import unittest
 import asyncio
+import threading
+import abc
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict
 from .util import partition
-
 from .type import State, Ok, Error
 
 
-class Daemon(ABC):
+class DaemonBase(ABC):
+
+    @abc.abstractmethod
+    def is_alive(self) -> bool:
+        """ Is daemon still in running """
+
+    @abc.abstractmethod
+    def start(self) -> None:
+        """ Start daemon """
+
+    @abc.abstractmethod
+    def stop(self) -> None:
+        """  Stop daemon """
+
+
+class Daemon(DaemonBase):
 
     def __init__(self) -> None:
         self.daemon = True
@@ -56,6 +72,12 @@ class Daemon(ABC):
         self._t = loop.create_task(self.run())
 
 
+class TDaemon(DaemonBase, threading.Thread):
+
+    def __init__(self) -> None:
+        threading.Thread.__init__(self)
+
+
 class Module(ABC):
 
     def __init__(self, mName: str) -> None:
@@ -71,6 +93,13 @@ class Module(ABC):
     @abstractmethod
     async def cleanup(self) -> None:
         pass
+
+
+class ModuleTDaemon(Module, TDaemon):
+
+    def __init__(self, mName: str) -> None:
+        Module.__init__(self, mName)
+        TDaemon.__init__(self)
 
 
 class ModuleDaemon(Module, Daemon):
@@ -144,6 +173,7 @@ class MManager:
     async def start(self, mName) -> None:
         if self.isModuleExists(mName):
             m = self._modules[mName]
+
             if isinstance(m, ModuleDaemon):
                 m.start()
 
@@ -173,6 +203,10 @@ class MManager:
                 mod.stop()
 
             await mod.cleanup()
+
+    async def join(self) -> None:
+        while True:
+            await asyncio.sleep(3600)
 
 
 # TestCases

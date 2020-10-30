@@ -43,6 +43,7 @@ from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
 from manager.master.verControl import RevSync
+from manager.basic.dataLink import DataLinker, DataLink
 
 ServerInstance = None  # type:  Optional['ServerInst']
 
@@ -113,7 +114,6 @@ class ServerInst(Thread):
 
         eventListener = EventListener()
         eventListener.registerEvent(Letter.Response, responseHandler)
-        eventListener.registerEvent(Letter.BinaryFile, binaryHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
         eventListener.registerEvent(Letter.Log, logHandler)
         self.addModule(eventListener)
@@ -169,9 +169,22 @@ class ServerInst(Thread):
 
         await self._mmanager.start_all()
 
-        # Block forever
-        while True:
-            await asyncio.sleep(3600)
+        # Open a DataLink
+        dataPort = info.getConfig('dataPort')
+        dataLinker = DataLinker()
+
+        # Add a TCP DataLink used to transfer big binaryFile
+        dataLinker.addDataLink(
+            self._address, dataPort, DataLink.TCP_DATALINK,
+            binaryHandler, env)
+
+        # Add a UDP DataLink used to transfer Log of in doing jobs.
+        # dataLinker.addDataLink(
+        #    self._address, dataPort, DataLink.UDP_DATALINK,
+        #    processor, args)
+
+        # Join to all modules
+        await self._mmanager.join()
 
     def run(self) -> None:
 

@@ -906,6 +906,7 @@ validityMethods = {
     Letter.TaskCancel:      lambda letter: True,
     Letter.Req:             lambda letter: True,
     Letter.Heartbeat:       lambda letter: True,
+    Letter.Notify:          lambda letter: True,
 }  # type:   Dict[str, Callable]
 
 parseMethods = {
@@ -920,7 +921,8 @@ parseMethods = {
     Letter.Post:             PostTaskLetter,
     Letter.TaskCancel:       CancelLetter,
     Letter.Req:              ReqLetter,
-    Letter.Heartbeat:        HeartbeatLetter
+    Letter.Heartbeat:        HeartbeatLetter,
+    Letter.Notify:           NotifyLetter
 }  # type: Any
 
 

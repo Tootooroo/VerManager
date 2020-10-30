@@ -181,10 +181,7 @@ class EVENT_HANDLER_TOOLS:
 
     @staticmethod
     async def _tasks_fin_action(t: Task, env: Entry.EntryEnv) -> None:
-        taskId = t.id()
-        chooserSet = EVENT_HANDLER_TOOLS.chooserSet
-        if taskId in chooserSet:
-            del chooserSet[taskId]
+        return None
 
     @staticmethod
     async def _tasks_fail_action(t: Task, env: Entry.EntryEnv) -> None:
@@ -319,9 +316,8 @@ async def responseHandler_ResultStore(
     task.setData(url + "/data/" + fileName)
 
 
-async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
+async def binaryHandler(letter: BinaryLetter, env: Entry.EntryEnv) -> None:
 
-    """
     import traceback
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
@@ -353,8 +349,6 @@ async def binaryHandler(env: Entry.EntryEnv, letter: Letter) -> None:
             chooser.store(content)
     except Exception:
         traceback.print_exc()
-    """
-    return None
 
 
 async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:

@@ -21,35 +21,55 @@
 # SOFTWARE.
 
 
+import typing
 import unittest
 import asyncio
-from manager.basic.dataLink import DataLinker
+from manager.basic.dataLink import DataLinker, DataLink, DataLinkNotify
+from manager.basic.letter import sending, NotifyLetter
+
+
+async def data_processor(dl: DataLink, data: typing.Any, args: typing.Any) -> None:
+    received_data = args
+    n = int(data.getHeader('ident'))
+    received_data.append(n)
+
+    if n == 9:
+        notify = DataLinkNotify("Data", "SendDone")
+        dl.notify(notify)
+
 
 class DataLinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         self.dlinker = DataLinker()
 
-    async def test_DataLinker_ProcessData(self) -> None:
+    async def test_DataLinker_TCP_ProcessData(self) -> None:
         # Setup
-        received_data = []
+        received_data = []  # type: typing.List
+        notify_content = []  # type: typing.List
 
         # Register Processor
-        self.dlinker.addDataLink("127.0.0.1", 3500)
-        self.dlinker.addProcessor("127.0.0.1", 3500,
-                                  lambda data: received_data.append(data))
+        self.dlinker.addDataLink("127.0.0.1", 3500, DataLink.TCP_DATALINK,
+                                 # Processor
+                                 data_processor,
+                                 # Processor args
+                                 received_data)
+        self.dlinker.addNotify("Data", lambda msg, arg: notify_content.append(msg), None)
 
         # Exercise
+        self.dlinker.start()
+        await asyncio.sleep(1)
+
         r, w = await asyncio.open_connection("127.0.0.1", 3500)
 
         n = 0
 
         while n < 10:
-            w.write(str(n).encode())
-        await w.drain()
+            letter = NotifyLetter(str(n), str(n), {})
+            await sending(w, letter)
+            await w.drain()
+            n += 1
+        await asyncio.sleep(1)
 
         # Verify
-        n = 0
-
-        while n < 10:
-            self.assertTrue(n in received_data)
+        self.assertEqual(["SendDone"], notify_content)
