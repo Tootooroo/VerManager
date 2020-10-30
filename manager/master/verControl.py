@@ -61,7 +61,7 @@ class RevSync(ModuleDaemon):
         self.revQueue = asyncio.Queue(10)  # type: Queue
 
     async def begin(self) -> None:
-        return None
+        await self.revDBInit()
 
     async def cleanup(self) -> None:
         return None
@@ -121,6 +121,7 @@ class RevSync(ModuleDaemon):
         return formatDate + offset
 
     async def revDBInit(self) -> bool:
+        print("RevDB Init...")
         loop = asyncio.get_running_loop()
         e = ProcessPoolExecutor()
         revisions = await loop.run_in_executor(e, self._retrive_revisions)
@@ -154,6 +155,7 @@ class RevSync(ModuleDaemon):
             traceback.print_exc()
             pass
 
+        print("RevDB Init success.")
         return True
 
     def revNewPush(self, rev: HttpRequest) -> bool:

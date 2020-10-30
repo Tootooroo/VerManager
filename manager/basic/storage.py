@@ -241,10 +241,10 @@ class Storage(Module):
         else:
             os.makedirs(path)
 
-    def begin(self) -> None:
+    async def begin(self) -> None:
         return None
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         return None
 
     def _recover(self) -> None:

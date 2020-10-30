@@ -73,3 +73,5 @@ class DataLinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertEqual(["SendDone"], notify_content)
+
+        self.dlinker.stop()

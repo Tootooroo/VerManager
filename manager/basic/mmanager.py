@@ -174,18 +174,23 @@ class MManager:
         if self.isModuleExists(mName):
             m = self._modules[mName]
 
-            if isinstance(m, ModuleDaemon):
+            if isinstance(m, Module):
+                await m.begin()
+            if isinstance(m, DaemonBase):
                 m.start()
 
     async def start_all(self) -> None:
         for m in self._modules.values():
-            if isinstance(m, ModuleDaemon):
+            if isinstance(m, Module):
+                await m.begin()
+            if isinstance(m, DaemonBase):
                 m.start()
 
     async def stop(self, mName) -> None:
         if self.isModuleExists(mName):
             m = self._modules[mName]
-            if isinstance(m, ModuleDaemon):
+            await m.cleanup()
+            if isinstance(m, DaemonBase):
                 m.stop()
 
     def allDaemons(self) -> List:
@@ -199,10 +204,9 @@ class MManager:
         allMods = self.getAllModules()
 
         for mod in allMods:
+            await mod.cleanup()
             if isinstance(mod, ModuleDaemon):
                 mod.stop()
-
-            await mod.cleanup()
 
     async def join(self) -> None:
         while True:

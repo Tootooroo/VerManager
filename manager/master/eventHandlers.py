@@ -54,6 +54,7 @@ from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
 from manager.basic.notify import Notify, WSCNotify
+from manager.basic.dataLink import DataLink
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
 
@@ -316,8 +317,7 @@ async def responseHandler_ResultStore(
     task.setData(url + "/data/" + fileName)
 
 
-async def binaryHandler(letter: BinaryLetter, env: Entry.EntryEnv) -> None:
-
+async def binaryHandler(dl: DataLink, letter: BinaryLetter, env: Entry.EntryEnv) -> None:
     import traceback
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 

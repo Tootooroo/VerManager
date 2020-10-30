@@ -132,10 +132,7 @@ class ServerInst(Thread):
         self.addModule(storage)
 
         revSyncner = RevSync()
-        print("RevDB Init is in processing")
-        await revSyncner.revDBInit()
         self.addModule(revSyncner)
-        print("RevDB Init Done")
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -167,9 +164,7 @@ class ServerInst(Thread):
         for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:
             logger.handler_install(module, logger.listenTo)
 
-        await self._mmanager.start_all()
-
-        # Open a DataLink
+        # DataLink Init
         dataPort = info.getConfig('dataPort')
         dataLinker = DataLinker()
 
@@ -178,10 +173,14 @@ class ServerInst(Thread):
             self._address, dataPort, DataLink.TCP_DATALINK,
             binaryHandler, env)
 
+        self._mmanager.addModule(dataLinker)
+
         # Add a UDP DataLink used to transfer Log of in doing jobs.
         # dataLinker.addDataLink(
         #    self._address, dataPort, DataLink.UDP_DATALINK,
         #    processor, args)
+
+        await self._mmanager.start_all()
 
         # Join to all modules
         await self._mmanager.join()

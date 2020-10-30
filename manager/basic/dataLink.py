@@ -101,7 +101,7 @@ class DataLink:
     UDP_DATALINK = "udp"
 
     def __init__(self, host: str, port: int, protocol: str,
-                 processor: Callable[[Any, Any], None],
+                 processor: Callable[['DataLink', Any, Any], None],
                  args: Any, notify_q: multiprocessing.Queue) -> None:
         """
         protocol's value is TCP_DATALINK or UDP_DATALINK
@@ -113,26 +113,35 @@ class DataLink:
         self._notifyQ = notify_q
 
         # Processor
-        self._processor = processor  # type: Callable[[Any, Any], None]
+        self._processor = processor  # type: Callable[[DataLink, Any, Any], None]
         self._args = args  # type: Any
 
+        self._p = None  # type: Optional[multiprocessing.Process]
+
     def start(self) -> None:
-        p = multiprocessing.Process(target=self.run, args=(self._notifyQ,))
-        p.start()
+        self._p = multiprocessing.Process(
+            target=self.run, args=(self._notifyQ,))
+        self._p.start()
+
+    def stop(self) -> None:
+        if self._p is not None:
+            self._p.terminate()
 
     def notify(self, notify: DataLinkNotify) -> None:
         self._notifyQ.put_nowait(tuple(notify))
 
     def run(self, notify_q: multiprocessing.Queue) -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Setup a loop for current thread.
+        asyncio.set_event_loop(
+            asyncio.new_event_loop())
 
         try:
             f = getattr(self, 'create_'+self._proto+'_datalink')
+            asyncio.run(f())
         except AttributeError:
             raise DATA_LINK_PROTO_NOT_SUPPORT(self._proto)
-
-        asyncio.run(f())
+        except asyncio.exceptions.CancelledError:
+            return
 
     async def create_tcp_datalink(self) -> None:
         assert(self._processor is not None)
@@ -140,6 +149,7 @@ class DataLink:
         server = await asyncio.start_server(
             self._tcp_datalink_factory, self.host, self.port)
         async with server:
+            self.server = server
             await server.serve_forever()
 
     async def _tcp_datalink_factory(self, reader: StreamReader,
@@ -175,6 +185,7 @@ class DataLinker(ModuleTDaemon):
         self._msgQueue = multiprocessing.Queue(256) \
             # type: multiprocessing.Queue[DataLinkNotify]
         self._notify_cb = {}  # type: Dict[tag, Notifier]
+        self._isNeedStop = False
 
     def addDataLink(self, host: str, port: int, proto: str,
                     processor: Callable, args: Any) -> None:
@@ -210,8 +221,12 @@ class DataLinker(ModuleTDaemon):
 
         # Deal with messages from DataLinks.
         while True:
-
-            tag, msg = self._msgQueue.get()
+            try:
+                tag, msg = self._msgQueue.get(timeout=3)
+            except multiprocessing.queues.Empty:
+                if self._isNeedStop is True:
+                    break
+                continue
 
             if tag not in self._notify_cb:
                 continue
@@ -221,11 +236,12 @@ class DataLinker(ModuleTDaemon):
             except Exception:
                 traceback.print_exc()
 
+        # Stop all DataLinks
+        for dl in self._links:
+            dl.stop()
+
     def stop(self) -> None:
-        """
-        DataLinker is unable to stop from external.
-        """
-        return
+        self._stop = True
 
     async def begin(self) -> None:
         return
