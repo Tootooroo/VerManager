@@ -10,11 +10,11 @@ MERGER_ADDRESS:
 
 WORKER_NAME: WORKER_EXAMPLE
 
-REPO_URL: git@10.5.4.211:gpon/olt.git
+REPO_URL: git@127.0.0.1:root/vertest.git
 
 STORAGE: DoneStorage
 
-PROJECT_NAME:  olt
+PROJECT_NAME:  vertest
 
 QUEUE_SIZE: 1024
 

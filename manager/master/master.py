@@ -38,7 +38,7 @@ from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler
+    logHandler, logRegisterhandler, binaryNotify
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
@@ -172,6 +172,7 @@ class ServerInst(Thread):
         dataLinker.addDataLink(
             self._address, dataPort, DataLink.TCP_DATALINK,
             binaryHandler, env)
+        dataLinker.addNotify("BINARY", binaryNotify, None)
 
         self._mmanager.addModule(dataLinker)
 

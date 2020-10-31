@@ -23,6 +23,7 @@
 # EventHandlers.py
 
 import asyncio
+import traceback
 import concurrent.futures
 
 import os
@@ -30,7 +31,8 @@ import zipfile
 import shutil
 import manager.master.configs as cfg
 
-from typing import List, Dict, Optional, cast, Callable
+from typing import List, Dict, Optional, cast, Callable, Tuple, \
+    Any
 from collections import namedtuple
 
 from manager.master.eventListener \
@@ -50,19 +52,20 @@ from manager.master.logger import Logger, M_NAME as LOGGER_M_NAME
 
 from manager.master.workerRoom import WorkerRoom, M_NAME as WR_M_NAME
 
-from manager.basic.info import M_NAME as INFO_M_NAME
 from manager.basic.storage import M_NAME as STORAGE_M_NAME
 from manager.basic.util import pathSeperator
 from manager.basic.notify import Notify, WSCNotify
-from manager.basic.dataLink import DataLink
+from manager.basic.dataLink import DataLink, DataLinkNotify
 
 ActionInfo = namedtuple('ActionInfo', 'isMatch execute args')
+path = str
 
 
 class EVENT_HANDLER_TOOLS:
 
     ProcessPool = concurrent.futures.ProcessPoolExecutor()
     chooserSet = {}  # type: Dict[str, StoChooser]
+    transfer_finished = {}  # type: Dict[str, path]
 
     PREPARE_ACTIONS = []  # type: List[ActionInfo]
     IN_PROC_ACTIONS = []  # type: List[ActionInfo]
@@ -269,9 +272,6 @@ async def responseHandler_ResultStore(
 
     logger = env.modules.getModule('Logger')
 
-    chooserSet = EVENT_HANDLER_TOOLS.chooserSet
-    seperator = pathSeperator()
-
     # Pending feature
     # Store result to the target position specified in configuration file
     # Send email to notify that task id done
@@ -284,10 +284,10 @@ async def responseHandler_ResultStore(
 
     extra = task.getExtra()
 
-    chooser = chooserSet[taskId]
+    seperator = pathSeperator()
+    path = EVENT_HANDLER_TOOLS.transfer_finished[taskId]
+    fileName = path.split(seperator)[-1]
     resultDir = cfg.config.getConfig("ResultDir")
-
-    fileName = chooser.path().split(seperator)[-1]
 
     if not os.path.exists("./data"):
         os.mkdir("./data")
@@ -297,15 +297,15 @@ async def responseHandler_ResultStore(
     try:
         if extra is not None and "logFrom" in extra and "logTo" in extra:
             fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
-                fileName, chooser.path(), resultDir,
+                fileName, path, resultDir,
                 extra['logFrom'],
                 extra['logTo']
             )
         else:
             dest = resultDir + seperator + fileName
-            shutil.copy(chooser.path(), dest)
+            shutil.copy(path, dest)
 
-        await copyFileInExecutor(chooser.path(), "public/"+fileName)
+        await copyFileInExecutor(path, "public/"+fileName)
 
     except FileNotFoundError as e:
         await Logger.putLog(logger, letterLog, str(e))
@@ -318,37 +318,44 @@ async def responseHandler_ResultStore(
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter, env: Entry.EntryEnv) -> None:
-    import traceback
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
     if not isinstance(letter, BinaryLetter):
         return None
 
-    try:
-        tid = letter.getHeader('tid')
+    tid = letter.getHeader('tid')
 
-        # This is the first binary letter of the task correspond to the
-        # received tid just open a file and store the relation into fdSet
-        if tid not in chooserSet:
-            fileName = letter.getFileName()
-            version = letter.getParent()
+    # A new file is transfered.
+    if tid not in chooserSet:
+        fileName = letter.getFileName()
+        version = letter.getParent()
 
-            sto = env.modules.getModule(STORAGE_M_NAME)
-            chooser = sto.create(version, fileName)
-            chooserSet[tid] = chooser
+        sto = env.modules.getModule(STORAGE_M_NAME)
+        chooser = sto.create(version, fileName)
+        chooserSet[tid] = chooser
 
-        chooser = chooserSet[tid]
-        content = letter.getContent('bytes')
+    chooser = chooserSet[tid]
+    content = letter.getContent('bytes')
 
-        if isinstance(content, str):
-            return None
+    if content == b"":
+        # A file is transfer finished.
+        chooser.close()
+        del chooser[tid]
 
-        if content == b"":
-            chooser.close()
-        else:
-            chooser.store(content)
-    except Exception:
-        traceback.print_exc()
+        # Notify To DataLinker a file is transfered finished.
+        dl.notify(DataLinkNotify("BINARY", ("tid", chooser.path())))
+    else:
+        chooser.store(content)
+
+
+def binaryNotify(msg: Tuple[str, str], arg: Any) -> None:
+    tid, path = msg[0], msg[1]
+    transfered = EVENT_HANDLER_TOOLS.transfer_finished
+
+    if tid in transfered:
+        return None
+
+    transfered[tid] = path
 
 
 async def logHandler(env: Entry.EntryEnv, letter: Letter) -> None:

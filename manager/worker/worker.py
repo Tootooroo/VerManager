@@ -25,11 +25,13 @@ import socket
 import manager.worker.configs as configs
 
 from typing import Callable
-from manager.basic.letter import Letter
+from manager.basic.letter import Letter, BinaryLetter
 from manager.basic.info import Info
 from manager.worker.connector import Connector
 from manager.worker.processor import Processor
 from manager.worker.procUnit import JobProcUnit, PostProcUnit
+from manager.basic.dataLink import DataLinker, DataLink
+from manager.worker.datalink import binaryStore, binaryStoreNotify
 
 
 class Worker:
@@ -72,9 +74,14 @@ class Worker:
             # Listen to another workers
             await connector.listen("Poster", merger_address['host'],
                                    merger_address['port'])
-            # Open datalink
-            connector.datalink_open(
-                merger_address['host'], merger_address['dataPort'])
+
+            # Create DataLink
+            dataLinker = DataLinker()
+
+            dataLinker.addDataLink(
+                merger_address['host'], merger_address['dataPort'],
+                DataLink.TCP_DATALINK, binaryStore, "./Post")
+            dataLinker.addNotify("BINARY", binaryStoreNotify, processor)
 
         # Create Link to Merger if exists.
         if merger_address != '':

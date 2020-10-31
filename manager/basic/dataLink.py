@@ -87,7 +87,7 @@ class DataLinkProcProtocol(asyncio.BaseProtocol):
 
 class Notifier:
 
-    def __init__(self, callback: Callable, arg: Any) -> None:
+    def __init__(self, callback: Callable[[Any, Any], None], arg: Any) -> None:
         self._cb = callback
         self._arg = arg
 

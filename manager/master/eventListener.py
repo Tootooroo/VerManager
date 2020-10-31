@@ -49,57 +49,6 @@ letterLog = "letterLog"
 Handler = Callable[['Entry.EntryEnv', Letter], Coroutine[Any, Any, None]]
 
 
-class DataLink:
-
-    def __init__(self, host: str, port: int) -> None:
-        self._host = host
-        self._port = port
-
-        assert(cfg.config is not None)
-        self._storage = Storage(cfg.config.getConfig('Storage'), None)
-
-    @staticmethod
-    def start(host: str, port: int) -> None:
-        p = multiprocessing.Process(
-            target=lambda: asyncio.run(DataLink(host, port).run()))
-        p.start()
-
-    async def run(self) -> None:
-        server = await asyncio.start_server(
-            self._dataReceive, self._host, self._port)
-        async with server:
-            await server.serve_forever()
-
-    async def _dataReceive(self, reader: asyncio.StreamReader,
-                           writer: asyncio.StreamWriter) -> None:
-        print("Datalink Open")
-        # From beginLetter the information about how to
-        # manage the received file
-        beginLetter = await receving(reader)
-        if beginLetter is None:
-            writer.close()
-            return
-
-        assert(isinstance(beginLetter, BinaryLetter))
-
-        version = beginLetter.getParent()
-        fileName = beginLetter.getFileName()
-
-        chooser = self._storage.create(version, fileName)
-        if chooser is None:
-            writer.close()
-            return
-
-        while True:
-            piece = await reader.read(1024)
-            if piece == b"":
-                break
-            chooser.store(piece)
-
-        chooser.close()
-        writer.close()
-
-
 class Entry:
     """
     An entry describe connection with a worker
@@ -299,9 +248,6 @@ class EventListener(ModuleDaemon, Subject, Observer):
 
         # Entry environment initialization
         entryEnv = Entry.EntryEnv(self, self.handlers, cfg.mmanager)
-
-        # Init DataLink
-        DataLink.start("127.0.0.1", 8899)
 
         while True:
 

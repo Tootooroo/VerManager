@@ -71,58 +71,6 @@ class Link:
         return (datetime.utcnow() - self.last).seconds
 
 
-class DataLink:
-
-    def __init__(self, host: str, port: int) -> None:
-        self._host = host
-        self._port = port
-
-        assert(cfg.config is not None)
-        post_dir = cfg.config.getConfig('POST_DIR')
-        self._storage = Storage(post_dir, None)
-
-    @staticmethod
-    def start(host: str, port: int) -> None:
-        p = multiprocessing.Process(
-            target=lambda: asyncio.run(DataLink(host, port).run()))
-
-        p.start()
-
-    async def run(self) -> None:
-        server = await asyncio.start_server(
-            self._dataReceive, self._host, self._port)
-        async with server:
-            await server.serve_forever()
-
-    async def _dataReceive(self, reader: asyncio.StreamReader,
-                           writer: asyncio.StreamWriter) -> None:
-        # From beginLetter the information about how to
-        # manage the received file
-        beginLetter = await receving(reader)
-        if beginLetter is None:
-            writer.close()
-            return
-
-        assert(isinstance(beginLetter, BinaryLetter))
-
-        version = beginLetter.getParent()
-        fileName = beginLetter.getFileName()
-
-        chooser = self._storage.create(version, fileName)
-        if chooser is None:
-            writer.close()
-            return
-
-        while True:
-            piece = await reader.read(1024)
-            if piece == b"":
-                break
-            chooser.store(piece)
-
-        chooser.close()
-        writer.close()
-
-
 class LinkTunnel(abc.ABC):
 
     def __init__(self, size: int) -> None:
@@ -186,13 +134,6 @@ class Linker:
             linkid, host, port, reader, writer, Link.ACTIVE)
 
         self._loop.create_task(self._active_link(reader, writer, linkid))
-
-    def data_link_create(self, host: str, port: int) -> None:
-        """
-        Data link will be maintain by another process so
-        manage event can gain stability.
-        """
-        DataLink.start(host, port)
 
     async def rebuild_link(self, link: Link) -> None:
 
@@ -334,14 +275,25 @@ class Linker:
         await sending(link.writer, letter, lock=self._lock)
 
     @staticmethod
-    def _do_send_file(sock: socket, path: str) -> bool:
+    def _do_send_file(sock: socket, path: str, tid: str,
+                      version: str, fileName: str) -> bool:
         try:
             with open(path, "rb") as f:
                 while True:
                     bytes = f.read(1024)
                     if not bytes:
                         break
-                    sock.sendall(bytes)
+
+                    bLetter = BinaryLetter(
+                        tid=tid, bStr=bytes,
+                        parent=version, fileName=fileName)
+
+                    sending_sock(sock, bLetter)
+
+            lastLetter = BinaryLetter(
+                tid=tid, bStr=b"",
+                parent=version, fileName=fileName)
+            sending_sock(sock, lastLetter)
 
         except Exception:
             import traceback
@@ -368,10 +320,6 @@ class Linker:
         sock = w.transport.get_extra_info('socket')
 
         try:
-            # Tell to target that we will begin to transfer
-            # a file.
-            await sending(w, BinaryLetter(tid=tid, bStr=b"",
-                                          parent=version, fileName=fileName))
             with ProcessPoolExecutor() as e:
                 await self._loop.run_in_executor(
                     e, self._do_send_file, sock._sock, path)
@@ -454,9 +402,6 @@ class Connector(ChannelReceiver):
 
     async def listen(self, lisId: str, host: str, port: int) -> None:
         await self._linker.new_listen(lisId, host, port)
-
-    def datalink_open(self, host: str, port: int) -> None:
-        self._linker.data_link_create(host, port)
 
     async def open_connection(self, linkId, host: str, port: int) -> None:
         await self._linker.new_link(linkId, host, port)
