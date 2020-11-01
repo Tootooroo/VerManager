@@ -782,6 +782,9 @@ class PostProcUnit(PostProcUnitProto):
             await self._output_space.sendfile(
                 "Master", path, post.ident(), post.version(), fileName)
 
+            # Wait a seonds
+            await asyncio.sleep(3)
+
             # Cleanup
             post.cleanup()
             # Success

@@ -277,6 +277,7 @@ class Linker:
     @staticmethod
     def _do_send_file(sock: socket, path: str, tid: str,
                       version: str, fileName: str) -> bool:
+
         try:
             with open(path, "rb") as f:
                 while True:
@@ -307,32 +308,25 @@ class Linker:
         """
         First, open a datalink to target then transfer file.
         """
-
         assert(cfg.config is not None)
-
         if linkid == 'Master':
             address = cfg.config.getConfig('MASTER_ADDRESS')
         elif linkid == 'Poster':
             address = cfg.config.getConfig('MERGER_ADDRESS')
-
         r, w = await asyncio.open_connection(
             address['host'], address['dataPort'])
         sock = w.transport.get_extra_info('socket')
-
         try:
             with ProcessPoolExecutor() as e:
                 await self._loop.run_in_executor(
-                    e, self._do_send_file, sock._sock, path)
+                    e, self._do_send_file, sock._sock,
+                    path, tid, version, fileName)
 
             # Close DataLink
             w.close()
 
-            # Notify target transfer done.
-            link = self._links[linkid]
-            await sending(link.writer, BinaryLetter(
-                tid=tid, bStr=b"", parent=version, fileName=fileName))
-
         except Exception:
+            traceback.print_exc()
             return False
 
         return True

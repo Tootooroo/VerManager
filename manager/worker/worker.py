@@ -82,6 +82,7 @@ class Worker:
                 merger_address['host'], merger_address['dataPort'],
                 DataLink.TCP_DATALINK, binaryStore, "./Post")
             dataLinker.addNotify("BINARY", binaryStoreNotify, processor)
+            dataLinker.start()
 
         # Create Link to Merger if exists.
         if merger_address != '':

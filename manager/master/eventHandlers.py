@@ -284,8 +284,10 @@ async def responseHandler_ResultStore(
 
     extra = task.getExtra()
 
+    trans_fin = EVENT_HANDLER_TOOLS.transfer_finished
+    path = trans_fin[taskId]
+
     seperator = pathSeperator()
-    path = EVENT_HANDLER_TOOLS.transfer_finished[taskId]
     fileName = path.split(seperator)[-1]
     resultDir = cfg.config.getConfig("ResultDir")
 
@@ -340,10 +342,10 @@ async def binaryHandler(dl: DataLink, letter: BinaryLetter, env: Entry.EntryEnv)
     if content == b"":
         # A file is transfer finished.
         chooser.close()
-        del chooser[tid]
+        del chooserSet[tid]
 
         # Notify To DataLinker a file is transfered finished.
-        dl.notify(DataLinkNotify("BINARY", ("tid", chooser.path())))
+        dl.notify(DataLinkNotify("BINARY", (tid, chooser.path())))
     else:
         chooser.store(content)
 

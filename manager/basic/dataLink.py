@@ -215,6 +215,7 @@ class DataLinker(ModuleTDaemon):
         return threading.Thread.is_alive(self)
 
     def run(self) -> None:
+
         # Start all DataLinks
         for dl in self._links:
             dl.start()

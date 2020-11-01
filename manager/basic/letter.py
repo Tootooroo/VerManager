@@ -755,7 +755,7 @@ class BinaryLetter(Letter):
     def getMenu(self) -> str:
         return self.getHeader('menu')
 
-    def getBytes(self) -> str:
+    def getBytes(self) -> bytes:
         return self.getContent('bytes')
 
     def setBytes(self, b: bytes) -> None:
@@ -1003,6 +1003,7 @@ def sending_sock(sock: socket.socket, l: Letter) -> None:
         except Exception:
             import traceback
             traceback.print_exc()
+            return
 
         if sent == 0:
             raise Exception
