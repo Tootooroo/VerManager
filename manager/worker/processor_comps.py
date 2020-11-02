@@ -24,6 +24,7 @@ import abc
 import asyncio
 import typing
 
+from manager.worker.channel import ChannelBox
 from manager.worker.procUnit import \
     ProcUnit, PROC_UNIT_HIGHT_OVERLOAD, PROC_UNIT_IS_IN_DENY_MODE
 from manager.basic.letter import Letter
@@ -73,8 +74,8 @@ class UnitMaintainer(ChannelReceiver):
     def setRestartDelay(self, delay: int) -> None:
         self._restart_delay = delay
 
-    def addTrack(self, uid: str, msgSrc: typing.Dict) -> None:
-        ChannelReceiver.addTrack(self, uid, msgSrc)
+    def addTrack(self, uid: str, box: ChannelBox) -> None:
+        ChannelReceiver.addTrack(self, uid, box)
 
         # Update _states
         info = self.last(uid)

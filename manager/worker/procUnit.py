@@ -153,18 +153,27 @@ class CommandExecutor:
 class ProcUnit(abc.ABC):
 
     PROC_UNIT_STATE = int
+
     # A ProcUnit is in stop state before it's
     # install into Processor
     STATE_STOP = 0
+
     # Ready to handle letter
     STATE_READY = 1
+
     # Normal space is out of space
     STATE_OVERLOAD = 2
+
     # DENY state means ProcUnit is unable
     # to accept any more jobs.
     STATE_DENY = 3
+
     # A ProcUnit is stop cause of exception
     STATE_EXCEP = 4
+
+    # Dirty State, ProcUnit in this state is unavailable
+    # to accept new job.
+    STATE_DIRTY = 5
 
     def __init__(self, ident: str, type: int) -> None:
         self._unitIdent = ident
