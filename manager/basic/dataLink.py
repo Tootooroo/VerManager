@@ -242,7 +242,7 @@ class DataLinker(ModuleTDaemon):
             dl.stop()
 
     def stop(self) -> None:
-        self._stop = True
+        self._isNeedStop = True
 
     async def begin(self) -> None:
         return

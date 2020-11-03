@@ -31,6 +31,8 @@ from manager.basic.letter import Letter
 from manager.worker.proc_common import \
     PROCESSOR_DISPATCHE_CANT_FIND_THE_TYPE
 from manager.worker.channel import ChannelReceiver
+from manager.worker.monitor import StateObject
+from manager.basic.mmanager import Daemon
 
 
 class Dispatcher:
@@ -57,45 +59,68 @@ class Dispatcher:
             print(e)
 
 
-class UnitMaintainer(ChannelReceiver):
+class UnitMaintainer(Daemon, ChannelReceiver, StateObject):
 
-    def __init__(self, ucontainer: typing.Dict) -> None:
+    def __init__(self, ucontainer: typing.Dict[str, ProcUnit]) -> None:
+        StateObject.__init__(self, "UM")
+        Daemon.__init__(self)
         ChannelReceiver.__init__(self)
-        self._states = {}  # type: typing.Dict[str, int]
+
         self._units = ucontainer
         self._restart_delay = 10
+        self._event = asyncio.Event()
 
     async def update(self, uid: str) -> None:
         info = self.last(uid)
         if info is None:
             return None
-        self._maintain(uid, info)
+        await self._maintain(uid, info)
 
     def setRestartDelay(self, delay: int) -> None:
         self._restart_delay = delay
 
-    def addTrack(self, uid: str, box: ChannelBox) -> None:
-        ChannelReceiver.addTrack(self, uid, box)
-
-        # Update _states
-        info = self.last(uid)
-        if info is not None:
-            self._states[uid] = info['state']
-
-    def _maintain(self, uid: str, info: typing.Dict) -> None:
+    async def _maintain(self, uid: str, info: typing.Dict) -> None:
         state = info['state']
 
-        # Fixme: Should also to notify master what happened.
-        if state == ProcUnit.STATE_OVERLOAD:
-            self._states[uid] = ProcUnit.STATE_OVERLOAD
-        elif state == ProcUnit.STATE_DENY:
-            self._states[uid] = ProcUnit.STATE_DENY
-        elif state == ProcUnit.STATE_STOP:
-            # Restart the ProcUnit
-            unit = self._units[uid]
-            asyncio.get_running_loop()\
-                   .create_task(self.unitRestart(unit))
-            self._states[uid] = ProcUnit.STATE_STOP
+        if state == ProcUnit.STATE_DENY or \
+           state == ProcUnit.STATE_STOP or \
+           state == ProcUnit.STATE_DIRTY:
+
+            try:
+                # Notify to Monitor
+                # Processor is not ready to accept a job
+                await self.pending()
+
+                # Set the event so UnitMaintainer
+                # will try to correct the problems.
+                if not self._event.is_set():
+                    self._event.set()
+            except Exception as e:
+                print(e)
+
+    async def run(self) -> None:
+
+        while True:
+
+            ret = True
+
+            # Wait event
+            # This event will be seted
+            # if a unit is need help
+            await self._event.wait()
+
+            for unit in self._units.values():
+                if unit.state() == ProcUnit.STATE_DIRTY:
+                    ret &= await unit.cleanup()
+                    # Set ProcUnit to Ready
+                    unit.setState(ProcUnit.STATE_READY)
+
+            # All problems is resolved.
+            if ret is True:
+                await self.ready()
+                self._event.clear()
+            else:
+                await asyncio.sleep(5)
 
     @staticmethod
     async def unitRestart(unit: ProcUnit) -> None:

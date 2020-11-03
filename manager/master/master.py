@@ -38,7 +38,7 @@ from manager.master.dispatcher import Dispatcher, M_NAME as DISPATCHER_M_NAME, \
 from manager.master.eventListener \
     import EventListener, M_NAME as EVENT_M_NAME, Entry
 from manager.master.eventHandlers import responseHandler, binaryHandler, \
-    logHandler, logRegisterhandler, binaryNotify
+    logHandler, logRegisterhandler, binaryNotify, NotifyHandle
 from manager.master.logger import Logger
 from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
@@ -116,6 +116,7 @@ class ServerInst(Thread):
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
         eventListener.registerEvent(Letter.Log, logHandler)
+        eventListener.registerEvent(Letter.Notify, NotifyHandle.handle)
         self.addModule(eventListener)
 
         # EventHandler init

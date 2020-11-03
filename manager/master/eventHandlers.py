@@ -379,24 +379,29 @@ async def logRegisterhandler(env: Entry.EntryEnv, letter: Letter) -> None:
 ###############################################################################
 #                               Notify Handlers                               #
 ###############################################################################
-class NotifyHandleer:
+class NotifyHandle:
 
-    def __init__(self, env: Entry.EntryEnv) -> None:
-        self._env = env
+    @classmethod
+    async def handle(self, env: Entry.EntryEnv, nl: Letter) -> None:
 
-    async def handle(self, nl: NotifyLetter) -> None:
+        if not isinstance(nl, NotifyLetter):
+            return None
+
         handler = self._search_handler(nl)
         if handler is None:
             return None
+        await handler(env, nl)
 
-    def _search_handler(self, nl: NotifyLetter) -> Optional[Callable[[NotifyLetter], None]]:
+    @classmethod
+    def _search_handler(self, nl: NotifyLetter) -> Optional[Callable]:
         type = nl.notifyType()
         try:
-            return getattr(self, 'NOTIFY_H_'+type)
+            return getattr(NotifyHandle, 'NOTIFY_H_'+type)
         except AttributeError:
             raise NOTIFY_NOT_MATCH_WITH_HANDLER(type)
 
-    async def NOTIFY_H_WSC(self, nl: NotifyLetter) -> None:
+    @classmethod
+    async def NOTIFY_H_WSC(self, env: Entry.EntryEnv, nl: NotifyLetter) -> None:
         """
         Change state of correspond worker.
         """
@@ -404,7 +409,7 @@ class NotifyHandleer:
         who = wsc_notify.fromWho()
         state = wsc_notify.state()
 
-        wr = self._env.modules.getModule(WR_M_NAME)  # type: WorkerRoom
+        wr = env.modules.getModule(WR_M_NAME)  # type: WorkerRoom
         wr.setState(who, int(state))
 
 

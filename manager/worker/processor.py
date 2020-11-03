@@ -62,6 +62,9 @@ class Processor(ModuleDaemon):
     def req(self, letter: Letter) -> None:
         self._reqQ.put_nowait(letter)
 
+    def getMaintainer(self) -> UnitMaintainer:
+        return self._maintainer
+
     def install_unit(self, unit: ProcUnit) -> None:
         uid = unit.ident()
         if uid in self._unit_container:
@@ -93,6 +96,9 @@ class Processor(ModuleDaemon):
         self._dispatcher.addUnit(type, unit)
 
     async def run(self) -> None:
+
+        # Start UnitMaintainer
+        self._maintainer.start()
 
         # Start all ProcUnit
         for unit in self._unit_container.values():

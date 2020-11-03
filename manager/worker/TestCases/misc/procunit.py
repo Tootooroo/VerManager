@@ -74,3 +74,20 @@ class Connector:
 
     async def sendLetter(self, letter: Letter, timeout=None) -> None:
         await self.q.put(letter)
+
+
+class ProcUnitStub_Dirty(ProcUnit):
+
+    async def cleanup(self) -> bool:
+        self._state = ProcUnit.STATE_READY
+        return True
+
+    async def run(self) -> None:
+        self._state = ProcUnit.STATE_DIRTY
+        self.msg_gen()
+        await self._notify()
+
+        await asyncio.sleep(10)
+
+    async def reset(self) -> None:
+        return None

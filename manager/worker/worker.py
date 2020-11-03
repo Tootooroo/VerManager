@@ -32,6 +32,7 @@ from manager.worker.processor import Processor
 from manager.worker.procUnit import JobProcUnit, PostProcUnit
 from manager.basic.dataLink import DataLinker, DataLink
 from manager.worker.datalink import binaryStore, binaryStoreNotify
+from manager.worker.monitor import Monitor
 
 
 class Worker:
@@ -49,8 +50,14 @@ class Worker:
         # Create Connector and Create Link
         connector = Connector()
 
+        # Create Monitor
+        monitor = Monitor(self.cfg.getConfig('WORKER_NAME'))
+        monitor.start()
+
         # Create Processor
         processor = Processor()
+        monitor.track(processor.getMaintainer())
+
         processor.setup_output(connector)
         connector.set_msg_callback(msg_callback_gen(processor.req))
 

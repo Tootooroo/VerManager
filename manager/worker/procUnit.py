@@ -226,6 +226,13 @@ class ProcUnit(abc.ABC):
         self._state = self.STATE_STOP
 
     @abc.abstractmethod
+    async def cleanup(self) -> bool:
+        """
+        return True if cleanup success
+        otherwise return False
+        """
+
+    @abc.abstractmethod
     async def run(self) -> None:
         """
         Start the ProcUnit. After started it will
@@ -258,13 +265,16 @@ class ProcUnit(abc.ABC):
         uptime = (datetime.utcnow() - self._start_at).seconds
         self._channel.update('uptime', uptime)
 
-    def _notify(self) -> None:
+    async def _notify(self) -> None:
         if self._channel is None:
             return None
-        self._channel.push()
+        await self._channel.push()
 
     def state(self) -> int:
         return self._state
+
+    def setState(self, state: int) -> None:
+        self._state = state
 
     def setChannel(self, channel: ChannelEntry) -> None:
         self._channel = channel
@@ -487,6 +497,7 @@ class JobProcUnit(JobProcUnitProto):
 
     async def _do_job(self, job: NewLetter) -> None:
         assert(self._config is not None)
+        assert(self._channel is not None)
 
         extra = job.getExtra()
         needPost = job.needPost()
@@ -500,7 +511,7 @@ class JobProcUnit(JobProcUnitProto):
 
         # Check is clean
         if os.path.exists(build_dir+"/"+projName):
-            if self.cleanup() is False:
+            if await self.cleanup() is False:
                 # Job unable to begin from dirty state.
                 await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
                 return
@@ -528,7 +539,10 @@ class JobProcUnit(JobProcUnitProto):
         if ret_code != 0:
             if ret_code != 128:
                 # Cleanup
-                self.cleanup()
+                if await self.cleanup() is False:
+                    self._state = ProcUnit.STATE_DIRTY
+                    self._channel.update_and_notify('state', self._state)
+
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE)
                 return
@@ -548,16 +562,19 @@ class JobProcUnit(JobProcUnitProto):
             import traceback
             traceback.print_exc()
 
-            self.cleanup()
+            await self.cleanup()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
             return
 
         # Cleanup
         # Cleanup should be done before notify master job is finished.
-        self.cleanup()
+        if await self.cleanup() is False:
+            self._state = ProcUnit.STATE_DIRTY
+            self._channel.update_and_notify('state', self._state)
+
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
-    def cleanup(self) -> bool:
+    async def cleanup(self) -> bool:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
         projName = cast(Info, self._config).getConfig('PROJECT_NAME')
 
@@ -740,6 +757,9 @@ class PostProcUnit(PostProcUnitProto):
         """
         for pid in self._posts:
             self.cancel(pid)
+
+    async def cleanup(self) -> bool:
+        return True
 
     async def cancel(self, tid: str) -> None:
         """
