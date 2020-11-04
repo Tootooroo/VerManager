@@ -95,8 +95,8 @@ class StateObject(abc.ABC):
 
 class Monitor(ModuleDaemon):
 
-    READY = 1
-    PENDING = 0
+    READY = 0
+    PENDING = 1
 
     def __init__(self, workerName: str, q_size: int = 1024) -> None:
         self._workerName = workerName
@@ -135,14 +135,13 @@ class Monitor(ModuleDaemon):
         return self._state != state
 
     async def run(self) -> None:
-
         assert(self._connector is not None)
         conn = typing.cast(Connector, self._connector)
 
         while True:
-
             # Wait for state change message
             st_msg = await self._msg_q.get()
+            print(st_msg)
 
             if self.may_need_update(st_msg.state):
                 # Iterate over all SOs to check that
