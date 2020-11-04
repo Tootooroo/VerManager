@@ -68,6 +68,9 @@ class ProcUnitStub(ProcUnit):
         while True:
             await asyncio.sleep(1)
 
+    async def cleanup(self) -> bool:
+        return True
+
 
 class ProcUnitStub_Except(ProcUnit):
 
@@ -79,6 +82,9 @@ class ProcUnitStub_Except(ProcUnit):
 
     async def run(self) -> None:
         raise Exception
+
+    async def cleanup(self) -> bool:
+        return True
 
 
 class CompChannel(ChannelReceiver):

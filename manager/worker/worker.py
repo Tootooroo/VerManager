@@ -35,6 +35,7 @@ from manager.worker.datalink import binaryStore, binaryStoreNotify
 from manager.worker.monitor import Monitor
 
 
+
 class Worker:
 
     def __init__(self, cfg_path: str) -> None:

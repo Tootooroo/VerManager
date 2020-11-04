@@ -28,6 +28,7 @@ import abc
 import manager.worker.configs as cfg
 import multiprocessing
 
+from datetime import datetime
 from manager.basic.storage import Storage
 from manager.basic.letter import BinaryLetter, sending_sock
 from socket import socket
@@ -192,6 +193,8 @@ class Linker:
                 if self._heartbeat_check(link) is False:
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
+
+                print(str(datetime.now()) + " : "  + str(letter))
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 # Wait a while
                 await asyncio.sleep(1)
@@ -343,7 +346,7 @@ class Linker:
             return
 
         link.hbCount += 1
-        self._loop.create_task(self._next_heartbeat(link, 5))
+        self._loop.create_task(self._next_heartbeat(link, 3))
 
     async def heartbeat_proc_passive(self, heartbeat: HeartbeatLetter) -> None:
         ident = heartbeat.getIdent()
@@ -368,6 +371,7 @@ class Linker:
 
         try:
             await sending(link.writer, hb)
+            print(str(datetime.now()) + " : Send HB " + str(hb))
         except ConnectionError:
             # Just return
             # that link will be rebuild while timer
@@ -377,7 +381,7 @@ class Linker:
             traceback.print_exc()
 
     def _heartbeat_check(self, link: Link) -> bool:
-        return link.hb_timer_diff() < 30
+        return link.hb_timer_diff() < 10
 
     def link_state(self, linkid: str) -> int:
         try:

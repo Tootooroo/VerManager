@@ -27,7 +27,6 @@
 # EventListenerTestCases
 
 
-"""
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
 
@@ -85,7 +84,12 @@ from manager.worker.TestCases.procUnitTestCases import \
 
 from manager.basic.TestCases.notifyTestCases import \
     NotifyTestCases
-"""
 
 from manager.basic.TestCases.dataLinkTestCases import \
     DataLinkerTestCases
+
+from manager.worker.TestCases.monitorTestCases import \
+    MonitorTestCase
+
+from manager.worker.TestCases.umaintainerTestCases import \
+    UnitMaintainerTestCase

@@ -23,8 +23,8 @@
 import asyncio
 import typing
 
-from manager.basic.letter import CommandLetter, Letter
-from manager.worker.procUnit import ProcUnit
+from manager.basic.letter import CommandLetter, Letter, NewLetter
+from manager.worker.procUnit import ProcUnit, JobProcUnit
 
 
 # Things that used by ProcUnitTestCases
@@ -91,3 +91,14 @@ class ProcUnitStub_Dirty(ProcUnit):
 
     async def reset(self) -> None:
         return None
+
+
+class JobProcUnit_CleanupFailed(JobProcUnit):
+
+    async def cleanup(self) -> bool:
+        return False
+
+    async def _do_job(self, job: NewLetter) -> None:
+        assert(self._channel is not None)
+        self._state = JobProcUnit.STATE_DIRTY
+        await self._channel.update_and_notify('state', self._state)

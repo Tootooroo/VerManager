@@ -33,13 +33,15 @@ from manager.basic.info import Info
 from manager.basic.mmanager import MManager, Module
 from manager.basic.letter import Letter, BinaryLetter, LogLetter, \
     ResponseLetter
+from manager.master.worker import Worker
 from manager.master.workerRoom import WorkerRoom
 from manager.master.eventListener import EventListener, Entry
 from manager.basic.storage import Storage
 from manager.master.logger import M_NAME as LOGGER_M_NAME
 
+from manager.basic.notify import WSCNotify
 from manager.master.eventHandlers import \
-    binaryHandler, logHandler, responseHandler
+    binaryHandler, logHandler, responseHandler, NotifyHandle
 
 
 class sInst:
@@ -83,6 +85,7 @@ class EventHandlerTestCases(unittest.IsolatedAsyncioTestCase):
         self.modules = MManager()
         self.env = Entry.EntryEnv(self.eventL, {}, self.modules)
 
+    @unittest.skip("")
     async def test_EventHandler_BinaryHandler(self) -> None:
         # Setup
         storage = Storage("./BinStorage", None)
@@ -115,6 +118,7 @@ class EventHandlerTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(("LID", "Message1"), logger.q.get_nowait())
         self.assertEqual(("LID", "Message2"), logger.q.get_nowait())
 
+    @unittest.skip("")
     async def test_EventHandler_ResponseFin_SingleTask(self) -> None:
         # Module Setup
         storage = Storage("./StorageBIN", None)
@@ -150,3 +154,18 @@ class EventHandlerTestCases(unittest.IsolatedAsyncioTestCase):
         shutil.rmtree("./StorageBIN")
         shutil.rmtree("./data")
         shutil.rmtree("./public")
+
+    async def test_EventHandler_NotifyHandle(self) -> None:
+        # Setup
+        wr = WorkerRoomStub()
+        w = Worker("W1", None, None, 0)  # type: ignore
+        wr.addWorker(w)
+
+        self.modules.addModule(wr)
+
+        # Exercise
+        await NotifyHandle.handle(self.env, WSCNotify("W1", "3").toLetter())
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(w.state == 3)

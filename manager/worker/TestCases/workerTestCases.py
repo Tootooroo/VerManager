@@ -28,6 +28,11 @@ from manager.basic.letter import sending, receving, HeartbeatLetter, \
     PropLetter, ResponseLetter, BinaryLetter, NewLetter, Letter
 from manager.worker.worker import Worker
 from manager.basic.virtuals.virtualServer import VirtualServer
+from manager.worker.TestCases.misc.procunit import JobProcUnit_CleanupFailed
+from manager.worker.channel import ChannelEntry
+from manager.worker.processor_comps import UnitMaintainer
+from manager.worker.monitor import Monitor
+from manager.worker.TestCases.misc.connector import ConnectorFake
 
 
 class VirtualServer_Minimal(VirtualServer):
@@ -108,3 +113,42 @@ class WorkerTestCases_(unittest.IsolatedAsyncioTestCase):
         # verify
         self.assertEqual(vir_server._responsec, 2)
         self.assertEqual(vir_server._binc, 2)
+
+    async def test_Worker_JobProcUnitNotify(self) -> None:
+        """
+        This test is to asure that ProcUnit's state can
+        send to Monitor via UnitMaintainer.
+        """
+
+        # Setup
+
+        # Create a JobProcUnit
+        unit = JobProcUnit_CleanupFailed("UNIT")
+        unit._channel = ChannelEntry("UNIT")
+
+        # Create UnitMaintainer
+        units = {"UNIT": unit}  # type: typing.Dict
+        um = UnitMaintainer(units)
+
+        # Build a channel
+        unit._channel.addReceiver(um)
+        um.addTrack("UNIT", unit._channel.info)
+
+        # Build Connector
+        conn = ConnectorFake()
+
+        # Create Monitor
+        monitor = Monitor("W")
+        monitor.setupConnector(conn)
+        monitor.track(um)
+
+        # Exercise
+        monitor.start()
+        um.start()
+        await asyncio.sleep(0.1)
+
+        await unit._do_job(None)
+        await asyncio.sleep(0.1)
+
+        # Verify
+        self.assertTrue(len(conn.notifies) == 1)

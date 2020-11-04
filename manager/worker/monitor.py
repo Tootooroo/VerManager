@@ -141,7 +141,6 @@ class Monitor(ModuleDaemon):
         while True:
             # Wait for state change message
             st_msg = await self._msg_q.get()
-            print(st_msg)
 
             if self.may_need_update(st_msg.state):
                 # Iterate over all SOs to check that

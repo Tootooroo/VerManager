@@ -310,9 +310,13 @@ async def responseHandler_ResultStore(
         await copyFileInExecutor(path, "public/"+fileName)
 
     except FileNotFoundError as e:
+        traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
+        traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
+    except Exception:
+        traceback.print_exc()
 
     url = cfg.config.getConfig('GitlabUr')
 

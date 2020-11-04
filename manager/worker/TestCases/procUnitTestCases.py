@@ -67,6 +67,9 @@ class ProcUnitMock(ProcUnit):
     async def reset(self) -> None:
         return None
 
+    async def cleanup(self) -> bool:
+        return True
+
 
 class ProcUnitUnitTestCases(unittest.IsolatedAsyncioTestCase):
 
