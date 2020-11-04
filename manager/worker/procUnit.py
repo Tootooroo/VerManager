@@ -27,8 +27,9 @@ import abc
 import asyncio
 import manager.worker.configs as configs
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Optional, cast, Dict, BinaryIO, List, \
+from typing import Optional, cast, Dict, List, \
     Callable, IO
 from manager.basic.letter import Letter
 from .proc_common import Output
@@ -541,7 +542,7 @@ class JobProcUnit(JobProcUnitProto):
                 # Cleanup
                 if await self.cleanup() is False:
                     self._state = ProcUnit.STATE_DIRTY
-                    self._channel.update_and_notify('state', self._state)
+                    await self._channel.update_and_notify('state', self._state)
 
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE)
@@ -575,7 +576,7 @@ class JobProcUnit(JobProcUnitProto):
         # Cleanup should be done before notify master job is finished.
         if await self.cleanup() is False:
             self._state = ProcUnit.STATE_DIRTY
-            self._channel.update_and_notify('state', self._state)
+            await self._channel.update_and_notify('state', self._state)
 
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
@@ -586,18 +587,24 @@ class JobProcUnit(JobProcUnitProto):
         path = build_dir+"/"+projName
 
         if platform.system() == "Windows":
-            ret = os.system("powershell.exe Remove-Item -Recurse -Force " + path)
-            if ret != 0:
-                return False
+            return await self._cleanup_windows(path)
         else:
-            try:
-                # Ignore FileNotFoundError
-                # cause there is noting to cleanup.
-                shutil.rmtree(path)
-            except FileNotFoundError:
-                return False
+            return await self._cleanup_unix(path)
 
-        return True
+    async def _cleanup_windows(self, path: str) -> bool:
+        ret = await execute_shell_until_complete(
+            "powershell.exe Remove-Item -Recurse -Force " + path)
+        return ret == 0
+
+    async def _cleanup_unix(self, path: str) -> bool:
+        try:
+            with ThreadPoolExecutor() as p:
+                await asyncio.get_running_loop()\
+                    .run_in_executor(p, shutil.rmtree, path)
+
+            return True
+        except Exception:
+            return False
 
     async def _job_result_transfer(self, target: str,
                                    job: NewLetter) -> None:
