@@ -53,6 +53,7 @@ class Worker:
 
         # Create Monitor
         monitor = Monitor(self.cfg.getConfig('WORKER_NAME'))
+        monitor.setupConnector(connector)
         monitor.start()
 
         # Create Processor

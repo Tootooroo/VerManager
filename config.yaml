@@ -20,6 +20,7 @@ BuildSet:
     GL5610:
       cmd:
         - .\GBN\src\gcom_gpon_build_boot.bat 1
+        - .\GBN\src\gcom_gpon_build_host.bat 1
         - cd .\BSP\config\image
         - rar a -r 5610gpon NOBRAND_OEM_TiNetS5610_10gpon
         - cd ..\..\..
@@ -29,6 +30,7 @@ BuildSet:
     GL5610-v3:
       cmd:
         - .\GBN\src\gcom_gpon_build_boot.bat 2
+        - .\GBN\src\gcom_gpon_build_host.bat 2
         - cd .\BSP\config\image
         - rar a -r 5610gpon_v3 NOBRAND_OEM_TiNetS5610_10gpon_v3
         - cd ..\..\..
@@ -38,6 +40,7 @@ BuildSet:
     GL8900_line:
       cmd:
         - .\GBN\src\gcom_gpon_build_boot.bat 6
+        - .\GBN\src\gcom_gpon_build_host.bat 6
         - cd .\BSP\config\image
         - rar a -r 8900_line NOBRAND_OEM_gcom_gpon_8900_line
         - cd ..\..\..
@@ -47,6 +50,7 @@ BuildSet:
     GL8900_ctrl:
       cmd:
         - .\GBN\src\gcom_gpon_build_boot.bat 5
+        - .\GBN\src\gcom_gpon_build_host.bat 5
         - cd .\BSP\config\image
         - rar a -r 8900_ctrl NOBRAND_OEM_gcom_gpon_8900_ctrl
         - cd ..\..\..
