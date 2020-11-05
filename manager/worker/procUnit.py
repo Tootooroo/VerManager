@@ -563,8 +563,8 @@ class JobProcUnit(JobProcUnitProto):
             import traceback
             traceback.print_exc()
 
-            await self.cleanup()
             await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+            await self.cleanup()
             return
 
         print("Send done")
@@ -572,13 +572,14 @@ class JobProcUnit(JobProcUnitProto):
         sys.stdout.flush()
         await asyncio.sleep(5)
 
+        # Notify to master
+        await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
+
         # Cleanup
         # Cleanup should be done before notify master job is finished.
         if await self.cleanup() is False:
             self._state = ProcUnit.STATE_DIRTY
             await self._channel.update_and_notify('state', self._state)
-
-        await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
     async def cleanup(self) -> bool:
         build_dir = cast(Info, self._config).getConfig('BUILD_DIR')
