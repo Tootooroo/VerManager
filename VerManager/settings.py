@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework'
+    'rest_framework',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -73,6 +74,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'VerManager.wsgi.application'
+ASGI_APPLICATION = "VerManager.asgi.application"
 
 
 # Database
@@ -84,12 +86,14 @@ vermng_mysql_passwd = os.environ.get('VERMNG_MYSQL_PASSWD')
 vermng_mysql_host = os.environ.get('VERMNG_MYSQL_HOST')
 vermng_mysql_port = os.environ.get('VERMNG_MYSQL_PORT')
 
+
 def mysql_param_from_env(varName, defVal):
     val = os.environ.get(varName)
     if val is None:
         return defVal
     else:
         return val
+
 
 DATABASES = {
     'default': {
