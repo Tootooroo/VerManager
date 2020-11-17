@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'channels',
+    'client.apps.ClientConfig',
 ]
 
 MIDDLEWARE = [
@@ -93,6 +94,16 @@ def mysql_param_from_env(varName, defVal):
         return defVal
     else:
         return val
+
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 
 DATABASES = {

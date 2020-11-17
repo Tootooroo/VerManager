@@ -20,16 +20,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from channels.generic.websocket import WebsocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer
+from client.models import Clients
+from typing import Dict, Any
+from channels.db import database_sync_to_async
 
 
-class CommuConsumer(WebsocketConsumer):
+class CommuConsumer(AsyncWebsocketConsumer):
 
     async def connect(self) -> None:
-        pass
-
-    async def receive(self, text_data=None, bytes_data=None) -> None:
-        pass
+        await client_create(self.channel_name)
 
     async def disconnect(self, close_code) -> None:
-        pass
+        await client_delete(self.channel_name)
+
+    async def server_message(self, event: Dict[str, Any]) -> None:
+        # Message from server to client.
+        await self.send(event['letter'].toString())
+
+
+async def client_create(name: str) -> None:
+    await database_sync_to_async(
+        Clients.objects.create
+    )(client_name=name)
+
+
+async def client_delete(name: str) -> None:
+    client = await database_sync_to_async(
+        Clients.objects.filter
+    )(client_name=name)
+
+    await database_sync_to_async(
+        client.delete
+    )()

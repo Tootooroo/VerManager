@@ -15,6 +15,7 @@ predicates = [
     lambda cfgs: "TimeZone" in cfgs
 ]
 
+
 class ManagerConfig(AppConfig):
     name = 'manager'
 
