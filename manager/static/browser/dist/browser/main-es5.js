@@ -1451,7 +1451,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   /***/
   function _(module, exports, __webpack_require__) {
     module.exports = __webpack_require__(
-    /*! /home/aydenlin/Projects/VerManager/manager/static/browser/src/main.ts */
+    /*! /home/ayden/Codebase/VerManager/manager/static/browser/src/main.ts */
     "./src/main.ts");
     /***/
   }

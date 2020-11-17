@@ -233,9 +233,10 @@ async def responseHandler(
 
 async def copyFileInExecutor(src: str, dest: str) -> None:
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(EVENT_HANDLER_TOOLS.ProcessPool,
-                               shutil.copy,
-                               src, dest)
+    await loop.run_in_executor(
+        EVENT_HANDLER_TOOLS.ProcessPool,
+        shutil.copy,
+        src, dest)
 
 
 async def temporaryBuild_handling(
@@ -307,19 +308,33 @@ async def responseHandler_ResultStore(
             dest = resultDir + seperator + fileName
             shutil.copy(path, dest)
 
+        print("Copy to public")
         await copyFileInExecutor(path, "public/"+fileName)
+        print("Copy done")
 
     except FileNotFoundError as e:
+        print(0)
+        print(e)
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
+        print(1)
+        print(e)
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
-    except Exception:
+    except Exception as e:
+        print(2)
+        print(e)
         traceback.print_exc()
 
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    print("Get url")
     url = cfg.config.getConfig('GitlabUr')
 
+    print("Set data")
     task.setData(url + "/data/" + fileName)
 
 
