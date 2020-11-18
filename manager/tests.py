@@ -26,7 +26,7 @@
 # iEntryTestCases, \
 # EventListenerTestCases
 
-
+"""
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
 
@@ -93,3 +93,10 @@ from manager.worker.TestCases.monitorTestCases import \
 
 from manager.worker.TestCases.umaintainerTestCases import \
     UnitMaintainerTestCase
+"""
+
+from manager.master.TestCases.jobTestCases import \
+    JobTestCases
+
+from manager.master.TestCases.jobMasterTestCases import \
+    JobMasterTestCases

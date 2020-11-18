@@ -203,8 +203,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             await self._log(
                 "Task " + task.id() + " is a SuperTask.")
             return await self._dispatchSuperTask(task)
+        else:
+            ret = await self._do_dispatch(task)
 
-        ret = await self._do_dispatch(task)
         return ret
 
     async def _do_dispatch(self, task: Task) -> bool:
@@ -349,7 +350,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 else:
                     return task_peek
 
-    # Dispatcher thread is response to assign task
+    # Dispatcher thread that is respond to assign task
     # in queue which name is taskWait
     async def _dispatching(self) -> None:
 

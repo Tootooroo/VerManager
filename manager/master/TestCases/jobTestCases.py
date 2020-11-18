@@ -20,22 +20,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+import unittest
+from manager.master.job import Job
+from manager.master.task import Task
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class JobTestCases(unittest.IsolatedAsyncioTestCase):
 
+    async def test_Job_Create(self) -> None:
+        # Setup & Exercise
+        job = Job("JobId", "JobCommandId", {})
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+        # Verify
+        self.assertIsNotNone(job)
 
+    async def test_Job_Tasks(self) -> None:
+        # Setup
+        job = Job("jobId", "JobCommandId", {})
 
-class Job_Command_Not_Found(Exception):
+        # Exercise
+        job.addTask(Task("ID", "SN", "VSN"))
 
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
+        # Verify
+        self.assertTrue(len(job.tasks()) == 1)

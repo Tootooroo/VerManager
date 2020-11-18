@@ -20,22 +20,29 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+from typing import Dict, List
+from manager.master.task import Task
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class Job:
 
+    def __init__(self, jobid: str, cmd_id: str, info: Dict[str, str]) -> None:
+        self.jobid = jobid
+        self.cmd_id = cmd_id
+        self._tasks = {}  # type: Dict[str, Task]
+        self._job_info = info
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+    def addTask(self, task: Task) -> None:
+        ident = task.id()
+        if ident not in self._tasks:
+            self._tasks[ident] = task
 
+    def removeTask(self, ident: str) -> None:
+        if ident in self._tasks:
+            del self._tasks[ident]
 
-class Job_Command_Not_Found(Exception):
+    def tasks(self) -> List[Task]:
+        return list(self._tasks.values())
 
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
+    def get_info(self, key: str) -> str:
+        return self._job_info[key]

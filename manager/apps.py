@@ -3,8 +3,6 @@ import sys
 
 from django.apps import AppConfig
 
-initialized = False
-
 predicates = [
     lambda cfgs: "Address" in cfgs,
     lambda cfgs: "Port" in cfgs,

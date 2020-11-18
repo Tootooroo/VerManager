@@ -228,7 +228,7 @@ class WorkerRoom(ModuleDaemon, Subject, Observer):
             worker.removeTask(tid)
 
     # while eventlistener notify that a worker is disconnected
-    # just change it's state into waiting wait <waiting_interval>
+    # just change it's state into waiting. After <waiting_interval>
     # minutes if the workers is still disconnected then change
     # it's state into disconnected and wait several seconds
     # and remove from WorkerRoom
