@@ -24,28 +24,42 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from client.models import Clients
 from typing import Dict, Any
 from channels.db import database_sync_to_async
+from channels.exceptions import AcceptConnection
 
 
 class CommuConsumer(AsyncWebsocketConsumer):
 
     async def connect(self) -> None:
+        # Use channel name as a client
+        # so another app can use this consumer
+        # to communicate with client
         await client_create(self.channel_name)
+
+        # Accept connection
+        raise AcceptConnection
 
     async def disconnect(self, close_code) -> None:
         await client_delete(self.channel_name)
 
     async def server_message(self, event: Dict[str, Any]) -> None:
         # Message from server to client.
-        await self.send(event['letter'].toString())
+        await self.send(str(event['message']))
+
+    async def receive(self, text_data=None, bytes_data=None) -> None:
+        pass
 
 
 async def client_create(name: str) -> None:
+    # Store Client's name into database
+    # calling when a client is connected
     await database_sync_to_async(
         Clients.objects.create
     )(client_name=name)
 
 
 async def client_delete(name: str) -> None:
+    # Delete client's name from database
+    # calling when a client is disconnected
     client = await database_sync_to_async(
         Clients.objects.filter
     )(client_name=name)

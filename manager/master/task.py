@@ -134,6 +134,10 @@ class Task(TaskBase):
 
         self.lastAccess = datetime.utcnow()
 
+        # A Variable that reference to the job that
+        # the task belong to.
+        self.job = None  # type: Any
+
     def getType(self) -> TaskType:
         return self.type
 

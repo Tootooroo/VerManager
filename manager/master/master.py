@@ -47,6 +47,12 @@ from manager.basic.dataLink import DataLinker, DataLink
 
 ServerInstance = None  # type:  Optional['ServerInst']
 
+
+def get_module(mod_id: str) -> Optional[Module]:
+    assert(ServerInstance is not None)
+    return ServerInstance.getModule(mod_id)
+
+
 predicates = [
     lambda cfgs:  "Address" in cfgs,
     lambda cfgs:  "Port" in cfgs,
