@@ -21,10 +21,25 @@
 # SOFTWARE.
 
 import unittest
+import typing
 import manager.master.configs as config
 from manager.basic.info import Info
+from manager.master.task import Task
 from manager.master.job import Job
 from manager.master.jobMaster import JobMaster
+from manager.basic.endpoint import Endpoint
+from manager.models import Jobs
+from asgiref.sync import sync_to_async
+
+
+class DispatcherFake(Endpoint):
+
+    def __init__(self) -> None:
+        Endpoint.__init__(self)
+        self.tasks = []  # type: typing.List[str]
+
+    async def handle(self, task: Task) -> None:
+        self.tasks.append(task.id())
 
 
 class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
@@ -46,7 +61,7 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         dispatched via dispatcher.
         """
         # Setup
-        job = Job("JobMasterTest", "GL8900", {"sn": "123456", "vsn": "123456"})
+        job = Job("JobMasterTest1", "GL8900", {"sn": "123456", "vsn": "123456"})
 
         # Exercise
         self.sut.bind(job)
@@ -54,11 +69,15 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         idents = [t.id() for t in job.tasks()]
         self.assertTrue(len(job.tasks()) == 5)
-        self.assertTrue("JobMasterTest_GL5610" in idents)
-        self.assertTrue("JobMasterTest_GL5610-v3" in idents)
-        self.assertTrue("JobMasterTest_GL8900_line" in idents)
-        self.assertTrue("JobMasterTest_GL8900_ctrl" in idents)
-        self.assertTrue("JobMasterTest" in idents)
+        self.assertTrue("JobMasterTest1_GL5610" in idents)
+        self.assertTrue("JobMasterTest1_GL5610-v3" in idents)
+        self.assertTrue("JobMasterTest1_GL8900_line" in idents)
+        self.assertTrue("JobMasterTest1_GL8900_ctrl" in idents)
+        self.assertTrue("JobMasterTest1" in idents)
+
+        # Teardown
+        job = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest1")
+        await sync_to_async(job.delete)()  # type: ignore
 
     async def test_JobMaster_DoJob(self) -> None:
         """
@@ -69,9 +88,20 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Setup
         job = Job("JobMasterTest", "GL8900", {"sn": "123456", "vsn": "123456"})
+        fake = DispatcherFake()
+        self.sut.set_peer(fake)
 
         # Exercise
-        self.sut.doJob(job)
+        await self.sut.doJob(job)
 
         # Verify
-        self.assertTrue(False)
+        self.assertTrue(len(job.tasks()) == 5)
+        self.assertTrue("JobMasterTest_GL5610" in fake.tasks)
+        self.assertTrue("JobMasterTest_GL5610-v3" in fake.tasks)
+        self.assertTrue("JobMasterTest_GL8900_line" in fake.tasks)
+        self.assertTrue("JobMasterTest_GL8900_ctrl" in fake.tasks)
+        self.assertTrue("JobMasterTest" in fake.tasks)
+
+        # Teardown
+        job = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")
+        await sync_to_async(job.delete)()  # type: ignore

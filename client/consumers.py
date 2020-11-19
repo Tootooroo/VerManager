@@ -22,9 +22,10 @@
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from client.models import Clients
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, List
 from channels.db import database_sync_to_async
 from channels.exceptions import AcceptConnection
+from client.messages import JobInfoMessage, JobStateChangeMessage
 
 
 class CommuConsumer(AsyncWebsocketConsumer):
@@ -47,6 +48,21 @@ class CommuConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None) -> None:
         pass
+
+    async def job_info(self, msg: str) -> None:
+        # Analyse message
+        jobid, tasks = msg
+        message = JobInfoMessage(jobid, tasks)
+
+        # Send to client
+        await self.send(str(message))
+
+    async def job_state_change(self, msg: str) -> None:
+        jobid, taskid, state = msg.split(":")
+        message = JobStateChangeMessage(jobid, taskid, state)
+
+        # Send to client
+        await self.send(str(message))
 
 
 async def client_create(name: str) -> None:

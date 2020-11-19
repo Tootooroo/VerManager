@@ -44,7 +44,6 @@ from manager.master.build import Build, BuildSet
 
 
 TaskState = int
-
 TaskType = int
 
 
@@ -69,6 +68,13 @@ class TaskBase(ABC):
 
     # Task is failure.
     STATE_FAILURE = 3
+
+    STATE_STR_MAPPING = {
+        STATE_PREPARE: "PREPARE",
+        STATE_IN_PROC: "IN_PROC",
+        STATE_FINISHED: "FIN",
+        STATE_FAILURE: "FAIL",
+    }
 
     STATE_TOPOLOGY = {
         STATE_PREPARE: [STATE_PREPARE, STATE_IN_PROC, STATE_FAILURE],

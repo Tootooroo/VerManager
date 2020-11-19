@@ -45,6 +45,7 @@ from manager.master.taskTracker import TaskTracker
 from manager.master.verControl import RevSync
 from manager.basic.dataLink import DataLinker, DataLink
 
+
 ServerInstance = None  # type:  Optional['ServerInst']
 
 

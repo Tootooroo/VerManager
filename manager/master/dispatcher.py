@@ -35,7 +35,7 @@ from manager.basic.type import Error
 from manager.master.task import Task, SuperTask, SingleTask, PostTask
 from manager.master.taskTracker import TaskTracker
 from manager.master.workerRoom import WorkerRoom
-from manager.basic.commands import ReWorkCommand
+
 
 M_NAME = "Dispatcher"
 

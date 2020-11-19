@@ -39,7 +39,18 @@ class JobTestCases(unittest.IsolatedAsyncioTestCase):
         job = Job("jobId", "JobCommandId", {})
 
         # Exercise
-        job.addTask(Task("ID", "SN", "VSN"))
+        job.addTask("ID", Task("ID", "SN", "VSN"))
 
         # Verify
         self.assertTrue(len(job.tasks()) == 1)
+
+    async def test_Job_toString(self) -> None:
+        # Setup
+        job = Job("JobId", "JobCmd", {})
+
+        # Exercise
+        job.addTask("ID1", Task("ID1", "SN", "VSN"))
+        job.addTask("ID2", Task("ID2", "SN", "VSN"))
+
+        # Verify
+        self.assertEqual("JobId::ID1:ID2", str(job))

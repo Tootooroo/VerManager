@@ -48,6 +48,11 @@ class Versions(models.Model):
         return self.vsn
 
 
+class Jobs(models.Model):
+    jobid = models.CharField(max_length=100, primary_key=True)
+    dateTime = models.DateTimeField(default=timezone.now)
+
+
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
 
     make_sure_mysql_usable()
