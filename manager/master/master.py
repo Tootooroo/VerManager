@@ -167,6 +167,7 @@ class ServerInst(Thread):
         async def handler_dispatcher(data):
             await dispatcher.workerLost_redispatch(data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
+        dispatcher.handler_install(EVENT_M_NAME, handler)
 
         # Install log handler to logger
         for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:

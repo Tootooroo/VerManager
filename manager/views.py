@@ -161,36 +161,6 @@ class VersionViewSet(viewsets.ModelViewSet):
 
         return HttpResponse()
 
-    @action(detail=True, methods=['post'])
-    def gen_status_query(self, request, pk=None) -> Response:
-
-        assert(S.ServerInstance is not None)
-
-        dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
-
-        if not dispatcher.isTaskExists(pk):
-            print("Not exists")
-            return HttpResponseBadRequest("Not Exists")
-
-        if dispatcher.isTaskFinished(pk):
-            resultUrl = dispatcher.retrive(pk)
-            return Response(resultUrl)
-
-        elif dispatcher.isTaskInProc(pk) or dispatcher.isTaskPrepare(pk):
-
-            # Update last counter of Task. This counter will
-            # give help to remove outdated tasks
-            dispatcher.taskLastUpdate(pk)
-            return HttpResponseNotModified()
-
-        elif dispatcher.isTaskFailure(pk):
-            print("Failed")
-            dispatcher.removeTask(pk)
-            return HttpResponseBadRequest()
-
-        print("Last")
-        return HttpResponseBadRequest()
-
 
 class RevisionViewSet(viewsets.ModelViewSet):
     queryset = Revisions.objects.all().order_by('-dateTime')

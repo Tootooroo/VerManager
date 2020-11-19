@@ -28,7 +28,7 @@ from typing import Dict, Any, Tuple
 from manager.master.job import Job
 from manager.master.exceptions import Job_Command_Not_Found
 from manager.master.build import Build, BuildSet
-from manager.master.task import SingleTask, PostTask, Task
+from manager.master.task import SingleTask, PostTask
 from manager.basic.endpoint import Endpoint
 from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
@@ -48,6 +48,8 @@ class JobMaster(Endpoint):
 
         self._jobs = {}  # type: Dict[str, Job]
         self._config = config.config
+
+        self._recovery()
 
     async def doJob(self, job: Job) -> None:
         # Dispatch job
@@ -79,6 +81,28 @@ class JobMaster(Endpoint):
             await self.peer_notify(task)
 
         job.state = Job.STATE_IN_PROCESSING
+
+    async def _recovery(self) -> None:
+        """
+        Recovery Jobs that does not done in
+        previous boot time.
+        """
+
+        jobs = await database_sync_to_async(
+            Jobs.objects.all
+        )()
+
+        # Is there some jobs that need to recover.
+        if len(jobs) == 0:
+            return
+
+        jobs = await database_sync_to_async(
+            jobs.order_by
+        )('-dateTime')
+
+        for job in jobs:
+            await self._doJob(job)
+            await self.notify_client(job)
 
     async def notify_client(self, job: Job) -> None:
         channel_layer = get_channel_layer()
@@ -180,7 +204,7 @@ class JobMaster(Endpoint):
                         revision=job.get_info('sn'),
                         build=build,
                         extra={})
-        job.addTask(st)
+        job.addTask(build.getIdent(), st)
 
     def exists(self, jobid: str) -> bool:
         return jobid in self._jobs

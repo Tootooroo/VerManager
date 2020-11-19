@@ -383,40 +383,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             else:
                 continue
 
-    async def _taskAging(self) -> None:
-
-        while True:
-            # Aging check for every 1 seconds
-            await asyncio.sleep(1)
-
-            # For a task that refs reduce
-            # to 0 do aging instance otherwise wait 1 min
-            tasks_outdated = [
-                t for t in cast(TaskTracker, self._taskTracker).tasks()
-                if t.refs == 0 or (datetime.utcnow() - t.last()).seconds > 3]
-
-            for t in tasks_outdated:
-                ident = t.id()
-
-                if cast(WorkerRoom, self._workers).getNumOfWorkers() != 0:
-                    # Task in proc or prepare status
-                    # will not be aging even though
-                    # their counter is out of date.
-                    if t.isProc() or t.isPrepare():
-                        continue
-                    else:
-                        # Need to check that is this
-                        # task dependen on another task
-                        deps = cast(List[Task], t.dependedBy())
-                        dep_state = \
-                            [dep.isProc() or dep.isPrepare for dep in deps]
-
-                        if True in dep_state:
-                            continue
-
-                await self._log("Remove task " + ident)
-                cast(TaskTracker, self._taskTracker).untrack(ident)
-
     # Cancel a task
     # This method cannot cancel a member of a SuperTask
     # but this method can cancel a SuperTask.
