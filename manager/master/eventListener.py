@@ -116,10 +116,6 @@ class Entry:
         if event is None:
             return None
 
-        import datetime
-        current = datetime.datetime.now()
-        print(str(current) + " : " + str(event))
-
         if isinstance(event, HeartbeatLetter):
             await self._heartbeatProc(event)
             return None

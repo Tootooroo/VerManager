@@ -194,7 +194,6 @@ class Linker:
                     raise ConnectionError()
                 letter = await receving(reader, timeout=3)
 
-                print(str(datetime.now()) + " : "  + str(letter))
             except (ConnectionError, ConnectionResetError, BrokenPipeError):
                 # Wait a while
                 await asyncio.sleep(1)
@@ -371,7 +370,6 @@ class Linker:
 
         try:
             await sending(link.writer, hb)
-            print(str(datetime.now()) + " : Send HB " + str(hb))
         except ConnectionError:
             # Just return
             # that link will be rebuild while timer

@@ -2,6 +2,7 @@ import os
 import sys
 
 from django.apps import AppConfig
+import manager.master.configs as cfg
 
 predicates = [
     lambda cfgs: "Address" in cfgs,
@@ -20,6 +21,8 @@ class ManagerConfig(AppConfig):
     def ready(self):
         from manager.basic.info import Info
         import manager.master.master as S
+
+        return None
 
         if os.environ.get('RUN_MAIN') == 'true':
             info = Info("./config.yaml")

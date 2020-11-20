@@ -51,8 +51,9 @@ class CommuConsumer(AsyncWebsocketConsumer):
 
     async def job_info(self, msg: str) -> None:
         # Analyse message
-        jobid, tasks = msg
-        message = JobInfoMessage(jobid, tasks)
+        jobid, tasks = msg.split("::")
+        tasks_list = tasks.split(":")
+        message = JobInfoMessage(jobid, tasks_list)
 
         # Send to client
         await self.send(str(message))
@@ -63,6 +64,12 @@ class CommuConsumer(AsyncWebsocketConsumer):
 
         # Send to client
         await self.send(str(message))
+
+    async def job_fin(self, msg: str) -> None:
+        pass
+
+    async def job_fail(self, msg: str) -> None:
+        pass
 
 
 async def client_create(name: str) -> None:

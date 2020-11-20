@@ -27,6 +27,8 @@ import os
 from typing import cast
 from manager.master.build import Build, BuildSet
 from manager.master.task import Task
+from manager.master.job import Job
+from manager.master.jobMaster import JobMaster
 from manager.master.master import ServerInst
 from manager.worker.worker import Worker
 from manager.master.dispatcher import M_NAME as DISPATCH_M_NAME, \
@@ -36,11 +38,12 @@ from manager.master.dispatcher import M_NAME as DISPATCH_M_NAME, \
 class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.master = ServerInst("127.0.0.1", 30000, "./config.yaml")
+        self.master = ServerInst("127.0.0.1", 30001, "./config_test.yaml")
         self.worker = Worker("./manager/worker/config.yaml")
         self.worker1 = Worker("./manager/worker/config1.yaml")
         self.worker2 = Worker("./manager/worker/config2.yaml")
 
+    @unittest.skip("")
     async def test_Functional_Startup(self) -> None:
         # Exercise
         self.master.start()
@@ -48,53 +51,17 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         await asyncio.sleep(10)
 
-    @unittest.skip("")
-    async def test_Functional_DispatchSingleTask(self) -> None:
-        # setup
-        self.master.start()
-        await asyncio.sleep(1)
-        self.worker.start_nowait()
-        await asyncio.sleep(1)
-
-        # Exercise
-        task = Task("ID", "SN", "VSN")
-        build = Build("Build",
-                      {"cmd": ["sleep 5", "echo HELLO > result"],
-                       "output": ["./result"]})
-        task.setBuild(build)
-        task = task.transform()
-        dispatcher = cast(Dispatcher, self.master.getModule(DISPATCH_M_NAME))
-
-        dispatcher.dispatch(task)
-
-        # Verify
-        await asyncio.sleep(10)
-        self.assertTrue(os.path.exists("./data/result"))
-
-    @unittest.skip("")
-    async def test_Functional_DispatchSuperTaskWithOnlyOneWorker(self) -> None:
+    async def test_Functional_DoJob(self) -> None:
         # Setup
         self.master.start()
-
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
         self.worker.start_nowait()
+        await asyncio.sleep(1)
 
         # Exercise
-        task = Task("ID", "SN", "VSN")
-        bs = BuildSet(
-            {"Merge": {"cmd": ["cat file1 file2 > file3"], "output": ["./file3"]},
-             "Builds": {
-                 "build1": {"cmd": ["echo file1 > file1"], "output": ["./file1"]},
-                 "build2": {"cmd": ["echo file2 > file2"], "output": ["./file2"]},
-             }
-            }
-        )
-        task.setBuild(bs)
-        task = task.transform()
+        job = Job("Job", "GL8900", {"sn": "123456", "vsn": "123456"})
+        job_master = cast(JobMaster, self.master.getModule("JobMaster"))
 
-        dispatcher = cast(Dispatcher, self.master.getModule(DISPATCH_M_NAME))
-        dispatcher.dispatch(task)
+        await job_master.do_job(job)
 
-        # Verify
-        await asyncio.sleep(10)
-        self.assertTrue(os.path.exists("./data/file3"))
+        await asyncio.sleep(3600)

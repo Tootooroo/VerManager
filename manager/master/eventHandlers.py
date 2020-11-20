@@ -42,7 +42,7 @@ from manager.basic.type import Error
 from manager.basic.letter import Letter, \
     ResponseLetter, BinaryLetter, NotifyLetter
 
-from manager.master.task import Task, SuperTask, SingleTask, PostTask
+from manager.master.task import Task, SingleTask, PostTask
 from manager.master.dispatcher import Dispatcher
 
 from manager.basic.storage import StoChooser
@@ -165,23 +165,19 @@ class EVENT_HANDLER_TOOLS:
     async def _singletask_fin_action(
             t: SingleTask, env: Entry.EntryEnv) -> None:
 
-        if t.getParent() is None:
+        if t.job.numOfTasks() == 1:
             await responseHandler_ResultStore(t, env)
 
     @staticmethod
     async def _posttask_fin_action(t: PostTask, env: Entry.EntryEnv) -> None:
-        super = t.getParent()
-        assert(super is not None)
+        Temporary = t.job.get_info('Temporary')
 
-        extra = super.getExtra()
-        assert(extra is not None)
-
-        if "Temporary" in extra:
+        if Temporary is not None and Temporary == 'true':
             await temporaryBuild_handling(t, env)
         else:
-            await responseHandler_ResultStore(super, env)
+            await responseHandler_ResultStore(t, env)
 
-        super.toFinState()
+        t.toFinState()
 
     @staticmethod
     async def _tasks_fin_action(t: Task, env: Entry.EntryEnv) -> None:
@@ -189,16 +185,7 @@ class EVENT_HANDLER_TOOLS:
 
     @staticmethod
     async def _tasks_fail_action(t: Task, env: Entry.EntryEnv) -> None:
-
-        if isinstance(t, SingleTask) or isinstance(t, PostTask):
-
-            if t.isAChild():
-                dispatcher = env.modules.getModule(DISPATCHER_M_NAME) \
-                    # type: Dispatcher
-
-                parent = t.getParent()
-                if isinstance(parent, SuperTask):
-                    await dispatcher.cancel(parent.id())
+        return None
 
 
 async def responseHandler(
@@ -226,9 +213,6 @@ async def responseHandler(
     # task's state is changed.
     type = env.eventListener.NOTIFY_TASK_STATE_CHANGED
     await env.eventListener.notify(type, (taskId, state))
-
-    if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
-        wr.removeTaskFromWorker(ident, taskId)
 
 
 async def copyFileInExecutor(src: str, dest: str) -> None:
@@ -273,16 +257,7 @@ async def responseHandler_ResultStore(
 
     logger = env.modules.getModule('Logger')
 
-    # Pending feature
-    # Store result to the target position specified in configuration file
-    # Send email to notify that task id done
-    if isinstance(task, SuperTask):
-        # Binary file correspond to a SuperTask
-        # is transfer from PostListener.
-        taskId = PostTask.genIdent(task.id())
-    else:
-        taskId = task.id()
-
+    taskId = task.id()
     extra = task.getExtra()
 
     trans_fin = EVENT_HANDLER_TOOLS.transfer_finished
@@ -313,13 +288,9 @@ async def responseHandler_ResultStore(
         print("Copy done")
 
     except FileNotFoundError as e:
-        print(0)
-        print(e)
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
-        print(1)
-        print(e)
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except Exception as e:
@@ -327,15 +298,8 @@ async def responseHandler_ResultStore(
         print(e)
         traceback.print_exc()
 
-    import sys
-    sys.stdout.flush()
-    sys.stderr.flush()
-
-    print("Get url")
     url = cfg.config.getConfig('GitlabUr')
-
-    print("Set data")
-    task.setData(url + "/data/" + fileName)
+    task.job.job_result = url + "/data/" + fileName
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter, env: Entry.EntryEnv) -> None:

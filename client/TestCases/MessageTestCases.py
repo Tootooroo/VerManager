@@ -20,26 +20,40 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+
+import unittest
+from client.messages import Message
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class MessageTestCaes(unittest.IsolatedAsyncioTestCase):
 
+    async def test_Message_toString(self) -> None:
+        # Setup
+        msg = Message("T1", {"C": ["1", "2"]})
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+        # Exercise & Verify
+        self.assertEqual(Message.FORMAT_TEMPLATE %
+                         ("T1", str({"C": ["1", "2"]}).replace("'", "\"")), str(msg))
 
+    async def test_Message_fromString(self) -> None:
+        # Setup
+        msg_str = Message.FORMAT_TEMPLATE % ("T1", '{"C": "C1"}')
 
-class Job_Command_Not_Found(Exception):
+        # Exercise
+        msg = Message.fromString(msg_str)
 
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
+        # Verify
+        self.assertEqual("T1", msg.type)
+        self.assertEqual({"C": "C1"}, msg.content)
 
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
+    async def test_Message_TransformCycle(self) -> None:
+        # Setup
+        msg = Message("T1", {"C": ["1", "2"]})
+        msg_str = str(msg)
 
+        # Exercise
+        msg1 = Message.fromString(msg_str)
 
-class Job_Bind_Failed(Exception):
-    pass
+        # Verify
+        self.assertEqual(msg.type, msg1.type)
+        self.assertEqual(msg.content, msg1.content)

@@ -44,14 +44,14 @@ class Observer(ABC):
         if source in self._handlers:
             del self._handlers[source]
 
-    async def update(self, source: str, data: Any) -> None:
+    async def update(self, type: str, data: Any) -> None:
         """
         Called by Subject to notify observer
         """
-        if source not in self._handlers:
+        if type not in self._handlers:
             return None
 
-        handler = self._handlers[source]
+        handler = self._handlers[type]
 
         await handler(data)
 

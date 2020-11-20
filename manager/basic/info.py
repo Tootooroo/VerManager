@@ -73,7 +73,7 @@ class InfoTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
         # Fixture setup
-        self.cfgs = Info("./config.yaml")
+        self.cfgs = Info("./WorkSpace/config.yaml")
 
     def test_Info_getConfig(self) -> None:
         # Exercise

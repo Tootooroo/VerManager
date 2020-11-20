@@ -44,6 +44,7 @@ from manager.basic.storage import Storage
 from manager.master.taskTracker import TaskTracker
 from manager.master.verControl import RevSync
 from manager.basic.dataLink import DataLinker, DataLink
+from manager.master.jobMaster import JobMaster
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -110,15 +111,23 @@ class ServerInst(Thread):
         tracker = TaskTracker()
         self.addModule(tracker)
 
-        # Dispatcher init
+        # JobMaster Init
+        jobMaster = JobMaster()
+        self.addModule(jobMaster)
+
+        # Dispatcher Init
         dispatcher = Dispatcher()
         dispatcher.setWorkerRoom(workerRoom)
         dispatcher.setTaskTracker(tracker)
         # Setup task's worker search condition
         dispatcher.add_worker_search_cond(SingleTask, viaOverhead)
         dispatcher.add_worker_search_cond(PostTask, theListener)
+        # Set as peer of JobMaster
+        jobMaster.set_peer(dispatcher)
+
         self.addModule(dispatcher)
 
+        # EventListener Init
         eventListener = EventListener()
         eventListener.registerEvent(Letter.Response, responseHandler)
         eventListener.registerEvent(Letter.LogRegister, logRegisterhandler)
@@ -139,8 +148,8 @@ class ServerInst(Thread):
         storage = Storage(info.getConfig('Storage'), self)
         self.addModule(storage)
 
-        revSyncner = RevSync()
-        self.addModule(revSyncner)
+        #revSyncner = RevSync()
+        #self.addModule(revSyncner)
 
         # Subscribe to subjects
         eventListener.subscribe(EventListener.NOTIFY_LOST, workerRoom)
@@ -167,7 +176,7 @@ class ServerInst(Thread):
         async def handler_dispatcher(data):
             await dispatcher.workerLost_redispatch(data)
         dispatcher.handler_install(WR_M_NAME, handler_dispatcher)
-        dispatcher.handler_install(EVENT_M_NAME, handler)
+        dispatcher.handler_install(EVENT_M_NAME, dispatcher.job_notify_handle)
 
         # Install log handler to logger
         for module in [EVENT_M_NAME, WR_M_NAME, DISPATCHER_M_NAME]:
@@ -197,8 +206,7 @@ class ServerInst(Thread):
 
     def run(self) -> None:
 
-        # Load configuration
-        cfg.config = Info("./config.yaml")
+        cfg.config = Info(self._configPath)
 
         # Start this server instance
         asyncio.run(self._execute())

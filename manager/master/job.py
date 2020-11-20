@@ -39,12 +39,15 @@ class Job:
         self.state = Job.STATE_PENDING
         self.result = None  # type: Any
 
-    def addTask(self, ident:str, task: Task) -> None:
+    def addTask(self, ident: str, task: Task) -> None:
         if ident not in self._tasks:
             self._tasks[ident] = task
 
     def getTask(self, taskid: str) -> Task:
         return self._tasks[taskid]
+
+    def numOfTasks(self) -> int:
+        return len(self._tasks)
 
     def removeTask(self, ident: str) -> None:
         if ident in self._tasks:
@@ -53,7 +56,9 @@ class Job:
     def tasks(self) -> List[Task]:
         return list(self._tasks.values())
 
-    def get_info(self, key: str) -> str:
+    def get_info(self, key: str) -> Optional[str]:
+        if key not in self._job_info:
+            return None
         return self._job_info[key]
 
     def is_fin(self) -> bool:

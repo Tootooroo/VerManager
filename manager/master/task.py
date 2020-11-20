@@ -24,7 +24,7 @@ import unittest
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, \
-    BinaryIO, Union, Any, Tuple, Callable, cast
+    BinaryIO, Union, Any, Callable, cast
 from functools import reduce
 from manager.basic.type import Ok, Error, State
 from manager.basic.letter import NewLetter, Letter, \
@@ -34,14 +34,10 @@ from manager.basic.restricts import TASK_ID_MAX_LENGTH, VERSION_MAX_LENGTH, \
     REVISION_MAX_LENGTH
 
 from datetime import datetime
-from threading import Lock
-
 from manager.master.build import Build, Merge
 
 # Need by test
 from manager.basic.info import Info
-from manager.master.build import Build, BuildSet
-
 
 TaskState = int
 TaskType = int
@@ -87,14 +83,6 @@ class TaskBase(ABC):
     @abstractmethod
     def id(self) -> str:
         """ identity of task """
-
-    @abstractmethod
-    def dependence(self) -> List['TaskBase']:
-        """ Which task dependen to """
-
-    @abstractmethod
-    def dependedBy(self) -> List['TaskBase']:
-        """ Return a liste of tasks that depend on this task  """
 
     @abstractmethod
     def taskState(self) -> TaskState:
@@ -214,12 +202,6 @@ class Task(TaskBase):
     def isFinished(self) -> bool:
         return self.state == Task.STATE_FINISHED
 
-    def dependence(self) -> List['TaskBase']:
-        return []
-
-    def dependedBy(self) -> List['TaskBase']:
-        return []
-
     # fixme:  Python 3.5.3 raise an NameError exception:
     #        name 'BinaryIO' is not defined. Temporarily
     #        use Any to instead of BinaryIO
@@ -241,19 +223,6 @@ class Task(TaskBase):
 
         return cond1 and cond2 and cond3 and cond4
 
-    def transform(self) -> 'Task':
-        if type(self) is not Task:
-            return self
-
-        if isinstance(self.build, Build):
-            return SingleTask(self.id(), self.sn, self.vsn,
-                              self.build, self.extra)
-        elif isinstance(self.build, BuildSet):
-            return SuperTask(self.id(), self.sn, self.vsn,
-                             self.build, self.extra)
-
-        raise TASK_TRANSFORM_ERROR
-
 
 class SingleTask(Task):
 
@@ -267,16 +236,6 @@ class SingleTask(Task):
 
         self.type = SingleTask.Type
         self._build = build
-        self._parent = None  # type:  Optional[SuperTask]
-
-    def setParent(self, parent: SuperTask) -> None:
-        self._parent = parent
-
-    def getParent(self) -> Optional[SuperTask]:
-        return self._parent
-
-    def isAChild(self) -> bool:
-        return self._parent is not None
 
     def isValid(self) -> bool:
         cond1 = len(self.taskId) <= BinaryLetter.TASK_ID_FIELD_LEN
@@ -286,30 +245,13 @@ class SingleTask(Task):
 
         return cond1 and cond2 and cond3 and cond4
 
-    def denpendence(self) -> List['TaskBase']:
-        return []
-
-    def dependedBy(self) -> List['TaskBase']:
-        if self._parent is not None:
-            post = self._parent.getPostTask()
-            if post is not None:
-                return [self._parent, post]
-        return []
-
     def toLetter(self) -> NewLetter:
-
         build = self._build
         extra = {"resultPath": build.getOutput(), "cmds": build.getCmd()}
-
-        if self.isAChild():
-            parent_ident = self.getParent().id()  # type:  ignore
-            needPost = "true"
-        else:
-            parent_ident = ""
-            needPost = "false"
+        needPost = "false"
 
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
-                         parent=parent_ident,
+                         parent="",
                          extra=extra,
                          needPost=needPost)
 
@@ -329,20 +271,10 @@ class PostTask(Task):
         self.type = PostTask.Type
         self._frags = frags
         self._merge = merge
-        self._parent = None  # type:  Optional[SuperTask]
 
     @staticmethod
     def genIdent(ident: str) -> str:
         return ident+"__Post"
-
-    def setParent(self, parent: SuperTask) -> None:
-        self._parent = parent
-
-    def getParent(self) -> Optional[SuperTask]:
-        return self._parent
-
-    def isAChild(self) -> bool:
-        return self._parent is not None
 
     def isValid(self) -> bool:
         cond1 = len(self.taskId) <= BinaryLetter.TASK_ID_FIELD_LEN
@@ -351,19 +283,6 @@ class PostTask(Task):
         cond4 = " " not in (self.taskId+self.vsn+self.sn)
 
         return cond1 and cond2 and cond3 and cond4
-
-    def dependence(self) -> List[TaskBase]:
-        if self._parent is None:
-            return []
-
-        children = self._parent.getChildren()
-        return [child for child in children if child is not self]
-
-    def dependedBy(self) -> List[TaskBase]:
-        if self._parent is not None:
-            return [self._parent]
-
-        return []
 
     def toLetter(self) -> PostTaskLetter:
         return PostTaskLetter(
@@ -438,7 +357,7 @@ class TaskGroup:
         return list(l_id)
 
     def isExists(self, ident: str) -> bool:
-        return self.__isExists(ident)
+        return self._isExists(ident)
 
     def _isExists(self, ident: str) -> bool:
         task_dicts = list(self._tasks.values())
@@ -456,7 +375,7 @@ class TaskGroup:
             ret = predicate(t)
 
             if ret is True:
-                self.__remove(t.id())
+                self._remove(t.id())
 
     def markPre(self, id:  str) -> State:
         return self._mark(id, Task.STATE_PREPARE)
@@ -492,46 +411,3 @@ class TaskTestCases(unittest.TestCase):
         info = Info("./config_test.yaml")
         buildSet = info.getConfig('BuildSet')
         self.bs = BuildSet(buildSet)
-
-    def test_SuperTask_Children(self):
-        # Create a taks object
-        t = SuperTask("VersionToto", "ABC", "VersionToto", self.bs, {})
-
-        # Get children of the task
-        children = [child.id() for child in t.getChildren()]
-
-        # Check memebers
-        self.assertTrue("VersionToto__GL5610" in children)
-        self.assertTrue("VersionToto__GL5610-v2" in children)
-        self.assertTrue("VersionToto__GL5610-v3" in children)
-        self.assertTrue("VersionToto__GL8900" in children)
-
-    def test_SuperTask_Deps(self) -> None:
-        # Create a taks object
-        t = SuperTask("VersionToto", "ABC", "VersionToto", self.bs, {})
-
-        # Verify
-        deps = [t.id() for t in t.dependence()]
-        self.assertTrue("VersionToto__GL5610" in deps)
-        self.assertTrue("VersionToto__GL5610-v2" in deps)
-        self.assertTrue("VersionToto__GL5610-v3" in deps)
-        self.assertTrue("VersionToto__GL8900" in deps)
-        self.assertTrue("VersionToto__Post" in deps)
-
-        post = cast(PostTask, t.getPostTask())
-        deps = [t.id() for t in post.dependence()]
-        self.assertTrue("VersionToto__GL5610" in deps)
-        self.assertTrue("VersionToto__GL5610-v2" in deps)
-        self.assertTrue("VersionToto__GL5610-v3" in deps)
-        self.assertTrue("VersionToto__GL8900" in deps)
-
-        depBy = [t.id() for t in post.dependedBy()]
-        self.assertTrue("VersionToto" in depBy)
-
-        depBys = [t.dependedBy() for t in t.dependence()
-                  if isinstance(t, SingleTask)]
-
-        for d in depBys:
-            d_id = [t.id() for t in d]
-            self.assertTrue("VersionToto" in d_id)
-            self.assertTrue("VersionToto__Post" in d_id)

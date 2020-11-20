@@ -25,16 +25,16 @@ import asyncio
 from functools import reduce
 from typing import Any, List, Optional, Callable, \
     Dict, Tuple, cast, Type
-from datetime import datetime
 from collections import namedtuple
 from threading import Condition
 from manager.basic.observer import Subject, Observer
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.worker import Worker
 from manager.basic.type import Error
-from manager.master.task import Task, SuperTask, SingleTask, PostTask
+from manager.master.task import Task, SingleTask, PostTask
 from manager.master.taskTracker import TaskTracker
 from manager.master.workerRoom import WorkerRoom
+from manager.basic.endpoint import Endpoint
 
 
 M_NAME = "Dispatcher"
@@ -133,8 +133,8 @@ class WaitArea:
             return None
 
         for _, q, _ in self._space:
-            if len(q._queue) > 0:
-                return q._queue[0]
+            if len(q._queue) > 0:  # type: ignore
+                return q._queue[0]  # type: ignore
             else:
                 continue
 
@@ -142,17 +142,22 @@ class WaitArea:
         all_content = []
 
         for _, q, _ in self._space:
-            all_content += list(q._queue)
+            all_content += list(q._queue)  # type: ignore
 
         return all_content
 
 
-class Dispatcher(ModuleDaemon, Subject, Observer):
+class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
 
     NOTIFY_LOG = "log"
 
+    ENDPOINT_DISPATCH = 0
+    ENDPOINT_CANCEL = 1
+
     def __init__(self) -> None:
         global M_NAME
+
+        Endpoint.__init__(self)
 
         ModuleDaemon.__init__(self, M_NAME)
 
@@ -197,16 +202,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
     #
     # return True if task is assign successful otherwise return False
     async def _dispatch(self, task: Task) -> bool:
-        ret = False
-
-        if isinstance(task, SuperTask):
-            await self._log(
-                "Task " + task.id() + " is a SuperTask.")
-            return await self._dispatchSuperTask(task)
-        else:
-            ret = await self._do_dispatch(task)
-
-        return ret
+        return await self._do_dispatch(task)
 
     async def _do_dispatch(self, task: Task) -> bool:
         """
@@ -226,7 +222,9 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             await worker.do(task)
             cast(TaskTracker, self._taskTracker).onWorker(task.id(), worker)
             await self._log(
-                "Task " + task.id() + " dispatch to Worker(" + worker.ident  + ")")
+                "Task " + task.id() + " dispatch to Worker("
+                + worker.ident + ")"
+            )
         except Exception:
             await self._log(
                 "Task " + task.id() + " dispatch failed: Worker is\
@@ -248,7 +246,8 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         else:
             return workers[0]
 
-    def add_worker_search_cond(self, task_type: Type[Task], cond: Callable) -> None:
+    def add_worker_search_cond(self, task_type: Type[Task],
+                               cond: Callable) -> None:
         """
         Add a filter function to filter out wokrer that is able to
         process a type of tasks.
@@ -258,24 +257,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         """
         t_typeName = task_type.__name__
         self._search_cond[t_typeName] = cond
-
-    async def _dispatchSuperTask(self, task: SuperTask) -> bool:
-        subTasks = task.getChildren()
-
-        for sub in subTasks:
-            cast(TaskTracker, self._taskTracker).track(sub)
-
-            ret = await self._do_dispatch(sub)
-
-            if ret is False:
-                await self._waitArea.enqueue(sub)
-                self.taskEvent.set()
-            else:
-                sub.toProcState()
-
-        task.stateChange(Task.STATE_IN_PROC)
-
-        return True
 
     async def _dispatch_async(self, task: Task) -> bool:
         """
@@ -334,7 +315,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         assert(cast(TaskTracker, self._taskTracker) is not None)
 
         self._loop.create_task(self._dispatching())
-        self._loop.create_task(self._taskAging())
 
     def _peek_trimUntrackTask(self, area: WaitArea) -> Any:
         while True:
@@ -368,10 +348,6 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
                 if cast(WorkerRoom, self._workers).\
                    getWorkerWithCond(cond) == []:
 
-                    if isinstance(task_peek, PostTask):
-                        parent = cast(SuperTask, task_peek.getParent())
-                        await self.cancel(parent.id())
-
                     continue
 
                 # Dispatch task to worker
@@ -383,47 +359,21 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
             else:
                 continue
 
-    # Cancel a task
-    # This method cannot cancel a member of a SuperTask
-    # but this method can cancel a SuperTask.
     async def cancel(self, taskId: str) -> None:
+        """
+        Cancel task
+        """
         task = cast(TaskTracker, self._taskTracker).getTask(taskId)
 
         if task is None:
             return None
 
-        if isinstance(task, SingleTask):
-            if task.isAChild():
-                # This task is a member of a SuperTask
-                # cancel a member of a SuperTask here
-                # is not allowed.
-                return None
+        theWorker = cast(TaskTracker, self._taskTracker)\
+            .whichWorker(task.id())
 
-            theWorker = cast(TaskTracker, self._taskTracker)\
-                .whichWorker(task.id())
-            if theWorker is not None and theWorker.isOnline():
-                await theWorker.cancel(task.id())
-                await self._log("Cancel task " + task.id())
-
-        elif isinstance(task, PostTask):
-            # PostTask must a member of a SuperTask
-            return None
-
-        elif isinstance(task, SuperTask):
-            children = task.getChildren()
-
-            for child in children:
-
-                ident = child.id()
-                theWorker = cast(TaskTracker, self._taskTracker)\
-                    .whichWorker(ident)
-
-                if theWorker is not None and theWorker.isOnline():
-                    await theWorker.cancel(ident)
-
-                child.stateChange(Task.STATE_FAILURE)
-                cast(TaskTracker, self._taskTracker).untrack(ident)
-                await self._log("Cancel task " + ident)
+        if theWorker is not None and theWorker.isOnline():
+            await theWorker.cancel(task.id())
+            await self._log("Cancel task " + task.id())
 
         task.stateChange(Task.STATE_FAILURE)
         cast(TaskTracker, self._taskTracker).untrack(task.id())
@@ -500,24 +450,7 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
         return self._isTask(taskId, lambda t: t.taskState()
                             == Task.STATE_FINISHED)
 
-    def taskLastUpdate(self, taskId: str) -> None:
-        if not cast(TaskTracker, self._taskTracker).isInTrack(taskId):
-            return None
-
-        task = cast(TaskTracker, self._taskTracker).getTask(taskId)
-        if task is None:
-            return None
-
-        task.lastUpdate()
-
-        if isinstance(task, SuperTask):
-            children = task.getChildren()
-
-            for child in children:
-                child.lastUpdate()
-
     async def workerLost_redispatch(self, worker: Worker) -> None:
-
         # No workers to dispatch task just return
         # and tasks on this worker will be drop by aging.
         if cast(WorkerRoom, self._workers).getNumOfWorkers() == 0:
@@ -531,21 +464,44 @@ class Dispatcher(ModuleDaemon, Subject, Observer):
 
         for t in tasks:
 
-            deps = t.dependence()
-
-            if deps == []:
+            if isinstance(t, SingleTask):
                 # This task is not depend on another task
                 # just redispatch this task again.
                 await self.redispatch(t)
-            else:
-                # A Merger is lost cancel SuperTask.
+            elif isinstance(t, PostTask):
+                # Cause there is only one Merger
+                # if it is lost, PostTask will unable to
+                # redispatch. Just notify to JobMaster,
+                # then it will cancel all tasks of the corresponding
+                # job.
+                self.peer_notify((
+                    t.id(),
+                    Task.STATE_STR_MAPPING[Task.STATE_FAILURE]
+                ))
 
-                # t must be a PostTask
-                st = cast(PostTask, t).getParent()
-                assert(st is not None)
+    async def job_notify_handle(self, data: Any) -> None:
+        """
+        An handler to notify task state to JobMaster while
+        task state changed event is come from EventListener
+        """
+        taskid, state = data
 
-                # Cancel SuperTask
-                await self.cancel(st.id())
+        if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
+            worker = cast(TaskTracker, self._taskTracker).whichWorker(taskid)
+            assert(worker is not None)
+            worker.removeTask(taskid)
+
+        await self.peer_notify((taskid, Task.STATE_STR_MAPPING[state]))
+
+    async def handle(self, data: Any) -> None:
+        cmd, task = data
+
+        if cmd == Dispatcher.ENDPOINT_DISPATCH:
+            # data :: Tuple[str, Task]
+            self.dispatch(task)
+        elif cmd == Dispatcher.ENDPOINT_CANCEL:
+            # data :: Tuple[str, str]
+            await self.cancel(task)
 
 
 # Misc

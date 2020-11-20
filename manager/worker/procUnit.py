@@ -567,15 +567,9 @@ class JobProcUnit(JobProcUnitProto):
             await self.cleanup()
             return
 
-        print("Send done")
-        import sys
-        sys.stdout.flush()
-        await asyncio.sleep(5)
-
         # Notify to master
         await self._notify_job_state(tid, Letter.RESPONSE_STATE_FINISHED)
 
-        # Cleanup
         # Cleanup should be done before notify master job is finished.
         if await self.cleanup() is False:
             self._state = ProcUnit.STATE_DIRTY

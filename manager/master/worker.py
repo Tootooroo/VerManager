@@ -31,10 +31,10 @@ import asyncio
 
 from manager.basic.commands import JobCancelCommand
 from typing import Tuple, Optional, List, Dict, Callable
-from .task import Task, TaskGroup, SingleTask, PostTask
+from .task import Task, TaskGroup
 from datetime import datetime
 from manager.basic.letter import Letter, receving as letter_receving, \
-    sending as letter_sending, CancelLetter
+    sending as letter_sending
 from manager.basic.commands import Command
 
 

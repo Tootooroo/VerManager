@@ -364,6 +364,9 @@ class NewLetter(Letter):
     def needPost(self) -> str:
         return self.getHeader('needPost')
 
+    def setPost(self, post: str) -> None:
+        self.setHeader("needPost", post)
+
     def getSN(self) -> str:
         return self.getContent('sn')
 

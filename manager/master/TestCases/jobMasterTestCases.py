@@ -38,7 +38,8 @@ class DispatcherFake(Endpoint):
         Endpoint.__init__(self)
         self.tasks = []  # type: typing.List[str]
 
-    async def handle(self, task: Task) -> None:
+    async def handle(self, msg: typing.Tuple[str, Task]) -> None:
+        cmd, task = msg
         self.tasks.append(task.id())
 
 
@@ -92,7 +93,7 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         self.sut.set_peer(fake)
 
         # Exercise
-        await self.sut.doJob(job)
+        await self.sut.do_job(job)
 
         # Verify
         self.assertTrue(len(job.tasks()) == 5)

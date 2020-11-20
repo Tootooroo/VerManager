@@ -20,26 +20,25 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+import typing
+import abc
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class Endpoint(abc.ABC):
 
+    def __init__(self) -> None:
+        self._peer = None  # type: typing.Optional[Endpoint]
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+    def set_peer(self, endpoint: 'Endpoint') -> None:
+        self._peer = endpoint
+        endpoint._peer = self
 
+    async def peer_notify(self, data: typing.Any) -> None:
+        assert(self._peer is not None)
+        await self._peer.handle(data)
 
-class Job_Command_Not_Found(Exception):
-
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
-
-
-class Job_Bind_Failed(Exception):
-    pass
+    @abc.abstractmethod
+    async def handle(self, data: typing.Any) -> None:
+        """
+        Respond to peer's notification.
+        """

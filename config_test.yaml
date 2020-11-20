@@ -1,5 +1,6 @@
 Address: "127.0.0.1"
-Port: 30000
+Port: 30001
+dataPort: 8899
 
 LogDir: ./log
 ResultDir: ./data
@@ -15,7 +16,7 @@ TimeZone: +8:00
 
 WaitingInterval: 2
 
-BuildSet:
+JOB_COMMAND_GL8900:
   Builds:
     GL5610:
         cmd:

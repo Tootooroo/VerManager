@@ -20,26 +20,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+
+from typing import List
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+clients = []  # type: List[Client]
 
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+class Client:
 
-
-class Job_Command_Not_Found(Exception):
-
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
-
-
-class Job_Bind_Failed(Exception):
-    pass
+    def __init__(self, ident: str) -> None:
+        self.id = ident
