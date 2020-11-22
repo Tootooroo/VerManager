@@ -65,7 +65,7 @@ class JobMaster(Endpoint, Module):
         await self._do_job(job)
 
         # Notify to client
-        await self.notify_client(job)
+        await self.client_notify("job.info", str(job))
 
         # Store Job into database
         await database_sync_to_async(
@@ -124,14 +124,7 @@ class JobMaster(Endpoint, Module):
 
         for job in jobs:
             await self._do_job(job)
-            await self.notify_client(job)
-
-    async def notify_client(self, job: Job) -> None:
-        for client in Client.clients:
-            await self._channel_layer.send(client.id, {
-                "type": "job.info",
-                "text": str(job)
-            })
+            await self.client_notify("job.info", str(job))
 
     async def handle(self, msg: Any) -> None:
         """
@@ -238,11 +231,10 @@ class JobMaster(Endpoint, Module):
             # Remove Job from JobMaster
             del self._jobs[jobid]
 
-        for client in Client.clients:
-            await self._channel_layer.send(client.id, {
-                "type": "job.state.change",
-                "text": ":".join([jobid, taskid, state])
-            })
+        self.client_notify(
+            "job.state.change",
+            ":".join([jobid, taskid, state])
+        )
 
     async def _job_maintain(self, jobid: str, state: str) -> None:
         """
@@ -266,11 +258,7 @@ class JobMaster(Endpoint, Module):
             return
 
         # Notify to client
-        for client in Client.clients:
-            await self._channel_layer.send(client.id, {
-                "type": type_str,
-                "text": text_str
-            })
+        self.client_notify(type_str, text_str)
 
         # Remove Job from JobMaster
         del self._jobs[jobid]
