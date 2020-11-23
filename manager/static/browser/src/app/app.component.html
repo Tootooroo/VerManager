@@ -1,12 +1,7 @@
 <navbar-row></navbar-row>
-<mat-grid-list cols="10" rowHeight="1:1">
-
-  <mat-grid-tile [colspan]='5' [rowspan]='6'>
-  <app-ver-register></app-ver-register>
-  </mat-grid-tile>
-
-  <mat-grid-tile [colspan]='2' [rowspan]='3'>
-  <app-ver-gen></app-ver-gen>
-  </mat-grid-tile>
-
-</mat-grid-list>
+<div>
+  <div class="GenPanel">
+    <app-ver-register></app-ver-register>
+    <app-ver-gen></app-ver-gen>
+  </div>
+</div>
