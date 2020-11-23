@@ -763,7 +763,7 @@ class PostProcUnit(PostProcUnitProto):
         Cancel all Posts
         """
         for pid in self._posts:
-            self.cancel(pid)
+            await self.cancel(pid)
 
     async def cleanup(self) -> bool:
         return True
@@ -800,6 +800,7 @@ class PostProcUnit(PostProcUnitProto):
 
         if post.ready():
             await self._do_post(post)
+            del self._posts[version]
 
     async def _do_post(self, post: Post) -> None:
 
@@ -823,6 +824,7 @@ class PostProcUnit(PostProcUnitProto):
 
             # Cleanup
             post.cleanup()
+
             # Success
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FINISHED)

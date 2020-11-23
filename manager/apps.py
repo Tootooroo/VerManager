@@ -22,8 +22,6 @@ class ManagerConfig(AppConfig):
         from manager.basic.info import Info
         import manager.master.master as S
 
-        return None
-
         if os.environ.get('RUN_MAIN') == 'true':
             info = Info("./config.yaml")
             sInst = S.ServerInst(info.getConfig("Address"),

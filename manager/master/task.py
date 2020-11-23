@@ -230,12 +230,14 @@ class SingleTask(Task):
 
     def __init__(self, id: str, sn: str, revision: str,
                  build: Build,
+                 needPost: str = 'false',
                  extra: Dict = {}) -> None:
 
         Task.__init__(self, id, sn, revision, extra)
 
         self.type = SingleTask.Type
         self._build = build
+        self._needPost = needPost
 
     def isValid(self) -> bool:
         cond1 = len(self.taskId) <= BinaryLetter.TASK_ID_FIELD_LEN
@@ -248,12 +250,11 @@ class SingleTask(Task):
     def toLetter(self) -> NewLetter:
         build = self._build
         extra = {"resultPath": build.getOutput(), "cmds": build.getCmd()}
-        needPost = "false"
 
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
                          parent="",
                          extra=extra,
-                         needPost=needPost)
+                         needPost=self._needPost)
 
     def isBindWithBuild(self) -> bool:
         return self._build is not None

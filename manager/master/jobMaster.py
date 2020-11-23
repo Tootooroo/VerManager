@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import manager.master.configs as config
 import client.client as Client
 
@@ -53,12 +54,16 @@ class JobMaster(Endpoint, Module):
         self._config = config.config
 
         self._channel_layer = get_channel_layer()
+        self._loop = asyncio.get_running_loop()
 
     async def begin(self) -> None:
         return
 
     async def cleanup(self) -> None:
         return
+
+    def new_job(self, job: Job) -> None:
+        self._loop.create_task(self.do_job(job))
 
     async def do_job(self, job: Job) -> None:
         # Dispatch job
@@ -140,7 +145,10 @@ class JobMaster(Endpoint, Module):
         taskid = taskid[taskid.find("_")+1:]
 
         # Notify Job's state to client.
-        await self._notify_job_to_client(jobid, taskid, state)
+        await self.client_notify(
+            "job.state.change",
+            ":".join([jobid, taskid, state])
+        )
 
         # Maintain the Job's state
         await self._job_maintain(jobid, state)
@@ -181,6 +189,7 @@ class JobMaster(Endpoint, Module):
                             sn=sn,
                             revision=vsn,
                             build=build,
+                            needPost='true',
                             extra={})
             st.job = job
             job.addTask(build.getIdent(), st)
@@ -228,10 +237,7 @@ class JobMaster(Endpoint, Module):
                 job_db.delete
             )()
 
-            # Remove Job from JobMaster
-            del self._jobs[jobid]
-
-        self.client_notify(
+        await self.client_notify(
             "job.state.change",
             ":".join([jobid, taskid, state])
         )
@@ -258,7 +264,17 @@ class JobMaster(Endpoint, Module):
             return
 
         # Notify to client
-        self.client_notify(type_str, text_str)
+        await self.client_notify(type_str, text_str)
 
         # Remove Job from JobMaster
-        del self._jobs[jobid]
+        if self._jobs[jobid].is_fin():
+            del self._jobs[jobid]
+
+            # Remove Job from database
+            job_db = await database_sync_to_async(
+                Jobs.objects.filter
+            )(jobid=jobid)
+
+            await database_sync_to_async(
+                job_db.delete
+            )()

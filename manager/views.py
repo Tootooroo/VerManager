@@ -37,6 +37,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from .serializers import VersionSerializer, RevisionSerializer, \
     BuildInfoSerializer, VersionInfoSerializer
+from manager.master.jobMaster import JobMaster
+from manager.master.job import Job
 
 import manager.master.master as S
 
@@ -117,19 +119,11 @@ class VersionViewSet(viewsets.ModelViewSet):
         except ObjectDoesNotExist:
             return HttpResponseBadRequest("Version does not exists.")
 
-        task = Task(pk, version.sn, pk, extra=extra)
-        if task.isValid() is False:
-            return HttpResponseBadRequest()
-
-        # Bind task with build
-        bs = BuildSet(cfg.config.getConfig("BuildSet"))
-        task.setBuild(bs)
-        task = task.transform()
+        job = Job(pk, "GL8900", {'vsn': pk, 'sn': version.sn})
 
         assert(S.ServerInstance is not None)
-        dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
-
-        dispatcher.dispatch(task)
+        jobMaster = cast(JobMaster, S.ServerInstance.getModule('JobMaster'))
+        jobMaster.new_job(job)
 
         return Response('Success')
 

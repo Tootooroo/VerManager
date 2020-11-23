@@ -484,12 +484,18 @@ class Dispatcher(ModuleDaemon, Subject, Observer, Endpoint):
         An handler to notify task state to JobMaster while
         task state changed event is come from EventListener
         """
+
+        assert(self._taskTracker is not None)
+
         taskid, state = data
 
         if state == Task.STATE_FINISHED or state == Task.STATE_FAILURE:
             worker = cast(TaskTracker, self._taskTracker).whichWorker(taskid)
             assert(worker is not None)
             worker.removeTask(taskid)
+
+            # Untrack the task
+            self._taskTracker.untrack(taskid)
 
         await self.peer_notify((taskid, Task.STATE_STR_MAPPING[state]))
 
