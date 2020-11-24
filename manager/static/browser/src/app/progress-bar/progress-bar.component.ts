@@ -2,10 +2,14 @@ import { Component, OnInit } from '@angular/core';
 import { MessageService } from '../message.service';
 import { Message } from '../message';
 
+interface Task {
+    taskid: string;
+    state: string;
+}
 
 interface Job {
     jobid: string;
-    tasks: string[];
+    tasks: { [index: string]: Task };
 }
 
 
@@ -16,7 +20,7 @@ interface Job {
 })
 export class ProgressBarComponent implements OnInit {
 
-    private jobs: Job[] = [];
+    private jobs: { [index: string]: Job } = {};
 
     constructor(msg_service: MessageService) {
         msg_service.register("job.state").subscribe(msg => {
@@ -37,10 +41,13 @@ export class ProgressBarComponent implements OnInit {
 
             switch (subtype) {
                 case "change":
+                    this.job_state_message_change_handle(msg);
                     break;
                 case "fin":
+                    this.job_state_message_fin_handle(msg);
                     break;
                 case "fail":
+                    this.job_state_message_fail_handle(msg)
                     break;
                 case "info":
                     this.job_state_message_info_handle(msg);
@@ -53,24 +60,36 @@ export class ProgressBarComponent implements OnInit {
     }
 
     job_state_message_info_handle(msg: Message): void {
-        let content = msg['content'];
+        let content = msg['content']['message'];
 
         // Create jobs from info in message.
         for (let jobid in content) {
             let job = { "jobid": jobid, tasks: content[jobid] };
-            this.jobs.push(job);
+            this.jobs[jobid] = job;
         }
     }
 
     job_state_message_change_handle(msg: Message): void {
+        let content = msg['content']['message'];
+        let jobid: string = content['jobid'];
+        let taskid: string = content['taskid'];
+        let state: string = content['state'];
 
+        this.jobs[jobid].tasks[taskid].state = state;
     }
 
     job_state_message_fin_handle(msg: Message): void {
+        let content = msg['content']['message'];
+        let jobid: string = content['jobid'];
 
+        delete this.jobs[jobid]
     }
 
     job_state_message_fail_handle(msg: Message): void {
+        let content = msg['content']['message'];
+        let jobid: string = content['jobid'];
+
+        delete this.jobs[jobid]
 
     }
 }
