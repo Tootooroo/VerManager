@@ -9,6 +9,8 @@ h1 {
     width: 25cm;
     grid-template-rows: 3cm 30cm;
     grid-template-colums: repeat(10, 2cm);
+    margin-left: auto;
+    margin-right: auto;
 }
 
 app-ver-register {

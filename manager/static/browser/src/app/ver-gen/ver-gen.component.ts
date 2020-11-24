@@ -46,49 +46,7 @@ export class VerGenComponent implements OnInit {
             }
 
             const build: VersionBuild = { ver: version, info: buildInfo };
-            this.verService.generate(build)
-                .subscribe(() => {
-                    /* Disable genbutton */
-                    const button: HTMLButtonElement =
-                        document.getElementById('genButton') as HTMLButtonElement;
-                    button.disabled = true;
-
-                    this.waitFinished(version);
-                });
+            this.verService.generate(build).subscribe();
         }
-    }
-
-    private waitFinErrHandle(error: HttpErrorResponse) {
-        if (error.status === 304) {
-            /* Version generation is in processing */
-            return of(VerErrors.IN_PROCESSING_STATUS).pipe(delay(3000));
-        } else if (error.status === 400) {
-            return of(VerErrors.FAILURE_STATUS);
-        }
-    }
-
-    waitFinished(version: Version): void {
-        this.verService.waitFinished(version)
-            .pipe(catchError(this.waitFinErrHandle))
-            .subscribe(result => {
-                if (typeof result === 'string') {
-                    /* enable button */
-                    const button: HTMLButtonElement =
-                        document.getElementById('genButton') as HTMLButtonElement;
-                    button.disabled = false;
-
-                    location.assign(result);
-                } else {
-                    const status = result as VerErrors;
-                    switch (status) {
-                        case VerErrors.IN_PROCESSING_STATUS:
-                            this.waitFinished(version);
-                            break;
-                        case VerErrors.FAILURE_STATUS:
-                            alert('Generation Failed');
-                            break;
-                    }
-                }
-            });
     }
 }

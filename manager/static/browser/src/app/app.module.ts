@@ -15,6 +15,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { FormsModule } from '@angular/forms';
+import { ProgressBarComponent } from './progress-bar/progress-bar.component';
 
 @NgModule({
     declarations: [
@@ -22,7 +23,8 @@ import { FormsModule } from '@angular/forms';
         VerGenComponent,
         RegisterDialog,
         NavrowComponent,
-        VerRegisterComponent
+        VerRegisterComponent,
+        ProgressBarComponent
     ],
     imports: [
         BrowserModule,
