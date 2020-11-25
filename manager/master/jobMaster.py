@@ -35,6 +35,8 @@ from manager.basic.endpoint import Endpoint
 from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.basic.mmanager import Module
+from client.messages import JobInfoMessage, JobStateChangeMessage, \
+    JobFinMessage, JobFailMessage
 
 
 JobCommandPrefix = "JOB_COMMAND_"
@@ -66,16 +68,24 @@ class JobMaster(Endpoint, Module):
         self._loop.create_task(self.do_job(job))
 
     async def do_job(self, job: Job) -> None:
-        # Dispatch job
-        await self._do_job(job)
+        try:
+            # Dispatch job
+            await self._do_job(job)
 
-        # Notify to client
-        await self.client_notify("job.info", str(job))
+            # Notify to client
+            await self.client_notify(
+                str(JobInfoMessage(
+                    job.jobid,
+                    [t.id() for t in job.tasks()]
+                ))
+            )
 
-        # Store Job into database
-        await database_sync_to_async(
-            Jobs.objects.create
-        )(jobid=job.jobid)
+            # Store Job into database
+            await database_sync_to_async(
+                Jobs.objects.create
+            )(jobid=job.jobid)
+        except Exception:
+            return
 
     async def _do_job(self, job: Job) -> None:
         """
@@ -88,20 +98,15 @@ class JobMaster(Endpoint, Module):
         else:
             self._jobs[job.jobid] = job
 
-        try:
-            # Bind Job with a job command
-            self.bind(job)
+        # Bind Job with a job command
+        self.bind(job)
 
-            # Assign job to another module typically
-            # is Dispatcher.
-            for task in job.tasks():
-                await self.peer_notify((Dispatcher.ENDPOINT_DISPATCH, task))
+        # Assign job to another module typically
+        # is Dispatcher.
+        for task in job.tasks():
+            await self.peer_notify((Dispatcher.ENDPOINT_DISPATCH, task))
 
-            job.state = Job.STATE_IN_PROCESSING
-        except Job_Bind_Failed:
-            # notify to client that
-            # this Job is failed to dispatch.
-            await self.client_notify("job.fail", job.jobid)
+        job.state = Job.STATE_IN_PROCESSING
 
     async def cancel_job(self, jobid: str) -> None:
         tasks = self._jobs[jobid].tasks()
@@ -129,7 +134,7 @@ class JobMaster(Endpoint, Module):
 
         for job in jobs:
             await self._do_job(job)
-            await self.client_notify("job.info", str(job))
+            await self.client_notify(str(job))
 
     async def handle(self, msg: Any) -> None:
         """
@@ -146,8 +151,7 @@ class JobMaster(Endpoint, Module):
 
         # Notify Job's state to client.
         await self.client_notify(
-            "job.state.change",
-            ":".join([jobid, taskid, state])
+            str(JobStateChangeMessage(jobid, taskid, state))
         )
 
         # Maintain the Job's state
@@ -217,54 +221,35 @@ class JobMaster(Endpoint, Module):
     def exists(self, jobid: str) -> bool:
         return jobid in self._jobs
 
-    async def client_notify(self, type: str, text: str) -> None:
-        for client in Client.clients:
+    async def client_notify(self, text: str) -> None:
+        print(Client.clients)
+        for client in Client.clients.values():
             await self._channel_layer.send(client.id, {
-                "type": type,
+                "type": "job.msg",
                 "text": text
             })
-
-    async def _notify_job_to_client(self, jobid: str, taskid: str,
-                                    state: str) -> None:
-        job = self._jobs[jobid]
-        if job.is_fin():
-            # Remove Job from database
-            job_db = await database_sync_to_async(
-                Jobs.objects.filter
-            )(jobid=jobid)
-
-            await database_sync_to_async(
-                job_db.delete
-            )()
-
-        await self.client_notify(
-            "job.state.change",
-            ":".join([jobid, taskid, state])
-        )
 
     async def _job_maintain(self, jobid: str, state: str) -> None:
         """
         Maintain Fin Jobs and Fail Jobs.
         """
-        type_str, text_str = "", ""
+        text_str = ""
 
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # Setup notify content of client notification.
-            type_str = "job.fin"
-            text_str = "..."
+            text_str = str(JobFinMessage(jobid))
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.
             # need to cancel all tasks of the job to make sure
             # the consistency of tasks of a job is statisfied.
             await self.cancel_job(jobid)
 
-            type_str = "job.fail"
-            text_str = "..."
+            text_str = str(JobFailMessage(jobid))
         else:
             return
 
         # Notify to client
-        await self.client_notify(type_str, text_str)
+        await self.client_notify(text_str)
 
         # Remove Job from JobMaster
         if self._jobs[jobid].is_fin():

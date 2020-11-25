@@ -49,7 +49,10 @@ class Message(abc.ABC):
 class JobInfoMessage(Message):
 
     def __init__(self, jobid: str, tasks: List[str]) -> None:
-        Message.__init__(self, "JobInfo", {"jobid": jobid, "tasks": tasks})
+        Message.__init__(self, "JobMsg", {
+            "subtype": "info",
+            "message": {"jobid": jobid, "tasks": tasks}
+        })
 
     def jobid(self) -> str:
         return self.content["jobid"]
@@ -61,5 +64,25 @@ class JobInfoMessage(Message):
 class JobStateChangeMessage(Message):
 
     def __init__(self, jobid: str, taskid: str, state: str) -> None:
-        Message.__init__(self, "JobStateChange",
-                         {"jobid": jobid, "taskid": taskid, "state": state})
+        Message.__init__(self, "JobMsg", {
+            "subtype": "change",
+            "message": {"jobid": jobid, "taskid": taskid, "state": state}
+        })
+
+
+class JobFinMessage(Message):
+
+    def __init__(self, jobid: str) -> None:
+        Message.__init__(self, "JobMsg", {
+            "subtype": "fin",
+            "message": {"jobs": [jobid]}
+        })
+
+
+class JobFailMessage(Message):
+
+    def __init__(self, jobid: str) -> None:
+        Message.__init__(self, "JobMsg", {
+            "subtype": "fail",
+            "message": {"jobs": [jobid]}
+        })

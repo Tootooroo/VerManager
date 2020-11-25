@@ -20,6 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import typing
+import client.client as client
 from channels.generic.websocket import AsyncWebsocketConsumer
 from client.models import Clients
 from typing import Dict, Any, Tuple, List
@@ -35,12 +37,16 @@ class CommuConsumer(AsyncWebsocketConsumer):
         # so another app can use this consumer
         # to communicate with client
         await client_create(self.channel_name)
+        client.clients[self.channel_name] = \
+            client.Client(self.channel_name)
+        print(client.clients)
 
         # Accept connection
         raise AcceptConnection
 
     async def disconnect(self, close_code) -> None:
         await client_delete(self.channel_name)
+        del client.clients[self.channel_name]
 
     async def server_message(self, event: Dict[str, Any]) -> None:
         # Message from server to client.
@@ -49,27 +55,9 @@ class CommuConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None) -> None:
         pass
 
-    async def job_info(self, msg: str) -> None:
-        # Analyse message
-        jobid, tasks = msg.split("::")
-        tasks_list = tasks.split(":")
-        message = JobInfoMessage(jobid, tasks_list)
-
-        # Send to client
-        await self.send(str(message))
-
-    async def job_state_change(self, msg: str) -> None:
-        jobid, taskid, state = msg.split(":")
-        message = JobStateChangeMessage(jobid, taskid, state)
-
-        # Send to client
-        await self.send(str(message))
-
-    async def job_fin(self, msg: str) -> None:
-        pass
-
-    async def job_fail(self, msg: str) -> None:
-        pass
+    async def job_msg(self, event: typing.Dict) -> None:
+        print(event)
+        await self.send(event['text'])
 
 
 async def client_create(name: str) -> None:

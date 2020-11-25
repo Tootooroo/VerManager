@@ -21,10 +21,10 @@
 # SOFTWARE.
 
 
-from typing import List
+from typing import Dict
 
 
-clients = []  # type: List[Client]
+clients = {}  # type: Dict[str, Client]
 
 
 class Client:

@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { webSocket } from 'rxjs/webSocket';
 import { Observable } from 'rxjs';
-import { Message, message_parse } from './message';
+import { Message, message_check } from './message';
+import { ChannelService } from "./channel.service";
+
 
 
 class MessageQueue {
@@ -33,7 +34,7 @@ class MessageQueue {
 })
 export class MessageService {
 
-    private sock_url = "ws://localhost/client/commu";
+    private sock_url = "ws://localhost:8000/commu/";
     private socket: any = null;
 
     /**
@@ -45,24 +46,26 @@ export class MessageService {
      */
     private msg_queues: { [index: string]: MessageQueue } = {};
 
-    constructor() { }
-
-    ngOnInit(): void {
-        this.socket = webSocket(this.sock_url);
-        this.socket.subscribe(
+    constructor(sock: ChannelService) {
+        sock.create(this.sock_url).subscribe(
             msg => {
-                let message: Message = message_parse(msg);
-                if (message == null) {
+
+                if (message_check(msg) === false) {
                     // invalid message
                     return;
                 }
 
-                let msg_type: string = message.msg_type;
+                let message: Message = {
+                    "type": msg["type"],
+                    "content": msg["content"]
+                };
+                let msg_type: string = message.type;
 
                 // If type of thie message is subscribe then add it to
                 // correspond queue.
-                if (typeof this.msg_queues[msg_type] != 'undefined')
-                    this.msg_queues[message.msg_type].push(message);
+                if (typeof this.msg_queues[msg_type] != 'undefined') {
+                    this.msg_queues[message.type].push(message);
+                }
             },
             err => {
                 console.log(err);

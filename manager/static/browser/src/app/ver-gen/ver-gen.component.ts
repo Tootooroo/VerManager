@@ -1,18 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import { of } from 'rxjs';
-import { catchError, delay } from 'rxjs/operators';
-import { throwError } from 'rxjs/index';
-
 import { VersionService } from '../version.service';
 import { RevisionService } from '../revision.service';
 import { Version, VersionBuild, BuildInfo } from '../version';
 import { Revision } from '../revision';
-import { HttpErrorResponse } from '@angular/common/http';
 
-enum VerErrors {
-    IN_PROCESSING_STATUS = 0,
-    FAILURE_STATUS = 1
-}
 
 @Component({
     selector: 'app-ver-gen',

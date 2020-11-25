@@ -10,11 +10,11 @@ MERGER_ADDRESS:
 
 WORKER_NAME: WORKER_EXAMPLE
 
-REPO_URL: git@127.0.0.1:root/vertest.git
+REPO_URL: git@10.5.4.211:root/ci_config.git
 
 STORAGE: DoneStorage
 
-PROJECT_NAME:  vertest
+PROJECT_NAME:  ci_config
 
 QUEUE_SIZE: 1024
 

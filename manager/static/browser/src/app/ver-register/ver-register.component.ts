@@ -4,7 +4,6 @@ import { RevisionService } from '../revision.service';
 import { Version } from '../version';
 import { Revision } from '../revision';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { SlicePipe } from '@angular/common';
 
 @Component({
     selector: 'app-ver-register',

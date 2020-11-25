@@ -20,10 +20,10 @@ interface Job {
 })
 export class ProgressBarComponent implements OnInit {
 
-    private jobs: { [index: string]: Job } = {};
+    jobs: { [index: string]: Job } = {};
 
     constructor(msg_service: MessageService) {
-        msg_service.register("job.state").subscribe(msg => {
+        msg_service.register("JobMsg").subscribe(msg => {
             this.job_state_message_handle(msg);
         });
     }
