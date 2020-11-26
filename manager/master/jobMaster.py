@@ -68,6 +68,12 @@ class JobMaster(Endpoint, Module):
         self._loop.create_task(self.do_job(job))
 
     async def do_job(self, job: Job) -> None:
+
+        if job.jobid in self._jobs:
+            return None
+        else:
+            self._jobs[job.jobid] = job
+
         try:
             # Dispatch job
             await self._do_job(job)
@@ -76,7 +82,8 @@ class JobMaster(Endpoint, Module):
             await self.client_notify(
                 str(JobInfoMessage(
                     job.jobid,
-                    [t.id() for t in job.tasks()]
+                    [t.id() for t in job.tasks()],
+                    Task.STATE_STR_MAPPING[Task.STATE_PREPARE]
                 ))
             )
 
@@ -84,19 +91,14 @@ class JobMaster(Endpoint, Module):
             await database_sync_to_async(
                 Jobs.objects.create
             )(jobid=job.jobid)
-        except Exception:
-            return
+        except Exception as e:
+            print(e)
 
     async def _do_job(self, job: Job) -> None:
         """
         Bind a Job with a command then dispatch
         to Workers.
         """
-
-        if job.jobid in self._jobs:
-            return None
-        else:
-            self._jobs[job.jobid] = job
 
         # Bind Job with a job command
         self.bind(job)

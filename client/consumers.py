@@ -39,7 +39,6 @@ class CommuConsumer(AsyncWebsocketConsumer):
         await client_create(self.channel_name)
         client.clients[self.channel_name] = \
             client.Client(self.channel_name)
-        print(client.clients)
 
         # Accept connection
         raise AcceptConnection
@@ -56,7 +55,6 @@ class CommuConsumer(AsyncWebsocketConsumer):
         pass
 
     async def job_msg(self, event: typing.Dict) -> None:
-        print(event)
         await self.send(event['text'])
 
 

@@ -48,10 +48,10 @@ class Message(abc.ABC):
 
 class JobInfoMessage(Message):
 
-    def __init__(self, jobid: str, tasks: List[str]) -> None:
+    def __init__(self, jobid: str, tasks: List[str], init_state: str) -> None:
         Message.__init__(self, "JobMsg", {
             "subtype": "info",
-            "message": {"jobid": jobid, "tasks": tasks}
+            "message": {"jobid": jobid, "tasks": tasks, "state": init_state }
         })
 
     def jobid(self) -> str:
