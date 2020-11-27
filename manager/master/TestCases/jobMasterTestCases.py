@@ -26,7 +26,7 @@ import manager.master.configs as config
 from manager.basic.info import Info
 from manager.master.task import Task
 from manager.master.job import Job
-from manager.master.jobMaster import JobMaster
+from manager.master.jobMaster import JobMaster, task_prefix_trim
 from manager.basic.endpoint import Endpoint
 from manager.models import Jobs
 from asgiref.sync import sync_to_async
@@ -106,3 +106,15 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         # Teardown
         job = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")
         await sync_to_async(job.delete)()  # type: ignore
+
+
+class JobMasterMiscTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def test_JobMasterMisc_TaskPrefixTrim_ValidString(self) -> None:
+        ident = "Ver_TASKID"
+        self.assertEqual("TASKID", task_prefix_trim(ident))
+
+    async def test_JobMasterMisc_TaskprefixTrim_InvalidString(self, ) -> None:
+        self.assertEqual(None, task_prefix_trim(""))
+        self.assertEqual(None, task_prefix_trim("1_"))
+        self.assertEqual(None, task_prefix_trim("_"))

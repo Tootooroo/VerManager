@@ -27,10 +27,6 @@
 # EventListenerTestCases
 
 
-from manager.functionalTest import FunctionalTestCases
-
-
-"""
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
 
@@ -101,5 +97,4 @@ from manager.master.TestCases.jobTestCases import \
     JobTestCases
 
 from manager.master.TestCases.jobMasterTestCases import \
-    JobMasterTestCases
-"""
+    JobMasterTestCases, JobMasterMiscTestCases

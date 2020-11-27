@@ -39,6 +39,11 @@ class Job:
         self.state = Job.STATE_PENDING
         self.result = None  # type: Any
 
+    def is_valid(self) -> bool:
+        return len(self.jobid) > 0 and \
+            len(self.cmd_id) > 0 and \
+            0 not in [len(t) for t in self._tasks]
+
     def addTask(self, ident: str, task: Task) -> None:
         if ident not in self._tasks:
             self._tasks[ident] = task

@@ -25,7 +25,7 @@ import manager.master.configs as config
 import client.client as Client
 
 from manager.models import Jobs
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional, cast
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
 from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
@@ -44,6 +44,14 @@ JobCommandPrefix = "JOB_COMMAND_"
 
 def prepend_prefix(prefix: str, ident: str) -> str:
     return prefix + "_" + ident
+
+
+def task_prefix_trim(ident: str) -> Optional[str]:
+    begin_pos = ident.find("_") + 1
+    if begin_pos + 1 > len(ident):
+        return None
+
+    return ident[begin_pos:]
 
 
 class JobMaster(Endpoint, Module):
@@ -72,6 +80,9 @@ class JobMaster(Endpoint, Module):
         if job.jobid in self._jobs:
             return None
         else:
+            if not job.is_valid():
+                return None
+
             self._jobs[job.jobid] = job
 
         try:
@@ -79,10 +90,14 @@ class JobMaster(Endpoint, Module):
             await self._do_job(job)
 
             # Notify to client
+            #
+            # Task's ident is already check by upper
+            # so assume that task_prefix_trim must not
+            # return None.
             await self.client_notify(
                 str(JobInfoMessage(
                     job.jobid,
-                    [t.id() for t in job.tasks()],
+                    [cast(str, task_prefix_trim(t.id())) for t in job.tasks()],
                     Task.STATE_STR_MAPPING[Task.STATE_PREPARE]
                 ))
             )
@@ -224,7 +239,6 @@ class JobMaster(Endpoint, Module):
         return jobid in self._jobs
 
     async def client_notify(self, text: str) -> None:
-        print(Client.clients)
         for client in Client.clients.values():
             await self._channel_layer.send(client.id, {
                 "type": "job.msg",
@@ -238,30 +252,31 @@ class JobMaster(Endpoint, Module):
         text_str = ""
 
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
-            # Setup notify content of client notification.
-            text_str = str(JobFinMessage(jobid))
+            # If Job is finished
+            if self._jobs[jobid].is_fin():
+                del self._jobs[jobid]
+
+                # Remove Job from database
+                job_db = await database_sync_to_async(
+                    Jobs.objects.filter
+                )(jobid=jobid)
+
+                await database_sync_to_async(
+                    job_db.delete
+                )()
+
+                # Notify to client
+                await self.client_notify(
+                    str(JobFinMessage(jobid))
+                )
+
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.
             # need to cancel all tasks of the job to make sure
             # the consistency of tasks of a job is statisfied.
             await self.cancel_job(jobid)
 
-            text_str = str(JobFailMessage(jobid))
-        else:
-            return
-
-        # Notify to client
-        await self.client_notify(text_str)
-
-        # Remove Job from JobMaster
-        if self._jobs[jobid].is_fin():
-            del self._jobs[jobid]
-
-            # Remove Job from database
-            job_db = await database_sync_to_async(
-                Jobs.objects.filter
-            )(jobid=jobid)
-
-            await database_sync_to_async(
-                job_db.delete
-            )()
+            # Notify to client
+            await self.client_notify(
+                str(JobFailMessage(jobid))
+            )
