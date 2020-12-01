@@ -20,55 +20,35 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+
+import unittest
+from manager.master.proxy_configs import ProxyConfigs
+from manager.master.exceptions import BASIC_CONFIG_IS_COVERED
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class ProxyConfigsTestCases(unittest.IsolatedAsyncioTestCase):
 
+    async def asyncSetUp(self) -> None:
+        self.sut = ProxyConfigs()
 
-class INVALID_CONFIGURATIONS(Exception):
-    pass
+    async def test_ProxyConfigs_AddConfig(self) -> None:
+        # Exercise
+        self.sut.add_config("cfg", None)
 
+        # Verify
+        self.assertIsNone(self.sut.get_config("cfg"))
 
-class Job_Command_Not_Found(Exception):
+    async def test_proxyConfigs_AddInvalidConfig(self) -> None:
+        """
+        Desc: Add a config to cover the special config
+        Expect: The Add op should not success.
+        """
+        try:
+            self.sut.add_config("is_broadcast", None)
+            # Should not success.
+            self.assertTrue(False)
+        except BASIC_CONFIG_IS_COVERED:
+            pass
 
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
-
-
-class Job_Bind_Failed(Exception):
-    pass
-
-
-# Proxy and MessageUnit
-class UNABLE_SEND_MSG_TO_PROXY(Exception):
-
-    def __init__(self, reason: str) -> None:
-        self._reason = reason
-
-    def __str__(self) -> str:
-        return "Unable to send message to Proxy cause: " \
-            + self._reason
-
-
-class MSG_WRAPPER_CFG_NOT_EXISTS(Exception):
-
-    def __init__(self, cfg_key: str) -> None:
-        self.cfg_key = cfg_key
-
-    def __str__(self) -> str:
-        return "MsgWrapper has no config \"" + self.cfg_key
-
-
-class BASIC_CONFIG_IS_COVERED(Exception):
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    def __str__(self) -> str:
-        return "Basic config \"" + self.name + "\" is covered."
+    async def test_ProxyConfigs_RemoveConfig(self) -> None:
+        pass

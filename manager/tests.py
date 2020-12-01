@@ -98,3 +98,6 @@ from manager.master.TestCases.jobTestCases import \
 
 from manager.master.TestCases.jobMasterTestCases import \
     JobMasterTestCases, JobMasterMiscTestCases
+
+from manager.master.TestCases.proxyTestCases import \
+    MsgWrapperTestCases

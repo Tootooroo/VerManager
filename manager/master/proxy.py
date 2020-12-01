@@ -22,14 +22,16 @@
 
 import asyncio
 import typing as T
-from manager.basic.mmanager import Module
-from manager.master.msgCell import MsgUnit, MsgSource
+from manager.basic.mmanager import ModuleDaemon
+from manager.master.msgCell import MsgUnit, MsgSource, MsgWrapper
+from manager.master.proxy_configs import ProxyConfigs
 
 
-class Proxy(Module):
+class Proxy(ModuleDaemon):
 
-    def __init__(self) -> None:
+    def __init__(self, q_size: int) -> None:
         self._msg_units = {}  # type: T.Dict[str, T.List[MsgUnit]]
+        self._q = asyncio.Queue(q_size)  # type: asyncio.Queue[MsgWrapper]
 
     def add_msg_source(self, msg_type: str, src: MsgSource) -> None:
         if msg_type not in self._msg_units:
@@ -46,3 +48,6 @@ class Proxy(Module):
         self._msg_units[msg_type] = [
             unit for unit in units if unit.src_id() != src_id
         ]
+
+    async def run(self) -> None:
+        pass
