@@ -24,6 +24,10 @@
 import unittest
 from manager.master.proxy_configs import ProxyConfigs
 from manager.master.exceptions import BASIC_CONFIG_IS_COVERED
+from client.messages import Message
+
+def handle(msg: Message, val: str) -> None:
+    return None
 
 
 class ProxyConfigsTestCases(unittest.IsolatedAsyncioTestCase):
@@ -33,10 +37,10 @@ class ProxyConfigsTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def test_ProxyConfigs_AddConfig(self) -> None:
         # Exercise
-        self.sut.add_config("cfg", None)
+        self.sut.add_config("cfg", handle)
 
         # Verify
-        self.assertIsNone(self.sut.get_config("cfg"))
+        self.assertEqual(handle, self.sut.get_config("cfg"))
 
     async def test_proxyConfigs_AddInvalidConfig(self) -> None:
         """
@@ -51,4 +55,18 @@ class ProxyConfigsTestCases(unittest.IsolatedAsyncioTestCase):
             pass
 
     async def test_ProxyConfigs_RemoveConfig(self) -> None:
-        pass
+        """
+        Desc: Remove a non-basic config from ProxyConfigs.
+        """
+        self.sut.add_config("cfg", handle)
+
+        # Exercise
+        self.sut.rm_config("cfg")
+
+        # Verify
+        self.assertFalse(self.sut.is_exists("cfg"))
+
+    async def test_ProxyConfigs_ApplyConfig(self) -> None:
+        """
+        Desc: Apply configs to a message.
+        """

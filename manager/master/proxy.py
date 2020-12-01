@@ -22,9 +22,10 @@
 
 import asyncio
 import typing as T
+import manager.master.proxy_configs as P
+import client.client as C
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.msgCell import MsgUnit, MsgSource, MsgWrapper
-from manager.master.proxy_configs import ProxyConfigs
 
 
 class Proxy(ModuleDaemon):
@@ -50,4 +51,13 @@ class Proxy(ModuleDaemon):
         ]
 
     async def run(self) -> None:
-        pass
+
+        while True:
+            wrapper = await self._q.get()  # type: MsgWrapper
+
+            # Apply config
+            msg, who = P.ProxyConfigs.apply(
+                wrapper.config_map, wrapper.msg)
+
+            for client_name in who:
+                await C.clients[client_name].notify(msg)

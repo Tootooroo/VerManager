@@ -22,6 +22,8 @@
 
 
 from typing import Dict
+from client.messages import Message
+from channels.layers import get_channel_layer
 
 
 clients = {}  # type: Dict[str, Client]
@@ -31,3 +33,10 @@ class Client:
 
     def __init__(self, ident: str) -> None:
         self.id = ident
+
+    async def notify(self, message: Message) -> None:
+        channel_layer = get_channel_layer()
+        await channel_layer.send(self.id, {
+            "type": message.type,
+            "text": str(message)
+        })
