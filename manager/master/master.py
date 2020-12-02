@@ -45,6 +45,7 @@ from manager.master.taskTracker import TaskTracker
 from manager.master.verControl import RevSync
 from manager.basic.dataLink import DataLinker, DataLink
 from manager.master.jobMaster import JobMaster
+from manager.master.proxy import Proxy
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -198,6 +199,11 @@ class ServerInst(Thread):
         # dataLinker.addDataLink(
         #    self._address, dataPort, DataLink.UDP_DATALINK,
         #    processor, args)
+
+        # Proxy Init
+        proxy = Proxy(1024)
+        proxy.add_msg_source(Proxy.M_NAME, jobMaster.source, {})
+        self._mmanager.addModule(proxy)
 
         await self._mmanager.start_all()
 

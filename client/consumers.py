@@ -55,7 +55,6 @@ class CommuConsumer(AsyncWebsocketConsumer):
         pass
 
     async def job_msg(self, event: typing.Dict) -> None:
-        print(event['text'])
         await self.send(event['text'])
 
 

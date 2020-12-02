@@ -20,55 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class COMPONENTS_LOG_NOT_INIT(Exception):
-    pass
+import unittest
 
 
-class INVALID_FORMAT_LETTER(Exception):
-    pass
+class RecordTestCases(unittest.IsolatedAsyncioTestCase):
 
-
-class INVALID_CONFIGURATIONS(Exception):
-    pass
-
-
-class Job_Command_Not_Found(Exception):
-
-    def __init__(self, job_cmd_id: str) -> None:
-        self._id = job_cmd_id
-
-    def __str__(self) -> str:
-        return "Job Command " + self._id + " not found."
-
-
-class Job_Bind_Failed(Exception):
-    pass
-
-
-# Proxy and MessageUnit
-class UNABLE_SEND_MSG_TO_PROXY(Exception):
-
-    def __init__(self, reason: str) -> None:
-        self._reason = reason
-
-    def __str__(self) -> str:
-        return "Unable to send message to Proxy cause: " \
-        + self._reason
-
-
-class MSG_WRAPPER_CFG_NOT_EXISTS(Exception):
-
-    def __init__(self, cfg_key: str) -> None:
-        self.cfg_key = cfg_key
-
-    def __str__(self) -> str:
-        return "MsgWrapper has no config \"" + self.cfg_key
-
-
-class BASIC_CONFIG_IS_COVERED(Exception):
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    def __str__(self) -> str:
-        return "Basic config \"" + self.name + "\" is covered."
+    async def asyncSetUp(self) -> None:
+        self.sut = Record()

@@ -22,10 +22,9 @@
 
 import asyncio
 import manager.master.configs as config
-import client.client as Client
 
 from manager.models import Jobs
-from typing import Dict, Any, Tuple, Optional, cast
+from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
 from manager.master.exceptions import Job_Command_Not_Found, Job_Bind_Failed
@@ -37,7 +36,8 @@ from channels.db import database_sync_to_async
 from manager.basic.mmanager import Module
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
     JobFinMessage, JobFailMessage
-
+from manager.master.msgCell import MsgSource
+from client.messages import Message
 
 JobCommandPrefix = "JOB_COMMAND_"
 
@@ -54,17 +54,26 @@ def task_prefix_trim(ident: str) -> Optional[str]:
     return ident[begin_pos:]
 
 
+class JobMasterMsgSrc(MsgSource):
+
+    async def gen_msg(self) -> Optional[Message]:
+        return None
+
+
 class JobMaster(Endpoint, Module):
+
+    M_NAME = "JobMaster"
 
     def __init__(self) -> None:
         Endpoint.__init__(self)
-        Module.__init__(self, "JobMaster")
+        Module.__init__(self, self.M_NAME)
 
         self._jobs = {}  # type: Dict[str, Job]
         self._config = config.config
 
         self._channel_layer = get_channel_layer()
         self._loop = asyncio.get_running_loop()
+        self.source = JobMasterMsgSrc(self.M_NAME)
 
     async def begin(self) -> None:
         return
@@ -94,13 +103,14 @@ class JobMaster(Endpoint, Module):
             # Task's ident is already check by upper
             # so assume that task_prefix_trim must not
             # return None.
-            await self.client_notify(
-                str(JobInfoMessage(
-                    job.jobid,
-                    [cast(str, task_prefix_trim(t.id())) for t in job.tasks()],
-                    Task.STATE_STR_MAPPING[Task.STATE_PREPARE]
-                ))
-            )
+            tasks = []  # type: List[Tuple[str, str]]
+            for t in job.tasks():
+                id = cast(str, task_prefix_trim(t.id()))
+                state = Task.STATE_STR_MAPPING[t.taskState()]
+                tasks.append((id, state))
+
+            msg = JobInfoMessage(job.jobid, tasks)
+            self.source.real_time_msg(msg, {"is_broadcast": "ON"})
 
             # Store Job into database
             await database_sync_to_async(
@@ -151,7 +161,6 @@ class JobMaster(Endpoint, Module):
 
         for job in jobs:
             await self._do_job(job)
-            await self.client_notify(str(job))
 
     async def handle(self, msg: Any) -> None:
         """
@@ -160,16 +169,15 @@ class JobMaster(Endpoint, Module):
 
         STATE should be str type.
         """
-        print("JobMaster:" + str(msg))
         taskid, state = msg  # type: Tuple[str, str]
 
         jobid = taskid.split("_")[0]
         taskid = taskid[taskid.find("_")+1:]
 
         # Notify Job's state to client.
-        await self.client_notify(
-            str(JobStateChangeMessage(jobid, taskid, state))
-        )
+        self.source.real_time_msg(JobStateChangeMessage(jobid, taskid, state), {
+            "is_broadcast": "ON"
+        })
 
         # Maintain the Job's state
         await self._job_maintain(jobid, state)
@@ -238,13 +246,6 @@ class JobMaster(Endpoint, Module):
     def exists(self, jobid: str) -> bool:
         return jobid in self._jobs
 
-    async def client_notify(self, text: str) -> None:
-        for client in Client.clients.values():
-            await self._channel_layer.send(client.id, {
-                "type": "job.msg",
-                "text": text
-            })
-
     async def _job_maintain(self, jobid: str, state: str) -> None:
         """
         Maintain Fin Jobs and Fail Jobs.
@@ -266,9 +267,9 @@ class JobMaster(Endpoint, Module):
                 )()
 
                 # Notify to client
-                await self.client_notify(
-                    str(JobFinMessage(jobid))
-                )
+                self.source.real_time_msg(JobFinMessage(jobid), {
+                    "is_broadcast": "ON"
+                })
 
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.
@@ -277,6 +278,6 @@ class JobMaster(Endpoint, Module):
             await self.cancel_job(jobid)
 
             # Notify to client
-            await self.client_notify(
-                str(JobFailMessage(jobid))
-            )
+            self.source.real_time_msg(JobFailMessage(jobid), {
+                "is_broadcast": "ON"
+            })

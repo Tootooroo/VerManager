@@ -283,9 +283,7 @@ async def responseHandler_ResultStore(
             dest = resultDir + seperator + fileName
             shutil.copy(path, dest)
 
-        print("Copy to public")
         await copyFileInExecutor(path, "public/"+fileName)
-        print("Copy done")
 
     except FileNotFoundError as e:
         traceback.print_exc()
@@ -294,8 +292,6 @@ async def responseHandler_ResultStore(
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except Exception as e:
-        print(2)
-        print(e)
         traceback.print_exc()
 
     url = cfg.config.getConfig('GitlabUr')

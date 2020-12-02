@@ -31,8 +31,8 @@ import manager.master.proxy_configs as ProxyCfg
 
 class MsgWrapper:
 
-    ON = 'on'
-    OFF = 'off'
+    ON = 'ON'
+    OFF = 'OFF'
 
     def __init__(self, msg: Message) -> None:
         self.msg = msg
@@ -41,35 +41,11 @@ class MsgWrapper:
     def get_msg(self) -> Message:
         return self.msg
 
-    def add_config(self, cfg_key: str) -> None:
+    def add_config(self, cfg_key: str, cfg_val: str) -> None:
         """
-        Add config in to config_map if the config is already
-        exists, just cover it.
+        Add config to config_map.
         """
-        self.config_map[cfg_key] = MsgWrapper.ON
-
-    def add_config_off(self, cfg_key: str) -> None:
-        """
-        Similar to add_config but it's default value
-        is OFF.
-        """
-        self.config_map[cfg_key] = MsgWrapper.OFF
-
-    def set_config_on(self, cfg_key: str) -> None:
-        try:
-            self.config_map[cfg_key] = MsgWrapper.ON
-        except KeyError:
-            raise MSG_WRAPPER_CFG_NOT_EXISTS(cfg_key)
-
-    def set_config_off(self, cfg_key: str) -> None:
-        try:
-            self.config_map[cfg_key] = MsgWrapper.OFF
-        except KeyError:
-            raise MSG_WRAPPER_CFG_NOT_EXISTS(cfg_key)
-
-    def is_turn_on(self, config_key: str) -> bool:
-        return config_key in self.config_map and \
-            self.config_map[config_key] == MsgWrapper.ON
+        self.config_map[cfg_key] = cfg_val
 
     def get_config(self, config_key: str) -> T.Optional[str]:
         if config_key not in self.config_map:
@@ -86,15 +62,23 @@ class MsgSource(abc.ABC):
         # Proxy, seted by Proxy while added to Proxy.
         self._q = None  # type: T.Optional[asyncio.Queue]
 
-    def real_time_msg(self, msg: MsgWrapper) -> None:
+    def setQ(self, q: asyncio.Queue) -> None:
+        self._q = q
+
+    def real_time_msg(self, msg: Message, configs: T.Dict[str, str]) -> None:
         """
         Wrap a message into a MsgWrapper with control info then
         send the MsgWrapper to Proxy
         """
-        try:
 
+        # Wrap message with configs
+        wrapper = MsgWrapper(msg)
+        for key in configs:
+            wrapper.add_config(key, configs[key])
+
+        try:
             if self._q is not None:
-                self._q.put_nowait(msg)
+                self._q.put_nowait(wrapper)
 
         except asyncio.QueueFull:
             raise UNABLE_SEND_MSG_TO_PROXY(
@@ -115,15 +99,20 @@ class MsgSource(abc.ABC):
 
 class MsgUnit:
 
-    def __init__(self, msg_type: str, source: MsgSource) -> None:
+    def __init__(self, msg_type: str, source: MsgSource,
+                 config: T.Dict[str, str]) -> None:
         self._type = msg_type
         self._source = source
+        self._config = config
 
     def src_id(self) -> str:
         return self._source.src_id
 
     def msg_type(self) -> str:
         return self._type
+
+    def config(self) -> T.Dict[str, str]:
+        return self._config
 
     async def gen_msg(self) -> T.Optional[Message]:
         return await self._source.gen_msg()

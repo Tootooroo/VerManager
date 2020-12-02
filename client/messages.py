@@ -22,7 +22,9 @@
 
 import json
 import abc
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
+from manager.master.job import Job
+from manager.master.task import Task
 
 
 class Message(abc.ABC):
@@ -46,18 +48,28 @@ class Message(abc.ABC):
         return Message(json_str["type"], json_str["content"])
 
 
+class JobBatchMessage(Message):
+
+    pass
+
+
+class JobHistoryMessage(Message):
+
+    pass
+
+
 class JobInfoMessage(Message):
 
-    def __init__(self, jobid: str, tasks: List[str], init_state: str) -> None:
+    def __init__(self, jobid: str, tasks: List[Tuple[str, str]]) -> None:
         Message.__init__(self, "job.msg", {
             "subtype": "info",
-            "message": {"jobid": jobid, "tasks": tasks, "state": init_state }
+            "message": {"jobid": jobid, "tasks": tasks}
         })
 
     def jobid(self) -> str:
         return self.content["jobid"]
 
-    def tasks(self) -> List[str]:
+    def tasks(self) -> List[Tuple[str, str]]:
         return self.content["tasks"]
 
 

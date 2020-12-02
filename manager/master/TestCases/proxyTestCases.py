@@ -20,15 +20,55 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
+import asyncio
 import unittest
+import typing as T
+import client.client as C
+from manager.master.proxy import Proxy
 from client.messages import Message
-from manager.master.msgCell import MsgWrapper
+from manager.master.msgCell import MsgWrapper, MsgSource
+
+
+class ClientFake(C.Client):
+
+    def __init__(self, ident: str) -> None:
+        C.Client.__init__(self, ident)
+        self.msgs = []  # type:  T.List[Message]
+
+    async def notify(self, message: Message) -> None:
+        self.msgs.append(message)
+
+
+class SourceTrivial(MsgSource):
+
+    async def gen_msg(self) -> T.Optional[Message]:
+        return Message("Test", {})
 
 
 class ProxyTestCases(unittest.IsolatedAsyncioTestCase):
 
-    pass
+    async def asyncSetUp(self) -> None:
+        self.sut = Proxy(10)
+
+    async def test_Proxy_RealTimeNotify(self) -> None:
+        # Setup
+        client = ClientFake("Fake")
+        C.clients["Fake"] = client
+
+        source = SourceTrivial("SRC1")
+        self.sut.add_msg_source("Test", source, {})
+
+        # Exercise
+        self.sut.start()
+        await asyncio.sleep(1)
+
+        msg = Message("Test", {})
+        source.real_time_msg(msg, {"is_broadcast": "ON"})
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(len(client.msgs) == 1)
+        self.assertEqual(msg, client.msgs[0])
 
 
 class MsgWrapperTestCases(unittest.IsolatedAsyncioTestCase):
@@ -42,25 +82,10 @@ class MsgWrapperTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.msg, self.sut.get_msg())
 
     async def test_MsgWrapper_addConfig(self) -> None:
-        key_off = "cfg_off"
         key_on = "cfg_on"
 
         # Exercise
-        self.sut.add_config(key_on)
-        self.sut.add_config_off(key_off)
+        self.sut.add_config(key_on, "val")
 
         # Verify
-        self.assertEqual(True, self.sut.is_turn_on(key_on))
-        self.assertEqual(False, self.sut.is_turn_on(key_off))
-
-    async def test_MsgWrapper_setConfig(self) -> None:
-        # Setup
-        key = "cfg"
-        self.sut.add_config(key)
-
-        # Exercise
-        self.sut.set_config_on(key)
-        self.assertTrue(self.sut.is_turn_on(key))
-
-        self.sut.set_config_off(key)
-        self.assertFalse(self.sut.is_turn_on(key))
+        self.assertEqual("val", self.sut.get_config(key_on))

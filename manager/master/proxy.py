@@ -30,15 +30,29 @@ from manager.master.msgCell import MsgUnit, MsgSource, MsgWrapper
 
 class Proxy(ModuleDaemon):
 
+    M_NAME = "Proxy"
+
     def __init__(self, q_size: int) -> None:
+        ModuleDaemon.__init__(self, self.M_NAME)
+
         self._msg_units = {}  # type: T.Dict[str, T.List[MsgUnit]]
         self._q = asyncio.Queue(q_size)  # type: asyncio.Queue[MsgWrapper]
 
-    def add_msg_source(self, msg_type: str, src: MsgSource) -> None:
+    async def begin(self) -> None:
+        return None
+
+    async def cleanup(self) -> None:
+        return None
+
+    def add_msg_source(self, msg_type: str, src: MsgSource,
+                       config: T.Dict[str, str]) -> None:
         if msg_type not in self._msg_units:
             self._msg_units[msg_type] = []
 
-        unit = MsgUnit(msg_type, src)
+        # Setup q
+        src.setQ(self._q)
+
+        unit = MsgUnit(msg_type, src, {})
         self._msg_units[msg_type].append(unit)
 
     def del_msg_source(self, msg_type: str, src_id: str) -> None:
@@ -50,8 +64,7 @@ class Proxy(ModuleDaemon):
             unit for unit in units if unit.src_id() != src_id
         ]
 
-    async def run(self) -> None:
-
+    async def real_time_notify_proc(self) -> None:
         while True:
             wrapper = await self._q.get()  # type: MsgWrapper
 
@@ -61,3 +74,12 @@ class Proxy(ModuleDaemon):
 
             for client_name in who:
                 await C.clients[client_name].notify(msg)
+
+    async def period_notify_proc(self) -> None:
+        return None
+
+    async def run(self) -> None:
+        await asyncio.gather(
+            self.real_time_notify_proc(),
+            self.period_notify_proc()
+        )

@@ -27,6 +27,7 @@ from manager.master.exceptions import BASIC_CONFIG_IS_COVERED
 
 config_value = str
 config_handle = T.Callable[[Message, T.List[str], str], None]
+config_item = T.Tuple[config_handle, T.List[str]]
 
 
 def config_is_broadcast(msg: Message, who: T.List[str], cfg_v: str) -> None:
@@ -52,11 +53,11 @@ class ProxyConfigs:
     BASIC_CONFIGS = {
         #                | handle             | value domain
         "is_broadcast": (config_is_broadcast, ["ON", "OFF"]),
-    }  # type: T.Dict[str, T.Tuple[config_handle, T.List[str]]]
+    }  # type: T.Dict[str, config_item]
 
     # You should not to add config to this dict
     # manually.
-    CONFIGS = {}  # type: T.Dict[str, T.Tuple[config_handle, T.List[str]]]
+    CONFIGS = {}  # type: T.Dict[str, config_item]
 
     @classmethod
     def add_config(self, cfg_name: str, handle: config_handle,
@@ -70,7 +71,18 @@ class ProxyConfigs:
 
     @classmethod
     def rm_config(self, cfg_name: str) -> None:
-        # To en
+        # To ensure basic config is not been removed.
+        if cfg_name in self.BASIC_CONFIGS:
+            raise BASIC_CONFIG_IS_COVERED(cfg_name)
+        del self.CONFIGS[cfg_name]
+
+        return None
+
+    def get_config(self, cfg_name: str) -> T.Optional[config_item]:
+        if cfg_name in self.BASIC_CONFIGS:
+            return self.BASIC_CONFIGS[cfg_name]
+        elif cfg_name in self.CONFIGS:
+            return self.CONFIGS[cfg_name]
 
         return None
 

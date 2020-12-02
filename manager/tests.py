@@ -100,4 +100,7 @@ from manager.master.TestCases.jobMasterTestCases import \
     JobMasterTestCases, JobMasterMiscTestCases
 
 from manager.master.TestCases.proxyTestCases import \
-    MsgWrapperTestCases
+    MsgWrapperTestCases, ProxyTestCases
+
+from manager.master.TestCases.proxyConfigsTestCases import \
+    ProxyConfigsTestCases

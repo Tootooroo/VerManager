@@ -38,6 +38,8 @@ class Job:
         self.job_result = None  # type: Optional[str]
         self.state = Job.STATE_PENDING
         self.result = None  # type: Any
+        # This Dict used by
+        self.tasks_record = {}  # type: Dict[str, str]
 
     def is_valid(self) -> bool:
         return len(self.jobid) > 0 and \
@@ -74,5 +76,38 @@ class Job:
         return True
 
     def __str__(self) -> str:
-        tasks_str = ":".join(self._tasks.keys())
-        return self.jobid + "::" + tasks_str
+        """
+        Format:
+        <JobId>,<CmdId>::=<TaskID_1>:<TaskID_2>:...:<TaskID_n>
+        """
+        if len(self._tasks) > 0:
+            tasks_str = ":".join([
+                t.id()+","+Task.STATE_STR_MAPPING[t.taskState()]
+                for t in self._tasks.values()
+            ])
+        elif len(self.tasks_record) > 0:
+            tasks_str = ":".join([
+                ident+","+self.tasks_record[ident]
+                for ident in self.tasks_record
+            ])
+
+        return self.jobid + "," + self.cmd_id + "::=" + tasks_str
+
+    @staticmethod
+    def fromStr(self, str_present: str) -> Optional['Job']:
+        try:
+            head, body = str_present.split("::=")
+            jobid, cmdid = head.split(",")
+
+            record = {}  # type: Dict[str, str]
+            tasks = body.split(":")
+            for t in tasks:
+                tid, state = t.split(",")
+                record[tid] = state
+
+            job = Job(jobid, cmdid, {})
+            job.tasks_record = record
+        except Exception:
+            return None
+
+        return job
