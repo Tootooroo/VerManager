@@ -94,7 +94,7 @@ class Job:
         return self.jobid + "," + self.cmd_id + "::=" + tasks_str
 
     @staticmethod
-    def fromStr(self, str_present: str) -> Optional['Job']:
+    def fromStr(str_present: str) -> Optional['Job']:
         try:
             head, body = str_present.split("::=")
             jobid, cmdid = head.split(",")

@@ -49,8 +49,21 @@ class Versions(models.Model):
 
 
 class Jobs(models.Model):
+    """
+    A set of jobs that is in processing.
+    """
     jobid = models.CharField(max_length=100, primary_key=True)
+    cmdid = models.CharField(max_length=50)
     dateTime = models.DateTimeField(default=timezone.now)
+
+
+class JobInfos(models.Model):
+    """
+    Extra info of Jobs
+    """
+    jobid = models.CharField(max_length=100, primary_key=True)
+    info_key = models.CharField(max_length=30)
+    info_value = models.CharField(max_length=100)
 
 
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
