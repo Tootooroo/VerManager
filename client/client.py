@@ -33,6 +33,13 @@ class Client:
 
     def __init__(self, ident: str) -> None:
         self.id = ident
+        self._reg_state = False
+
+    def register(self) -> None:
+        self._reg_state = True
+
+    def is_register(self) -> bool:
+        return self._reg_state
 
     async def notify(self, message: Message) -> None:
         channel_layer = get_channel_layer()

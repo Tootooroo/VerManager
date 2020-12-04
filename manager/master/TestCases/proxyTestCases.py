@@ -27,6 +27,10 @@ import client.client as C
 from manager.master.proxy import Proxy
 from client.messages import Message
 from manager.master.msgCell import MsgWrapper, MsgSource
+from manager.master.jobMaster import JobMasterMsgSrc, \
+    job_to_jobInfoMsg
+from manager.master.job import Job
+from manager.master.task import Task
 
 
 class ClientFake(C.Client):
@@ -89,3 +93,23 @@ class MsgWrapperTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertEqual("val", self.sut.get_config(key_on))
+
+
+class MsgSourceTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def test_JobMasterMsgSrc_GenMsg(self) -> None:
+        # Setup
+        src = JobMasterMsgSrc("123")
+
+        job1 = Job("1", "1", {})
+        job1._tasks["ID"] = Task("ID", "SN", "VSN")
+        src.jobs = {"job1": job1}
+
+        # Exercise
+        msg = await src.gen_msg()
+        assert(msg is not None)
+
+        # Verify
+        msg_d = dict(msg)
+        self.assertEqual("batch", msg_d["content"]["subtype"])
+        self.assertEqual(dict(job_to_jobInfoMsg(job1)), msg_d["content"]["message"][0])

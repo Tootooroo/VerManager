@@ -24,10 +24,9 @@ import typing
 import client.client as client
 from channels.generic.websocket import AsyncWebsocketConsumer
 from client.models import Clients
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any
 from channels.db import database_sync_to_async
 from channels.exceptions import AcceptConnection
-from client.messages import JobInfoMessage, JobStateChangeMessage
 
 
 class CommuConsumer(AsyncWebsocketConsumer):
@@ -55,6 +54,7 @@ class CommuConsumer(AsyncWebsocketConsumer):
         pass
 
     async def job_msg(self, event: typing.Dict) -> None:
+        print(event['text'])
         await self.send(event['text'])
 
 

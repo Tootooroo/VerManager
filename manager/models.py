@@ -61,7 +61,6 @@ class JobInfos(models.Model):
     """
     Extra info of Jobs
     """
-    jobid = models.CharField(max_length=100, primary_key=True)
     jobs = models.ForeignKey(Jobs, on_delete=models.CASCADE)
     info_key = models.CharField(max_length=30)
     info_value = models.CharField(max_length=100)

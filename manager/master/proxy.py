@@ -26,6 +26,14 @@ import manager.master.proxy_configs as P
 import client.client as C
 from manager.basic.mmanager import ModuleDaemon
 from manager.master.msgCell import MsgUnit, MsgSource, MsgWrapper
+from client.messages import Message
+
+
+class QueryInfo:
+
+    def __init__(self, who: str, require_msg: str) -> None:
+        self.who = who
+        self.require_msg = require_msg
 
 
 class Proxy(ModuleDaemon):
@@ -36,7 +44,10 @@ class Proxy(ModuleDaemon):
         ModuleDaemon.__init__(self, self.M_NAME)
 
         self._msg_units = {}  # type: T.Dict[str, T.List[MsgUnit]]
+        # Queue of real-time-notify request
         self._q = asyncio.Queue(q_size)  # type: asyncio.Queue[MsgWrapper]
+        # Queue of query request
+        self._query_q = asyncio.Queue(q_size)  # type: asyncio.Queue[QueryInfo]
 
     async def begin(self) -> None:
         return None
@@ -73,7 +84,46 @@ class Proxy(ModuleDaemon):
                 wrapper.config_map, wrapper.msg)
 
             for client_name in who:
-                await C.clients[client_name].notify(msg)
+                await self.notify(client_name, msg)
+
+    async def query_proc(self) -> None:
+        while True:
+            q_info = await self._query_q.get()  # type: QueryInfo
+
+            # To check whether is a valid QueryInfo
+            if q_info.who not in C.clients or \
+               q_info.require_msg not in self._msg_units:
+
+                continue
+
+            try:
+                # Get Message from unit
+                units = self._msg_units[q_info.require_msg]
+                for unit in units:
+                    msg = await unit.gen_msg()
+
+                    # Unit's message is not available
+                    # this time, try next.
+                    if msg is None:
+                        continue
+
+                    # Reply message
+                    await self.notify(q_info.who, msg)
+
+            except KeyError:
+                continue
+
+    async def notify(self, cid, msg: Message) -> None:
+        """
+        Send message to a registered client, if it's not a
+        registered client, do nothing
+        """
+        if cid not in C.clients:
+            return
+
+        client = C.clients[cid]
+        if client.is_register():
+            await client.notify(msg)
 
     async def period_notify_proc(self) -> None:
         return None
@@ -81,5 +131,6 @@ class Proxy(ModuleDaemon):
     async def run(self) -> None:
         await asyncio.gather(
             self.real_time_notify_proc(),
-            self.period_notify_proc()
+            self.period_notify_proc(),
+            self.query_proc()
         )
