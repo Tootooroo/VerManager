@@ -81,6 +81,13 @@ class JobMaster(Endpoint, Module):
     async def cleanup(self) -> None:
         return
 
+    async def _job_record(self, job: Job) -> None:
+        # Job record
+        await database_sync_to_async(
+            Jobs.objects.create
+        )(jobid=job.jobid, cmdid=job.cmd_id)
+        # Job info record
+
     def new_job(self, job: Job) -> None:
         self._loop.create_task(self.do_job(job))
 
