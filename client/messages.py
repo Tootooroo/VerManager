@@ -22,7 +22,7 @@
 
 import json
 import abc
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Generator
 from manager.master.job import Job
 from manager.master.task import Task
 
@@ -39,6 +39,10 @@ class Message(abc.ABC):
         content = str(self.content).replace("'", "\"")
         return Message.FORMAT_TEMPLATE % (self.type, content)
 
+    def __iter__(self) -> Generator:
+        yield "type", self.type
+        yield "content", self.content
+
     @staticmethod
     def fromString(msg_str: str) -> 'Message':
         """
@@ -50,7 +54,14 @@ class Message(abc.ABC):
 
 class JobBatchMessage(Message):
 
-    pass
+    def __init__(self, msgs: List[Message]) -> None:
+        Message.__init__(self, "job.msg", {
+            "subtype": "batch",
+            "message": [dict(msg) for msg in msgs
+                        # Ensure a batch not to embed into another
+                        # batch.
+                        if type(msg).__name__ != "JobBatchMessage"]
+        })
 
 
 class JobHistoryMessage(Message):
@@ -60,7 +71,7 @@ class JobHistoryMessage(Message):
 
 class JobInfoMessage(Message):
 
-    def __init__(self, jobid: str, tasks: List[Tuple[str, str]]) -> None:
+    def __init__(self, jobid: str, tasks: List[List[str]]) -> None:
         Message.__init__(self, "job.msg", {
             "subtype": "info",
             "message": {"jobid": jobid, "tasks": tasks}

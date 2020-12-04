@@ -23,7 +23,8 @@
 import asyncio
 import manager.master.configs as config
 
-from manager.models import Jobs
+from types import MappingProxyType
+from manager.models import Jobs, JobInfos
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
@@ -35,7 +36,7 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.basic.mmanager import Module
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
-    JobFinMessage, JobFailMessage
+    JobFinMessage, JobFailMessage, JobBatchMessage
 from manager.master.msgCell import MsgSource
 from client.messages import Message
 
@@ -54,10 +55,34 @@ def task_prefix_trim(ident: str) -> Optional[str]:
     return ident[begin_pos:]
 
 
+def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
+    task = [
+        [
+            # TaskID
+            cast(str, task_prefix_trim(t.id())),
+            # TaskState
+            Task.STATE_STR_MAPPING[t.taskState()]
+        ]
+        for t in job.tasks()
+    ]
+    return JobInfoMessage(
+        job.jobid, task)
+
+
 class JobMasterMsgSrc(MsgSource):
 
+    jobs = None  # type: Optional[Dict[str, Job]]
+
     async def gen_msg(self) -> Optional[Message]:
-        return None
+        if self.jobs is None:
+            return None
+
+        msgs = []  # type: List[Message]
+        for job in self.jobs.values():
+            job_info_msg = job_to_jobInfoMsg(job)
+            msgs.append(job_info_msg)
+
+        return JobBatchMessage(msgs)
 
 
 class JobMaster(Endpoint, Module):
@@ -73,7 +98,10 @@ class JobMaster(Endpoint, Module):
 
         self._channel_layer = get_channel_layer()
         self._loop = asyncio.get_running_loop()
+
+        # Setup source
         self.source = JobMasterMsgSrc(self.M_NAME)
+        self.source.jobs = self._jobs
 
     async def begin(self) -> None:
         return
@@ -83,10 +111,27 @@ class JobMaster(Endpoint, Module):
 
     async def _job_record(self, job: Job) -> None:
         # Job record
-        await database_sync_to_async(
+        job_db = await database_sync_to_async(
             Jobs.objects.create
         )(jobid=job.jobid, cmdid=job.cmd_id)
+
         # Job info record
+        infos = job.infos()
+        for key in job.infos():
+            await database_sync_to_async(
+                JobInfos.objects.create
+            )(jobs=job_db, info_key=key,
+              info_value=infos[key])
+
+    async def _job_record_rm(self, jobid: str) -> None:
+        # Remove Job from database
+        job_db = await database_sync_to_async(
+            Jobs.objects.filter
+        )(jobid=jobid)
+
+        await database_sync_to_async(
+            job_db.delete
+        )()
 
     def new_job(self, job: Job) -> None:
         self._loop.create_task(self.do_job(job))
@@ -110,19 +155,17 @@ class JobMaster(Endpoint, Module):
             # Task's ident is already check by upper
             # so assume that task_prefix_trim must not
             # return None.
-            tasks = []  # type: List[Tuple[str, str]]
+            tasks = []  # type: List[List[str]]
             for t in job.tasks():
                 id = cast(str, task_prefix_trim(t.id()))
                 state = Task.STATE_STR_MAPPING[t.taskState()]
-                tasks.append((id, state))
+                tasks.append([id, state])
 
             msg = JobInfoMessage(job.jobid, tasks)
             self.source.real_time_msg(msg, {"is_broadcast": "ON"})
 
             # Store Job into database
-            await database_sync_to_async(
-                Jobs.objects.create
-            )(jobid=job.jobid)
+            await self._job_record(job)
         except Exception as e:
             print(e)
 
@@ -257,21 +300,13 @@ class JobMaster(Endpoint, Module):
         """
         Maintain Fin Jobs and Fail Jobs.
         """
-        text_str = ""
-
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # If Job is finished
             if self._jobs[jobid].is_fin():
                 del self._jobs[jobid]
 
-                # Remove Job from database
-                job_db = await database_sync_to_async(
-                    Jobs.objects.filter
-                )(jobid=jobid)
-
-                await database_sync_to_async(
-                    job_db.delete
-                )()
+                # Remove record of the job
+                await self._job_record_rm(jobid)
 
                 # Notify to client
                 self.source.real_time_msg(JobFinMessage(jobid), {

@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from types import MappingProxyType
 from typing import Dict, List, Optional, Any
 from manager.master.task import Task
 
@@ -67,6 +68,9 @@ class Job:
         if key not in self._job_info:
             return None
         return self._job_info[key]
+
+    def infos(self) -> MappingProxyType:
+        return MappingProxyType(self._job_info)
 
     def is_fin(self) -> bool:
         for task in self._tasks.values():
