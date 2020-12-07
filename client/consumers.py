@@ -27,6 +27,7 @@ from client.models import Clients
 from typing import Dict, Any
 from channels.db import database_sync_to_async
 from channels.exceptions import AcceptConnection
+from client.messages import Message
 
 
 class CommuConsumer(AsyncWebsocketConsumer):
@@ -56,6 +57,10 @@ class CommuConsumer(AsyncWebsocketConsumer):
     async def job_msg(self, event: typing.Dict) -> None:
         print(event['text'])
         await self.send(event['text'])
+
+
+def client_event_proc(msg: Message) -> None:
+    pass
 
 
 async def client_create(name: str) -> None:
