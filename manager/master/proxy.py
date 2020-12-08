@@ -28,12 +28,21 @@ from manager.basic.mmanager import ModuleDaemon
 from manager.master.msgCell import MsgUnit, MsgSource, MsgWrapper
 from client.messages import Message
 
+PROXY = None  # type: T.Optional[Proxy]
+
 
 class QueryInfo:
 
     def __init__(self, who: str, require_msg: str) -> None:
         self.who = who
         self.require_msg = require_msg
+
+async def message_query(query: QueryInfo) -> T.Optional[T.List[Message]]:
+    # Make sure Proxy is startup.
+    if PROXY is None:
+        return None
+
+    return await PROXY.query_proc(query)
 
 
 class Proxy(ModuleDaemon):
@@ -46,8 +55,7 @@ class Proxy(ModuleDaemon):
         self._msg_units = {}  # type: T.Dict[str, T.List[MsgUnit]]
         # Queue of real-time-notify request
         self._q = asyncio.Queue(q_size)  # type: asyncio.Queue[MsgWrapper]
-        # Queue of query request
-        self._query_q = asyncio.Queue(q_size)  # type: asyncio.Queue[QueryInfo]
+        self.PROXYS = self
 
     async def begin(self) -> None:
         return None
@@ -86,32 +94,34 @@ class Proxy(ModuleDaemon):
             for client_name in who:
                 await self.notify(client_name, msg)
 
-    async def query_proc(self) -> None:
-        while True:
-            q_info = await self._query_q.get()  # type: QueryInfo
+    async def query_proc(self, q_info: QueryInfo) -> T.Optional[T.List[Message]]:
 
-            # To check whether is a valid QueryInfo
-            if q_info.who not in C.clients or \
-               q_info.require_msg not in self._msg_units:
+        msgs = []  # type: T.List[Message]
 
-                continue
+        # To check whether is a valid QueryInfo
+        if q_info.who not in C.clients or \
+           q_info.require_msg not in self._msg_units:
 
-            try:
-                # Get Message from unit
-                units = self._msg_units[q_info.require_msg]
-                for unit in units:
-                    msg = await unit.gen_msg()
+            return None
 
-                    # Unit's message is not available
-                    # this time, try next.
-                    if msg is None:
-                        continue
+        try:
+            # Get Message from unit
+            units = self._msg_units[q_info.require_msg]
+            for unit in units:
+                msg = await unit.gen_msg()
 
-                    # Reply message
-                    await self.notify(q_info.who, msg)
+                # Unit's message is not available
+                # this time, try next.
+                if msg is None:
+                    continue
 
-            except KeyError:
-                continue
+                # Reply message
+                msgs.append(msg)
+
+            return msgs
+
+        except KeyError:
+            return None
 
     async def notify(self, cid, msg: Message) -> None:
         """
@@ -132,5 +142,4 @@ class Proxy(ModuleDaemon):
         await asyncio.gather(
             self.real_time_notify_proc(),
             self.period_notify_proc(),
-            self.query_proc()
         )

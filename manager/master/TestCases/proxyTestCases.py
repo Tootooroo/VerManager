@@ -38,6 +38,7 @@ class ClientFake(C.Client):
     def __init__(self, ident: str) -> None:
         C.Client.__init__(self, ident)
         self.msgs = []  # type:  T.List[Message]
+        self._reg_state = True
 
     async def notify(self, message: Message) -> None:
         self.msgs.append(message)
