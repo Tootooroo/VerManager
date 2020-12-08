@@ -26,7 +26,8 @@ import manager.master.configs as config
 from manager.basic.info import Info
 from manager.master.task import Task
 from manager.master.job import Job
-from manager.master.jobMaster import JobMaster, task_prefix_trim
+from manager.master.jobMaster import JobMaster, task_prefix_trim, \
+    JobMasterMsgSrc
 from manager.basic.endpoint import Endpoint
 from manager.models import Jobs
 from asgiref.sync import sync_to_async
@@ -106,6 +107,20 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         # Teardown
         job = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")
         await sync_to_async(job.delete)()  # type: ignore
+
+    async def test_JobMaster_GenMsg(self) -> None:
+        """
+        Try query message from JobMaster.
+        """
+        source = JobMasterMsgSrc("SRC")
+        source.jobs = {"1": Job("J", "CMD", {})}
+
+        # Exercise
+        msg = await source.gen_msg()
+
+        # Verify
+        self.assertIsNotNone(msg)
+        self.assertTrue("batch", msg.content['subtype'])
 
 
 class JobMasterMiscTestCases(unittest.IsolatedAsyncioTestCase):

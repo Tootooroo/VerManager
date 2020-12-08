@@ -109,3 +109,19 @@ class JobFailMessage(Message):
             "subtype": "fail",
             "message": {"jobs": [jobid]}
         })
+
+
+class ClientEvent(Message):
+
+    def __init__(self, text_data: str) -> None:
+
+        try:
+            data = json.loads(text_data)
+
+            Message.__init__(self, data['type'], {
+                "msg_type": data["content"]["message"]["msg_type"],
+                "args": data["content"]["message"]["args"]
+            })
+
+        except Exception:
+            raise

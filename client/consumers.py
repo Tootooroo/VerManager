@@ -27,7 +27,9 @@ from client.models import Clients
 from typing import Dict, Any
 from channels.db import database_sync_to_async
 from channels.exceptions import AcceptConnection
-from client.messages import Message
+from client.messages import ClientEvent
+from client.clientEventProcessor import ClientEventProcessor
+from client.exceptions import FAILED_TO_QUERY
 
 
 class CommuConsumer(AsyncWebsocketConsumer):
@@ -52,15 +54,28 @@ class CommuConsumer(AsyncWebsocketConsumer):
         await self.send(str(event['message']))
 
     async def receive(self, text_data=None, bytes_data=None) -> None:
-        pass
+        """
+        Client will send datas in json format. These datas will
+        convert into Message
+        """
+        try:
+            event = ClientEvent(text_data)
+            replies = await ClientEventProcessor.proc(event)
+            if replies is None:
+                raise FAILED_TO_QUERY()
+
+            for reply in replies:
+                await self.send(str(reply))
+
+        except FAILED_TO_QUERY:
+            pass
+        except Exception:
+            # Need to be logged
+            pass
 
     async def job_msg(self, event: typing.Dict) -> None:
         print(event['text'])
         await self.send(event['text'])
-
-
-def client_event_proc(msg: Message) -> None:
-    pass
 
 
 async def client_create(name: str) -> None:

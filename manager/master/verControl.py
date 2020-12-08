@@ -58,7 +58,7 @@ class RevSync(ModuleDaemon):
         # repository after RevSync started and RevSync will
         # put such revision into model so the revision database
         # will remain updated
-        self.revQueue = asyncio.Queue(10)  # type: Queue
+        self.revQueue = asyncio.Queue(10)  # type: asyncio.Queue
 
     async def begin(self) -> None:
         await self.revDBInit()

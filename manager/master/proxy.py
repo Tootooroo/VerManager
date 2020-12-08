@@ -33,9 +33,9 @@ PROXY = None  # type: T.Optional[Proxy]
 
 class QueryInfo:
 
-    def __init__(self, who: str, require_msg: str) -> None:
-        self.who = who
+    def __init__(self, require_msg: str) -> None:
         self.require_msg = require_msg
+
 
 async def message_query(query: QueryInfo) -> T.Optional[T.List[Message]]:
     # Make sure Proxy is startup.
@@ -55,7 +55,9 @@ class Proxy(ModuleDaemon):
         self._msg_units = {}  # type: T.Dict[str, T.List[MsgUnit]]
         # Queue of real-time-notify request
         self._q = asyncio.Queue(q_size)  # type: asyncio.Queue[MsgWrapper]
-        self.PROXYS = self
+
+        global PROXY
+        PROXY = self
 
     async def begin(self) -> None:
         return None
@@ -99,9 +101,7 @@ class Proxy(ModuleDaemon):
         msgs = []  # type: T.List[Message]
 
         # To check whether is a valid QueryInfo
-        if q_info.who not in C.clients or \
-           q_info.require_msg not in self._msg_units:
-
+        if q_info.require_msg not in self._msg_units:
             return None
 
         try:

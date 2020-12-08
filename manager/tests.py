@@ -96,11 +96,12 @@ from manager.worker.TestCases.umaintainerTestCases import \
 from manager.master.TestCases.jobTestCases import \
     JobTestCases
 
-from manager.master.TestCases.jobMasterTestCases import \
-    JobMasterTestCases, JobMasterMiscTestCases
-
 from manager.master.TestCases.proxyConfigsTestCases import \
     ProxyConfigsTestCases
 """
+
+from manager.master.TestCases.jobMasterTestCases import \
+    JobMasterTestCases, JobMasterMiscTestCases
+
 from manager.master.TestCases.proxyTestCases import \
     MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases

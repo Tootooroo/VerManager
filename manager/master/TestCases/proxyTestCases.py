@@ -24,7 +24,8 @@ import asyncio
 import unittest
 import typing as T
 import client.client as C
-from manager.master.proxy import Proxy
+from manager.master.proxy import Proxy, \
+    QueryInfo, message_query
 from client.messages import Message
 from manager.master.msgCell import MsgWrapper, MsgSource
 from manager.master.jobMaster import JobMasterMsgSrc, \
@@ -42,6 +43,12 @@ class ClientFake(C.Client):
 
     async def notify(self, message: Message) -> None:
         self.msgs.append(message)
+
+    async def query(self, q_info: QueryInfo) -> None:
+        msgs = await message_query(q_info)
+        if msgs is None:
+            return
+        self.msgs = msgs
 
 
 class SourceTrivial(MsgSource):
@@ -74,6 +81,22 @@ class ProxyTestCases(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertTrue(len(client.msgs) == 1)
         self.assertEqual(msg, client.msgs[0])
+
+    async def test_Proxy_Query(self) -> None:
+        # Setup
+        client1 = ClientFake("Fake1")
+        C.clients["Fake1"] = client1
+
+        source = SourceTrivial("SRC1")
+        self.sut.add_msg_source("Test", source, {})
+
+        # Exercise
+        q_info = QueryInfo("Test")
+        await client1.query(q_info)
+
+        # Verify
+        self.assertNotEqual([], client1.msgs)
+        self.assertEqual("Test", client1.msgs[0].type)
 
 
 class MsgWrapperTestCases(unittest.IsolatedAsyncioTestCase):
