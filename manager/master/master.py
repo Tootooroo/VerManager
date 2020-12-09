@@ -202,7 +202,7 @@ class ServerInst(Thread):
 
         # Proxy Init
         proxy = Proxy(1024)
-        proxy.add_msg_source(Proxy.M_NAME, jobMaster.source, {})
+        proxy.add_msg_source(jobMaster.M_NAME, jobMaster.source, {})
         self._mmanager.addModule(proxy)
 
         await self._mmanager.start_all()

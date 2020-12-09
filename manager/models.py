@@ -28,7 +28,19 @@ from django.utils import timezone
 from django.db import connection
 
 
+async def model_init() -> None:
+
+    # Init manager_informations
+    pass
+
+
 # Create your models here.
+class informations(models.Model):
+    idx = models.DecimalField(max_digits=1, decimal_places=0, primary_key=True)
+    # Next job's unique decimal id
+    avail_job_id = models.BigIntegerField()
+
+
 class Revisions(models.Model):
     sn = models.CharField(max_length=50, primary_key=True)
     author = models.CharField(max_length=25)
@@ -64,6 +76,14 @@ class JobInfos(models.Model):
     jobs = models.ForeignKey(Jobs, on_delete=models.CASCADE)
     info_key = models.CharField(max_length=30)
     info_value = models.CharField(max_length=100)
+
+
+class JobHistory(models.Model):
+    """
+    History of Jobs
+    """
+    job = models.CharField(max_length=100)
+    dateTime = models.DateTimeField(default=timezone.now)
 
 
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:

@@ -132,8 +132,7 @@ class Proxy(ModuleDaemon):
             return
 
         client = C.clients[cid]
-        if client.is_register():
-            await client.notify(msg)
+        await client.notify(msg)
 
     async def period_notify_proc(self) -> None:
         return None

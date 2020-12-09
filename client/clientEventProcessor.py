@@ -47,11 +47,10 @@ class ClientEventProcessor:
 
     @classmethod
     def event_proc_exists(self, event_type: str) -> bool:
-        return evnet_type in self.PROC_TBL
+        return event_type in self.PROC_TBL
 
     @classmethod
     async def proc(self, event: ClientEvent) -> Optional[List[Message]]:
-
         if event.type not in self.PROC_TBL:
             raise EVENT_NOT_FOUND(event.type)
 

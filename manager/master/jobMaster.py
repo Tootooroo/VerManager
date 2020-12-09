@@ -24,7 +24,7 @@ import asyncio
 import manager.master.configs as config
 
 from types import MappingProxyType
-from manager.models import Jobs, JobInfos
+from manager.models import Jobs, JobInfos, informations
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
@@ -175,6 +175,8 @@ class JobMaster(Endpoint, Module):
         to Workers.
         """
 
+        # Assign a unique_id to the job
+
         # Bind Job with a job command
         self.bind(job)
 
@@ -190,6 +192,21 @@ class JobMaster(Endpoint, Module):
 
         for task in tasks:
             await self.peer_notify((Dispatcher.ENDPOINT_CANCEL, task.id()))
+
+    async def assign_unique_id(self, job: Job) -> None:
+        """
+        Read the available unique id from DB then
+        assign it to Job and update DB.
+        """
+        info = await database_sync_to_async(
+            informations.objects
+        ).filter(idx=0)
+
+        job.set_unique_id(info.avail_job_id)
+
+        await database_sync_to_async(
+            informations.objects
+        )
 
     async def _recovery(self) -> None:
         """

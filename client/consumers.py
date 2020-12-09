@@ -58,6 +58,7 @@ class CommuConsumer(AsyncWebsocketConsumer):
         Client will send datas in json format. These datas will
         convert into Message
         """
+
         try:
             event = ClientEvent(text_data)
             replies = await ClientEventProcessor.proc(event)
@@ -71,10 +72,10 @@ class CommuConsumer(AsyncWebsocketConsumer):
             pass
         except Exception:
             # Need to be logged
-            pass
+            import traceback
+            traceback.print_exc()
 
     async def job_msg(self, event: typing.Dict) -> None:
-        print(event['text'])
         await self.send(event['text'])
 
 

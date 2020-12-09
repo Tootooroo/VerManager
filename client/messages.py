@@ -55,7 +55,8 @@ class Message(abc.ABC):
 class JobBatchMessage(Message):
 
     def __init__(self, msgs: List[Message]) -> None:
-        Message.__init__(self, "job.msg", {
+        # fixme: type should be job.msg.
+        Message.__init__(self, "job.msg.batch", {
             "subtype": "batch",
             "message": [dict(msg) for msg in msgs
                         # Ensure a batch not to embed into another
@@ -119,8 +120,8 @@ class ClientEvent(Message):
             data = json.loads(text_data)
 
             Message.__init__(self, data['type'], {
-                "msg_type": data["content"]["message"]["msg_type"],
-                "args": data["content"]["message"]["args"]
+                "subtype": data["content"]["subtype"],
+                "message": data["content"]["message"]
             })
 
         except Exception:

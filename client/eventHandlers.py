@@ -27,11 +27,11 @@ from manager.master.proxy import QueryInfo, message_query
 from client.clientEventProcessor import ClientEventProcessor
 
 
-def init(self) -> None:
+def init() -> None:
     """
     Initialize event handlers
     """
-    pass
+    ClientEventProcessor.event_proc_install("query", query_event_handler)
 
 
 async def query_event_handler(event: ClientEvent) -> Optional[List[Message]]:
