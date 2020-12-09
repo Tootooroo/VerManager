@@ -24,7 +24,7 @@ import asyncio
 import manager.master.configs as config
 
 from types import MappingProxyType
-from manager.models import Jobs, JobInfos, informations
+from manager.models import Jobs, JobInfos, Informations
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
@@ -176,6 +176,7 @@ class JobMaster(Endpoint, Module):
         """
 
         # Assign a unique_id to the job
+        self.assign_unique_id(job)
 
         # Bind Job with a job command
         self.bind(job)
@@ -199,14 +200,18 @@ class JobMaster(Endpoint, Module):
         assign it to Job and update DB.
         """
         info = await database_sync_to_async(
-            informations.objects
+            Informations.objects
         ).filter(idx=0)
 
         job.set_unique_id(info.avail_job_id)
 
+        # Update unique id
+        # avail_job_id can grow up to 9223372036854775807,
+        # so it will no likely to overflow in normal scence.
+        info.avail_job_id += 1
         await database_sync_to_async(
-            informations.objects
-        )
+            info
+        ).save()
 
     async def _recovery(self) -> None:
         """

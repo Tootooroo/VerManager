@@ -35,8 +35,8 @@ async def model_init() -> None:
 
 
 # Create your models here.
-class informations(models.Model):
-    idx = models.DecimalField(max_digits=1, decimal_places=0, primary_key=True)
+class Informations(models.Model):
+    idx = models.DecimalField(max_digits=0, decimal_places=0, primary_key=True)
     # Next job's unique decimal id
     avail_job_id = models.BigIntegerField()
 
@@ -82,8 +82,18 @@ class JobHistory(models.Model):
     """
     History of Jobs
     """
+    unique_id = models.BigIntegerField(primary_key=True)
     job = models.CharField(max_length=100)
     dateTime = models.DateTimeField(default=timezone.now)
+
+
+class TaskHistory(models.Model):
+    """
+    History of tasks
+    """
+    jobhistory = models.ForeignKey(JobHistory, on_delete=models.CASCADE)
+    task_name = models.CharField(max_length=64)
+    state = models.CharField(max_length=10)
 
 
 def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
