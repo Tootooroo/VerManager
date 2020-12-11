@@ -26,19 +26,30 @@ from django.db import connections
 from django.db import models
 from django.utils import timezone
 from django.db import connection
+from channels.db import database_sync_to_async
 
 
 async def model_init() -> None:
 
     # Init manager_informations
-    pass
+    await Informations.init()
 
 
 # Create your models here.
 class Informations(models.Model):
-    idx = models.DecimalField(max_digits=0, decimal_places=0, primary_key=True)
+    idx = models.DecimalField(max_digits=1, decimal_places=0, primary_key=True)
     # Next job's unique decimal id
     avail_job_id = models.BigIntegerField()
+
+    @classmethod
+    async def init(self) -> None:
+        infos = self.objects.all()
+
+        if await database_sync_to_async(len)(infos) == 0:
+            info = Informations(idx=0, avail_job_id=1)
+            await database_sync_to_async(
+                info.save
+            )()
 
 
 class Revisions(models.Model):

@@ -89,7 +89,7 @@ class MsgSource(abc.ABC):
         return self._q is not None and not self._q.full()
 
     @abc.abstractmethod
-    async def gen_msg(self) -> T.Optional[Message]:
+    async def gen_msg(self, args: T.List[str] = None) -> T.Optional[Message]:
         """
         Generate Message
 
@@ -114,5 +114,5 @@ class MsgUnit:
     def config(self) -> T.Dict[str, str]:
         return self._config
 
-    async def gen_msg(self) -> T.Optional[Message]:
-        return await self._source.gen_msg()
+    async def gen_msg(self, args: T.List[str] = None) -> T.Optional[Message]:
+        return await self._source.gen_msg(args)

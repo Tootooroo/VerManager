@@ -36,7 +36,7 @@ class Job:
 
         # A unique id is set by JobMaster while this job is
         # dispatched, so set to 0 by default is not a matter.
-        self._unique_id = 0
+        self.unique_id = 0
 
         self.cmd_id = cmd_id
         self._tasks = {}  # type: Dict[str, Task]
@@ -53,7 +53,7 @@ class Job:
             0 not in [len(t) for t in self._tasks]
 
     def set_unique_id(self, uid: int) -> None:
-        self._unique_id = uid
+        self.unique_id = uid
 
     def addTask(self, ident: str, task: Task) -> None:
         if ident not in self._tasks:

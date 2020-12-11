@@ -46,6 +46,7 @@ from manager.master.verControl import RevSync
 from manager.basic.dataLink import DataLinker, DataLink
 from manager.master.jobMaster import JobMaster
 from manager.master.proxy import Proxy
+from manager.models import model_init
 
 
 ServerInstance = None  # type:  Optional['ServerInst']
@@ -95,6 +96,9 @@ class ServerInst(Thread):
 
     async def _execute(self) -> None:
         global predicates
+
+        # Initialize models
+        await model_init()
 
         self._mmanager = MManager()
         cfg.mmanager = self._mmanager

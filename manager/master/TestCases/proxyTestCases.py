@@ -53,7 +53,7 @@ class ClientFake(C.Client):
 
 class SourceTrivial(MsgSource):
 
-    async def gen_msg(self) -> T.Optional[Message]:
+    async def gen_msg(self, args: T.List[str] = None) -> T.Optional[Message]:
         return Message("Test", {})
 
 

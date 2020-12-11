@@ -23,8 +23,8 @@
 import asyncio
 import manager.master.configs as config
 
-from types import MappingProxyType
-from manager.models import Jobs, JobInfos, Informations
+from manager.models import Jobs, JobInfos, Informations, \
+    JobHistory, TaskHistory
 from typing import Dict, Any, Tuple, Optional, cast, List
 from manager.master.dispatcher import Dispatcher
 from manager.master.job import Job
@@ -73,7 +73,7 @@ class JobMasterMsgSrc(MsgSource):
 
     jobs = None  # type: Optional[Dict[str, Job]]
 
-    async def gen_msg(self) -> Optional[Message]:
+    async def gen_msg(self, args: List[str] = None) -> Optional[Message]:
         if self.jobs is None:
             return None
 
@@ -176,7 +176,7 @@ class JobMaster(Endpoint, Module):
         """
 
         # Assign a unique_id to the job
-        self.assign_unique_id(job)
+        await self.assign_unique_id(job)
 
         # Bind Job with a job command
         self.bind(job)
@@ -200,8 +200,8 @@ class JobMaster(Endpoint, Module):
         assign it to Job and update DB.
         """
         info = await database_sync_to_async(
-            Informations.objects
-        ).filter(idx=0)
+            Informations.objects.get
+        )(idx=0)
 
         job.set_unique_id(info.avail_job_id)
 
@@ -210,8 +210,8 @@ class JobMaster(Endpoint, Module):
         # so it will no likely to overflow in normal scence.
         info.avail_job_id += 1
         await database_sync_to_async(
-            info
-        ).save()
+            info.save
+        )()
 
     async def _recovery(self) -> None:
         """
@@ -318,6 +318,22 @@ class JobMaster(Endpoint, Module):
     def exists(self, jobid: str) -> bool:
         return jobid in self._jobs
 
+    async def _record_history(self, job: Job) -> None:
+        jobHistory = JobHistory(unique_id=job.unique_id, job=job.jobid)
+        await database_sync_to_async(
+            jobHistory.save
+        )()
+
+        for task in job.tasks():
+            taskHistory = TaskHistory(
+                jobhistory=jobHistory,
+                task_name=task.id(),
+                state=task.taskState()
+            )
+            await database_sync_to_async(
+                taskHistory.save
+            )()
+
     async def _job_maintain(self, jobid: str, state: str) -> None:
         """
         Maintain Fin Jobs and Fail Jobs.
@@ -325,6 +341,10 @@ class JobMaster(Endpoint, Module):
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # If Job is finished
             if self._jobs[jobid].is_fin():
+                # Record Job info into db
+                job = self._jobs[jobid]
+                await self._record_history(job)
+
                 del self._jobs[jobid]
 
                 # Remove record of the job
@@ -340,6 +360,11 @@ class JobMaster(Endpoint, Module):
             # need to cancel all tasks of the job to make sure
             # the consistency of tasks of a job is statisfied.
             await self.cancel_job(jobid)
+
+            job = self._jobs[jobid]
+            await self._record_history(job)
+
+            del self._jobs[jobid]
 
             # Notify to client
             self.source.real_time_msg(JobFailMessage(jobid), {

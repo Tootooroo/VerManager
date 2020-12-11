@@ -33,8 +33,9 @@ PROXY = None  # type: T.Optional[Proxy]
 
 class QueryInfo:
 
-    def __init__(self, require_msg: str) -> None:
+    def __init__(self, require_msg: str, args: T.List[str] = None) -> None:
         self.require_msg = require_msg
+        self.args = args
 
 
 async def message_query(query: QueryInfo) -> T.Optional[T.List[Message]]:
@@ -108,7 +109,7 @@ class Proxy(ModuleDaemon):
             # Get Message from unit
             units = self._msg_units[q_info.require_msg]
             for unit in units:
-                msg = await unit.gen_msg()
+                msg = await unit.gen_msg(q_info.args)
 
                 # Unit's message is not available
                 # this time, try next.

@@ -39,6 +39,9 @@ async def query_event_handler(event: ClientEvent) -> Optional[List[Message]]:
     Query information of manager via send a QueryInfo to
     Proxy then send back the response of reply of Proxy.
     """
-    q_info = QueryInfo(event.content['subtype'])
+    q_info = QueryInfo(
+        event.content['subtype'],
+        args=event.content['message']['args']
+    )
     replies = await message_query(q_info)
     return replies
