@@ -251,6 +251,12 @@ class SingleTask(Task):
         build = self._build
         extra = {"resultPath": build.getOutput(), "cmds": build.getCmd()}
 
+        for key in self.extra:
+            if key not in extra:
+                extra[key] = self.extra[key]
+            else:
+                raise Exception()
+
         return NewLetter(self.id(), self.sn, self.vsn, str(datetime.utcnow()),
                          parent="",
                          extra=extra,
