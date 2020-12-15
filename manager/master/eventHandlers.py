@@ -298,7 +298,8 @@ async def responseHandler_ResultStore(
     task.job.job_result = url + "/data/" + fileName
 
 
-async def binaryHandler(dl: DataLink, letter: BinaryLetter, env: Entry.EntryEnv) -> None:
+async def binaryHandler(dl: DataLink, letter: BinaryLetter,
+                        env: Entry.EntryEnv) -> None:
     chooserSet = EVENT_HANDLER_TOOLS.chooserSet
 
     if not isinstance(letter, BinaryLetter):

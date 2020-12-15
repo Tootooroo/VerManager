@@ -332,9 +332,6 @@ async def job_result_transfer(target: str, job: NewLetter, output: Output) -> No
     fileName = result_path.split(pathSeperator())[-1]
 
     await output.sendfile(target, result_path, tid, version, fileName)
-    # await do_job_result_transfer(
-    #    result_path, tid, target, version, fileName,
-    #    send_rtn)
 
 
 async def do_job_result_transfer(path, tid: str, linkid: str,
@@ -788,12 +785,17 @@ class PostProcUnit(PostProcUnitProto):
     async def _frag_collect(self, letter: BinaryLetter) -> None:
         assert(configs.config is not None)
 
-        version = letter.getParent()
-        if version not in self._posts:
-            return
-        post = self._posts[version]
-
         tid = letter.getTid()
+        version = letter.getParent()
+
+        # Make target post's ident via
+        # merge unique_id with version's ident
+        post_ident = tid.split("_")[0] + "_" + version
+        if post_ident not in self._posts:
+            return
+        else:
+            post = self._posts[post_ident]
+
         fileName = letter.getFileName()
         post.set_frag_fileName(tid, fileName)
         post.set_frag_ready(tid)
@@ -810,11 +812,6 @@ class PostProcUnit(PostProcUnitProto):
         if path != '':
             # Success
             fileName = path.split(pathSeperator())[-1]
-
-            # await do_job_result_transfer(
-            #     path, post.ident(), "Master", post.version(),
-            #     fileName, self._output_space.send
-            # )
 
             await self._output_space.sendfile(
                 "Master", path, post.ident(), post.version(), fileName)
@@ -844,11 +841,12 @@ class PostProcUnit(PostProcUnitProto):
         if ident in self._posts:
             return
 
+        ident = letter.getIdent()
         version = letter.getVersion()
         post = Post(ident, letter.frags(), letter.getCmds(),
                     letter.getOutput(), version)
 
-        self._posts[version] = post
+        self._posts[ident] = post
 
         path = self._post_dir+"/"+version
         if not os.path.exists(path):

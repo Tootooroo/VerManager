@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import asyncio
+import traceback
 import manager.master.configs as config
 
 from manager.models import Jobs, JobInfos, Informations, \
@@ -113,7 +114,7 @@ class JobMaster(Endpoint, Module):
         # Job record
         job_db = await database_sync_to_async(
             Jobs.objects.create
-        )(jobid=job.jobid, cmdid=job.cmd_id)
+        )(unique_id=job.unique_id, jobid=job.jobid, cmdid=job.cmd_id)
 
         # Job info record
         infos = job.infos()
@@ -123,11 +124,11 @@ class JobMaster(Endpoint, Module):
             )(jobs=job_db, info_key=key,
               info_value=infos[key])
 
-    async def _job_record_rm(self, jobid: str) -> None:
+    async def _job_record_rm(self, unique_id: str) -> None:
         # Remove Job from database
         job_db = await database_sync_to_async(
             Jobs.objects.filter
-        )(jobid=jobid)
+        )(unique_id=unique_id)
 
         await database_sync_to_async(
             job_db.delete
@@ -138,13 +139,8 @@ class JobMaster(Endpoint, Module):
 
     async def do_job(self, job: Job) -> None:
 
-        if job.jobid in self._jobs:
+        if not job.is_valid():
             return None
-        else:
-            if not job.is_valid():
-                return None
-
-            self._jobs[job.jobid] = job
 
         try:
             # Dispatch job
@@ -175,8 +171,10 @@ class JobMaster(Endpoint, Module):
         to Workers.
         """
 
-        # Assign a unique_id to the job
+        # Store job with assigned unique id
+        # to make sure no conflict.
         await self.assign_unique_id(job)
+        self._jobs[str(job.unique_id)] = job
 
         # Bind Job with a job command
         self.bind(job)
@@ -199,19 +197,23 @@ class JobMaster(Endpoint, Module):
         Read the available unique id from DB then
         assign it to Job and update DB.
         """
-        info = await database_sync_to_async(
-            Informations.objects.get
-        )(idx=0)
 
-        job.set_unique_id(info.avail_job_id)
+        try:
+            info = await database_sync_to_async(
+                Informations.objects.get
+            )(idx=0)
 
-        # Update unique id
-        # avail_job_id can grow up to 9223372036854775807,
-        # so it will no likely to overflow in normal scence.
-        info.avail_job_id += 1
-        await database_sync_to_async(
-            info.save
-        )()
+            job.set_unique_id(info.avail_job_id)
+
+            # Update unique id
+            # avail_job_id can grow up to 9223372036854775807,
+            # so it will no likely to overflow in normal scence.
+            info.avail_job_id += 1
+            await database_sync_to_async(
+                info.save
+            )()
+        except Exception:
+            traceback.print_exc()
 
     async def _recovery(self) -> None:
         """
@@ -243,16 +245,23 @@ class JobMaster(Endpoint, Module):
         """
         taskid, state = msg  # type: Tuple[str, str]
 
-        jobid = taskid.split("_")[0]
+        unique_id = taskid.split("_")[0]
         taskid = taskid[taskid.find("_")+1:]
 
+        if unique_id not in self._jobs:
+            return
+        else:
+            jobid = self._jobs[unique_id].jobid
+
         # Notify Job's state to client.
-        self.source.real_time_msg(JobStateChangeMessage(jobid, taskid, state), {
-            "is_broadcast": "ON"
-        })
+        self.source.real_time_msg(
+            JobStateChangeMessage(jobid, taskid, state), {
+                "is_broadcast": "ON"
+            }
+        )
 
         # Maintain the Job's state
-        await self._job_maintain(jobid, state)
+        await self._job_maintain(unique_id, state)
 
     def bind(self, job: Job) -> None:
         """
@@ -286,21 +295,28 @@ class JobMaster(Endpoint, Module):
             raise Job_Bind_Failed()
 
         for build in bs.getBuilds():
-            st = SingleTask(prepend_prefix(job.jobid, build.getIdent()),
-                            sn=sn,
-                            revision=vsn,
-                            build=build,
-                            needPost='true',
-                            extra={})
+            st = SingleTask(
+                prepend_prefix(str(job.unique_id), build.getIdent()),
+                sn=sn,
+                revision=vsn,
+                build=build,
+                needPost='true',
+                extra={}
+            )
             st.job = job
             job.addTask(build.getIdent(), st)
 
         # Build PostTask
-        st_idents = [prepend_prefix(job.jobid, build.getIdent())
+        st_idents = [prepend_prefix(str(job.unique_id), build.getIdent())
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        pt = PostTask(job.jobid, job.get_info('vsn'), st_idents, merge_command)
+        pt = PostTask(
+            prepend_prefix(str(job.unique_id), job.jobid),
+            job.get_info('vsn'),
+            st_idents,
+            merge_command
+        )
         pt.job = job
         job.addTask(job.jobid, pt)
 
@@ -319,7 +335,20 @@ class JobMaster(Endpoint, Module):
         return jobid in self._jobs
 
     async def _record_history(self, job: Job) -> None:
-        jobHistory = JobHistory(unique_id=job.unique_id, job=job.jobid)
+
+        # No file is generated from an
+        # unfinished job.
+        if job.is_fin() and job.job_result is not None:
+            filePath = job.job_result
+        else:
+            filePath = "None"
+
+        jobHistory = JobHistory(
+            unique_id=job.unique_id,
+            job=job.jobid,
+            filePath=filePath
+        )
+
         await database_sync_to_async(
             jobHistory.save
         )()

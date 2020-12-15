@@ -75,7 +75,8 @@ class Jobs(models.Model):
     """
     A set of jobs that is in processing.
     """
-    jobid = models.CharField(max_length=100, primary_key=True)
+    unique_id = models.BigIntegerField(primary_key=True)
+    jobid = models.CharField(max_length=100)
     cmdid = models.CharField(max_length=50)
     dateTime = models.DateTimeField(default=timezone.now)
 
@@ -95,6 +96,7 @@ class JobHistory(models.Model):
     """
     unique_id = models.BigIntegerField(primary_key=True)
     job = models.CharField(max_length=100)
+    filePath = models.CharField(max_length=128, default="")
     dateTime = models.DateTimeField(default=timezone.now)
 
 
