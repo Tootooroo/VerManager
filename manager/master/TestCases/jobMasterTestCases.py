@@ -29,26 +29,44 @@ from manager.master.job import Job
 from manager.master.jobMaster import JobMaster, task_prefix_trim, \
     JobMasterMsgSrc
 from manager.basic.endpoint import Endpoint
-from manager.models import Jobs
+from manager.models import Jobs, JobHistory, TaskHistory
 from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 
 class DispatcherFake(Endpoint):
 
     def __init__(self) -> None:
         Endpoint.__init__(self)
-        self.tasks = []  # type: typing.List[str]
+        self.tasks = []  # type: typing.List[Task]
 
     async def handle(self, msg: typing.Tuple[str, Task]) -> None:
         cmd, task = msg
-        self.tasks.append(task.id())
+        self.tasks.append(task)
+
+    async def fin(self) -> None:
+        """
+        Set all tasks to fin state and notify
+        JobMaster.
+        """
+        for t in self.tasks:
+            # To ProcState then to Fin
+            # cause directly from Prepare to
+            # Fin state is not allow.
+            t.toProcState()
+            t.toFinState()
+
+            await self.peer_notify((
+                t.id(),
+                Task.STATE_STR_MAPPING[Task.STATE_FINISHED]
+            ))
 
 
 class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         # Setup
-        config.config = Info("./WorkSpace/config.yaml")
+        config.config = Info("manager/master/TestCases/misc/config.yaml")
         self.sut = JobMaster()
 
     async def test_JobMaster_Create(self) -> None:
@@ -69,12 +87,12 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         self.sut.bind(job)
 
         # Verify
-        idents = [t.id() for t in job.tasks()]
+        idents = [t.id().split("_")[1] for t in job.tasks()]
         self.assertTrue(len(job.tasks()) == 5)
-        self.assertTrue("JobMasterTest1_GL5610" in idents)
-        self.assertTrue("JobMasterTest1_GL5610-v3" in idents)
-        self.assertTrue("JobMasterTest1_GL8900_line" in idents)
-        self.assertTrue("JobMasterTest1_GL8900_ctrl" in idents)
+        self.assertTrue("GL5610" in idents)
+        self.assertTrue("GL5610-v3" in idents)
+        self.assertTrue("GL5610-v2" in idents)
+        self.assertTrue("GL8900" in idents)
         self.assertTrue("JobMasterTest1" in idents)
 
         # Teardown
@@ -88,6 +106,14 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         worker via dispatcher.
         """
 
+        tasks = [
+            "GL5610",
+            "GL5610-v2",
+            "GL5610-v3",
+            "GL8900",
+            "JobMasterTest",
+        ]
+
         # Setup
         job = Job("JobMasterTest", "GL8900", {"sn": "123456", "vsn": "123456"})
         fake = DispatcherFake()
@@ -96,17 +122,45 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         # Exercise
         await self.sut.do_job(job)
 
-        # Verify
+        # Verify Tasks
         self.assertTrue(len(job.tasks()) == 5)
-        self.assertTrue("JobMasterTest_GL5610" in fake.tasks)
-        self.assertTrue("JobMasterTest_GL5610-v3" in fake.tasks)
-        self.assertTrue("JobMasterTest_GL8900_line" in fake.tasks)
-        self.assertTrue("JobMasterTest_GL8900_ctrl" in fake.tasks)
-        self.assertTrue("JobMasterTest" in fake.tasks)
+        for t in tasks:
+            self.assertTrue(t in [t.id().split("_")[1] for t in fake.tasks])
+
+        # Exercise Fin state of a job
+        job.job_result = "Path"
+        await fake.fin()
+
+        # Verify
+        job_db = await database_sync_to_async(
+            JobHistory.objects.get
+        )(unique_id=job.unique_id)
+
+        tasks_db = await database_sync_to_async(
+            TaskHistory.objects.filter
+        )(jobhistory_id=job_db.unique_id)
+
+        tasks_objs = await database_sync_to_async(list)(tasks_db)
+        for t in tasks:
+            self.assertTrue(t in [obj.task_name.split("_")[1] for obj in tasks_objs])
 
         # Teardown
-        job = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")
-        await sync_to_async(job.delete)()  # type: ignore
+        job_ = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")
+        await sync_to_async(job_.delete)()  # type: ignore
+
+        jobhistory = await database_sync_to_async(
+            JobHistory.objects.filter
+        )(unique_id=job.unique_id)
+        await database_sync_to_async(
+            jobhistory.delete
+        )()
+
+        taskhistory = await database_sync_to_async(
+            TaskHistory.objects.filter
+        )(jobhistory_id=job_db.unique_id)
+        await database_sync_to_async(
+            taskhistory.delete
+        )()
 
     async def test_JobMaster_GenMsg(self) -> None:
         """
