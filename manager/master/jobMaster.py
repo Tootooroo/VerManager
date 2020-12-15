@@ -370,32 +370,23 @@ class JobMaster(Endpoint, Module):
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # If Job is finished
             if self._jobs[jobid].is_fin():
-                # Record Job info into db
-                job = self._jobs[jobid]
-                await self._record_history(job)
-
-                del self._jobs[jobid]
-
-                # Remove record of the job
-                await self._job_record_rm(jobid)
-
-                # Notify to client
-                self.source.real_time_msg(JobFinMessage(jobid), {
-                    "is_broadcast": "ON"
-                })
+                await self._job_maintain_terminate(jobid, JobFinMessage(jobid))
 
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.
             # need to cancel all tasks of the job to make sure
             # the consistency of tasks of a job is statisfied.
             await self.cancel_job(jobid)
+            await self._job_maintain_terminate(jobid, JobFailMessage(jobid))
 
-            job = self._jobs[jobid]
-            await self._record_history(job)
+    async def _job_maintain_terminate(self, jobid: str, msg: Message) -> None:
+        job = self._jobs[jobid]
+        await self._record_history(job)
 
-            del self._jobs[jobid]
+        del self._jobs[jobid]
+        await self._job_record_rm(jobid)
 
-            # Notify to client
-            self.source.real_time_msg(JobFailMessage(jobid), {
-                "is_broadcast": "ON"
-            })
+        # Notify to client
+        self.source.real_time_msg(msg, {
+            "is_broadcast": "ON"
+        })
