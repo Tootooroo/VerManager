@@ -22,7 +22,9 @@
 
 
 import unittest
-from client.messages import Message
+from manager.master.job import Job
+from manager.master.task import Task
+from client.messages import Message, JobHistoryMessage
 
 
 class MessageTestCaes(unittest.IsolatedAsyncioTestCase):
@@ -57,3 +59,13 @@ class MessageTestCaes(unittest.IsolatedAsyncioTestCase):
         # Verify
         self.assertEqual(msg.type, msg1.type)
         self.assertEqual(msg.content, msg1.content)
+
+
+class JobHistoryMessageTestCases(unittest.IsolatedAsyncioTestCase):
+
+    async def test_JHMessage_toString(self) -> None:
+        # Setup
+        jobs = [Job("123", "123", {}), Job("12", "12", {})]
+        jobs[0]._tasks = {"t1": Task("t1", "SN", "VSN")}
+        jobs[1].unique_id = 1
+        msg = JobHistoryMessage(jobs)

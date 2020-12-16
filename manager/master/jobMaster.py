@@ -37,7 +37,7 @@ from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
 from manager.basic.mmanager import Module
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
-    JobFinMessage, JobFailMessage, JobBatchMessage
+    JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage
 from manager.master.msgCell import MsgSource
 from client.messages import Message
 
@@ -56,6 +56,13 @@ def task_prefix_trim(ident: str) -> Optional[str]:
     return ident[begin_pos:]
 
 
+def task_gen_helper(id: str, state: str) -> Task:
+    t = Task(id, "", "")
+    t.state = int(state)
+
+    return t
+
+
 def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
     task = [
         [
@@ -66,8 +73,7 @@ def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
         ]
         for t in job.tasks()
     ]
-    return JobInfoMessage(
-        job.jobid, task)
+    return JobInfoMessage(str(job.unique_id), job.jobid, task)
 
 
 class JobMasterMsgSrc(MsgSource):
@@ -75,15 +81,59 @@ class JobMasterMsgSrc(MsgSource):
     jobs = None  # type: Optional[Dict[str, Job]]
 
     async def gen_msg(self, args: List[str] = None) -> Optional[Message]:
+
+        assert(args is not None)
+
         if self.jobs is None:
             return None
 
+        try:
+            f = getattr(self, "query_" + args[0])
+            return await f(args)
+        except AttributeError:
+            return None
+
+    async def query_processing(self, args: List[str]) -> Optional[Message]:
         msgs = []  # type: List[Message]
-        for job in self.jobs.values():
+
+        for job in self.jobs.values():  # type: ignore
             job_info_msg = job_to_jobInfoMsg(job)
             msgs.append(job_info_msg)
 
         return JobBatchMessage(msgs)
+
+    async def query_history(self, *args) -> Optional[Message]:
+        jobs = []  # type: List[Job]
+
+        jobs_history = await database_sync_to_async(
+            JobHistory.objects.all
+        )()
+
+        jobs_history_list = await database_sync_to_async(
+            list
+        )(jobs_history)
+
+        for job in jobs_history_list:
+            task_history = await database_sync_to_async(
+                TaskHistory.objects.filter
+            )(jobhistory=job)
+
+            task_history_list = await database_sync_to_async(
+                list
+            )(task_history)
+
+            tasks = {
+                t.task_name: task_gen_helper(t.task_name, t.state)
+                for t in task_history_list
+            }
+
+            job_ = Job(job.job, "", {})
+            job_.unique_id = job.unique_id
+            job_._tasks = tasks
+
+            jobs.append(job_)
+
+        return JobHistoryMessage(jobs)
 
 
 class JobMaster(Endpoint, Module):
@@ -103,6 +153,10 @@ class JobMaster(Endpoint, Module):
         # Setup source
         self.source = JobMasterMsgSrc(self.M_NAME)
         self.source.jobs = self._jobs
+
+        # Lock to prevent race conditon of
+        # unique id access.
+        self._lock = asyncio.Lock()
 
     async def begin(self) -> None:
         return
@@ -157,7 +211,7 @@ class JobMaster(Endpoint, Module):
                 state = Task.STATE_STR_MAPPING[t.taskState()]
                 tasks.append([id, state])
 
-            msg = JobInfoMessage(job.jobid, tasks)
+            msg = JobInfoMessage(str(job.unique_id), job.jobid, tasks)
             self.source.real_time_msg(msg, {"is_broadcast": "ON"})
 
             # Store Job into database
@@ -197,23 +251,24 @@ class JobMaster(Endpoint, Module):
         Read the available unique id from DB then
         assign it to Job and update DB.
         """
+        async with self._lock:
 
-        try:
-            info = await database_sync_to_async(
-                Informations.objects.get
-            )(idx=0)
+            try:
+                info = await database_sync_to_async(
+                    Informations.objects.get
+                )(idx=0)
 
-            job.set_unique_id(info.avail_job_id)
+                job.set_unique_id(info.avail_job_id)
 
-            # Update unique id
-            # avail_job_id can grow up to 9223372036854775807,
-            # so it will no likely to overflow in normal scence.
-            info.avail_job_id += 1
-            await database_sync_to_async(
-                info.save
-            )()
-        except Exception:
-            traceback.print_exc()
+                # Update unique id
+                # avail_job_id can grow up to 9223372036854775807,
+                # so it will no likely to overflow in normal scence.
+                info.avail_job_id += 1
+                await database_sync_to_async(
+                    info.save
+                )()
+            except Exception:
+                traceback.print_exc()
 
     async def _recovery(self) -> None:
         """
@@ -255,7 +310,7 @@ class JobMaster(Endpoint, Module):
 
         # Notify Job's state to client.
         self.source.real_time_msg(
-            JobStateChangeMessage(jobid, taskid, state), {
+            JobStateChangeMessage(unique_id, jobid, taskid, state), {
                 "is_broadcast": "ON"
             }
         )

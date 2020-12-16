@@ -208,6 +208,14 @@ class Task(TaskBase):
     def file(self) -> Optional[Any]:
         return self._files
 
+    @classmethod
+    def state_str_to_int(self, state: str) -> int:
+        for i in range(4):
+            if state == self.STATE_STR_MAPPING[i]:
+                return i
+
+        return -1
+
     def toLetter(self) -> Letter:
         pass
 

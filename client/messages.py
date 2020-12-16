@@ -58,28 +58,34 @@ class JobBatchMessage(Message):
         # fixme: type should be job.msg.
         Message.__init__(self, "job.msg.batch", {
             "subtype": "batch",
-            "message": [dict(msg) for msg in msgs
-                        # Ensure a batch not to embed into another
-                        # batch.
-                        if type(msg).__name__ != "JobBatchMessage"]
+            "message": [
+                dict(msg) for msg in msgs
+                # Ensure a batch not to
+                # embed into another batch.
+                if type(msg).__name__ != "JobBatchMessage"
+            ]
         })
-
-
-class JobHistoryMessage(Message):
-
-    pass
 
 
 class JobInfoMessage(Message):
 
-    def __init__(self, jobid: str, tasks: List[List[str]]) -> None:
+    def __init__(self, unique_id: str, jobid: str,
+                 tasks: List[List[str]]) -> None:
+
         Message.__init__(self, "job.msg", {
             "subtype": "info",
-            "message": {"jobid": jobid, "tasks": tasks}
+            "message": {
+                "unique_id": unique_id,
+                "jobid": jobid,
+                "tasks": tasks
+            }
         })
 
+    def unique_id(self) -> str:
+        return self.content["message"]["unique_id"]
+
     def jobid(self) -> str:
-        return self.content["jobid"]
+        return self.content["jobid"]["unique_id"]
 
     def tasks(self) -> List[Tuple[str, str]]:
         return self.content["tasks"]
@@ -87,28 +93,55 @@ class JobInfoMessage(Message):
 
 class JobStateChangeMessage(Message):
 
-    def __init__(self, jobid: str, taskid: str, state: str) -> None:
+    def __init__(self, unique_id: str, jobid: str, taskid: str, state: str) -> None:
         Message.__init__(self, "job.msg", {
             "subtype": "change",
-            "message": {"jobid": jobid, "taskid": taskid, "state": state}
+            "message": {
+                "unique_id": unique_id,
+                "jobid": jobid,
+                "taskid": taskid,
+                "state": state
+            }
+        })
+
+
+class JobHistoryMessage(Message):
+
+    def __init__(self, jobs: List[Job]) -> None:
+        Message.__init__(self, "job.msg.history", {
+            "subtype": "history",
+            "message": {
+                job.unique_id: {
+                    "unique_id": job.unique_id,
+                    "jobid": job.jobid,
+                    "tasks": {
+                        t.id(): {
+                            "taskid": t.id(),
+                            "state": Task.STATE_STR_MAPPING[t.taskState()]
+                        }
+                        for t in job.tasks()
+                    }
+                }
+                for job in jobs
+            }
         })
 
 
 class JobFinMessage(Message):
 
-    def __init__(self, jobid: str) -> None:
+    def __init__(self, unique_id: str) -> None:
         Message.__init__(self, "job.msg", {
             "subtype": "fin",
-            "message": {"jobs": [jobid]}
+            "message": {"jobs": [unique_id]}
         })
 
 
 class JobFailMessage(Message):
 
-    def __init__(self, jobid: str) -> None:
+    def __init__(self, unique_id: str) -> None:
         Message.__init__(self, "job.msg", {
             "subtype": "fail",
-            "message": {"jobs": [jobid]}
+            "message": {"jobs": [unique_id]}
         })
 
 

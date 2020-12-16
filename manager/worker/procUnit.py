@@ -802,7 +802,7 @@ class PostProcUnit(PostProcUnitProto):
 
         if post.ready():
             await self._do_post(post)
-            del self._posts[version]
+            del self._posts[post_ident]
 
     async def _do_post(self, post: Post) -> None:
 

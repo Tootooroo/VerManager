@@ -170,11 +170,21 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
         source.jobs = {"1": Job("J", "CMD", {})}
 
         # Exercise
-        msg = await source.gen_msg()
+        msg = await source.gen_msg(["processing"])
 
         # Verify
         self.assertIsNotNone(msg)
         self.assertTrue("batch", msg.content['subtype'])
+
+    async def test_JobMaster_GenHistoryMsg(self) -> None:
+        """
+        Query history message from JobMaster.
+        """
+        source = JobMasterMsgSrc("SRC")
+        source.jobs = {"1": Job("J", "CMD", {})}
+
+        # Exercise
+        msg = await source.gen_msg(["history"])
 
 
 class JobMasterMiscTestCases(unittest.IsolatedAsyncioTestCase):
