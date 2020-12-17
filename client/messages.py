@@ -111,8 +111,8 @@ class JobHistoryMessage(Message):
         Message.__init__(self, "job.msg.history", {
             "subtype": "history",
             "message": {
-                job.unique_id: {
-                    "unique_id": job.unique_id,
+                str(job.unique_id): {
+                    "unique_id": str(job.unique_id),
                     "jobid": job.jobid,
                     "tasks": {
                         t.id(): {

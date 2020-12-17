@@ -411,7 +411,7 @@ class JobMaster(Endpoint, Module):
         for task in job.tasks():
             taskHistory = TaskHistory(
                 jobhistory=jobHistory,
-                task_name=task.id(),
+                task_name=task_prefix_trim(task.id()),
                 state=task.taskState()
             )
             await database_sync_to_async(
@@ -443,5 +443,8 @@ class JobMaster(Endpoint, Module):
 
         # Notify to client
         self.source.real_time_msg(msg, {
+            "is_broadcast": "ON"
+        })
+        self.source.real_time_msg(JobHistoryMessage([job]), {
             "is_broadcast": "ON"
         })
