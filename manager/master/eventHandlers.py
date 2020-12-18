@@ -267,11 +267,6 @@ async def responseHandler_ResultStore(
     fileName = path.split(seperator)[-1]
     resultDir = cfg.config.getConfig("ResultDir")
 
-    if not os.path.exists("./data"):
-        os.mkdir("./data")
-    if not os.path.exists("public"):
-        os.mkdir("public")
-
     try:
         if extra is not None and "logFrom" in extra and "logTo" in extra:
             fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
@@ -283,19 +278,16 @@ async def responseHandler_ResultStore(
             dest = resultDir + seperator + fileName
             shutil.copy(path, dest)
 
-        await copyFileInExecutor(path, "public/"+fileName)
-
     except FileNotFoundError as e:
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
     except PermissionError as e:
         traceback.print_exc()
         await Logger.putLog(logger, letterLog, str(e))
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
 
-    url = cfg.config.getConfig('GitlabUr')
-    task.job.job_result = url + "/data/" + fileName
+    task.job.job_result = "/data/" + taskId.split("_")[0] + "/" + fileName
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
@@ -306,23 +298,23 @@ async def binaryHandler(dl: DataLink, letter: BinaryLetter,
         return None
 
     tid = letter.getHeader('tid')
+    unique_id = tid.split("_")[0]
 
     # A new file is transfered.
     if tid not in chooserSet:
         fileName = letter.getFileName()
-        version = letter.getParent()
 
         sto = env.modules.getModule(STORAGE_M_NAME)
-        chooser = sto.create(version, fileName)
-        chooserSet[tid] = chooser
+        chooser = sto.create(unique_id, fileName)
+        chooserSet[unique_id] = chooser
 
-    chooser = chooserSet[tid]
+    chooser = chooserSet[unique_id]
     content = letter.getContent('bytes')
 
     if content == b"":
         # A file is transfer finished.
         chooser.close()
-        del chooserSet[tid]
+        del chooserSet[unique_id]
 
         # Notify To DataLinker a file is transfered finished.
         dl.notify(DataLinkNotify("BINARY", (tid, chooser.path())))

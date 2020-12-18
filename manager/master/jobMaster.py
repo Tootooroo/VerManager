@@ -56,6 +56,13 @@ def task_prefix_trim(ident: str) -> Optional[str]:
     return ident[begin_pos:]
 
 
+def trim_prefix_of_tasks(tasks: List[Task]) -> None:
+    for t in tasks:
+        trim_id = task_prefix_trim(t.taskId)
+        if trim_id is not None:
+            t.taskId = trim_id
+
+
 def task_gen_helper(id: str, state: str) -> Task:
     t = Task(id, "", "")
     t.state = int(state)
@@ -445,6 +452,8 @@ class JobMaster(Endpoint, Module):
         self.source.real_time_msg(msg, {
             "is_broadcast": "ON"
         })
+
+        trim_prefix_of_tasks(job.tasks())
         self.source.real_time_msg(JobHistoryMessage([job]), {
             "is_broadcast": "ON"
         })
