@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 
-from .models import Versions, Revisions
+from .models import Versions, Revisions, JobHistory
 from rest_framework import serializers
 
 
@@ -35,6 +35,12 @@ class RevisionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Revisions
         fields = ['sn', 'author', 'comment', 'dateTime']
+
+
+class JobHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobHistory
+        fields = ['unique_id', 'job', 'filePath', 'dateTime']
 
 
 class VersionInfoSerializer(serializers.Serializer):

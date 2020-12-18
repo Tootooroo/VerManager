@@ -36,14 +36,14 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .serializers import VersionSerializer, RevisionSerializer, \
-    BuildInfoSerializer, VersionInfoSerializer
+    BuildInfoSerializer, VersionInfoSerializer, JobHistorySerializer
 from manager.master.jobMaster import JobMaster
 from manager.master.job import Job
 
 import manager.master.master as S
 
 # Models
-from .models import Revisions, Versions
+from .models import Revisions, Versions, JobHistory
 
 
 # Create your views here.
@@ -127,34 +127,6 @@ class VersionViewSet(viewsets.ModelViewSet):
 
         return Response('Success')
 
-    @csrf_exempt
-    @action(detail=True, methods=['put'])
-    def temporaryGen(self, request, pk=None) -> Response:
-
-        assert(cfg.config is not None)
-        assert(S.ServerInstance is not None)
-
-        dispatcher = cast(Dispatcher, S.ServerInstance.getModule('Dispatcher'))
-
-        revision = pk
-
-        version = str(timezone.localtime())
-        version = version.split(".")[0].replace("-", "").\
-            replace(":", "").replace(" ", "") + "_" + revision[0:10]
-
-        task = Task(version, revision, version,
-                    extra={"Temporary": "true"})
-        bs = BuildSet(cfg.config.getConfig("BuildSet"))
-        task.setBuild(bs)
-        task = task.transform()
-
-        if not task.isValid():
-            return HttpResponseBadRequest()
-
-        dispatcher.dispatch(task)
-
-        return HttpResponse()
-
 
 class RevisionViewSet(viewsets.ModelViewSet):
     queryset = Revisions.objects.all().order_by('-dateTime')
@@ -189,6 +161,16 @@ class RevisionViewSet(viewsets.ModelViewSet):
         revs = Revisions.objects.all().order_by('-dateTime')
         serializer = self.get_serializer(revs[:num], many=True)
 
+        return Response(serializer.data)
+
+
+class JobHistoryViewSet(viewsets.ModelViewSet):
+    queryset = JobHistory.objects.all().order_by('-dateTime')
+    serializer_class = JobHistorySerializer
+
+    @action(detail=False, methods=['get'])
+    def getHistories(self, request) -> None:
+        serializer = self.get_serializer(self.queryset, many=True)
         return Response(serializer.data)
 
 

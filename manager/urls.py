@@ -23,7 +23,8 @@
 
 from django.urls import path, include
 from rest_framework import routers
-from .views import VersionViewSet, RevisionViewSet
+from .views import VersionViewSet, RevisionViewSet, \
+    JobHistoryViewSet
 from . import views
 
 app_name = 'manager'
@@ -31,6 +32,7 @@ app_name = 'manager'
 router = routers.SimpleRouter()
 router.register(r'versions', VersionViewSet)
 router.register(r'revisions', RevisionViewSet)
+router.register(r'histories', JobHistoryViewSet)
 
 urlpatterns = [
     path('', views.index, name='index'),
