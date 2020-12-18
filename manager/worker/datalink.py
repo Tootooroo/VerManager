@@ -74,7 +74,6 @@ async def binaryStore(dl: DataLink, bl: BinaryLetter,
             fd = fds[tid]
 
         bStr = bl.getBytes()
-
         if bStr == b"":
             # File transfer done
             fd.close()
@@ -87,6 +86,7 @@ async def binaryStore(dl: DataLink, bl: BinaryLetter,
             fd.write(bStr)
     except Exception:
         traceback.print_exc()
+
 
 def binaryStoreNotify(msg: Tuple[str, str, str], proc: Processor) -> None:
     version, tid, fileName = msg[0], msg[1], msg[2]

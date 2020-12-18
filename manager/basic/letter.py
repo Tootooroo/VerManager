@@ -726,12 +726,15 @@ class BinaryLetter(Letter):
         tid_field = extend_bytes(
             BinaryLetter.TASK_ID_FIELD_LEN - len(tid),
             tid.encode())
+
         parent_field = extend_bytes(
             BinaryLetter.PARENT_FIELD_LEN -
             len(parent), parent.encode())
+
         name_field = extend_bytes(
             BinaryLetter.FILE_NAME_FIELD_LEN -
             len(fileName), fileName.encode())
+
         menu_field = extend_bytes(
             BinaryLetter.MENU_FIELD_LEN - len(menu),
             menu.encode())

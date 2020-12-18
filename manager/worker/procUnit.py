@@ -536,13 +536,13 @@ class JobProcUnit(JobProcUnitProto):
         # Error code handle
         if ret_code != 0:
             if ret_code != 128:
-                # Cleanup
                 if await self.cleanup() is False:
                     self._state = ProcUnit.STATE_DIRTY
                     await self._channel.update_and_notify('state', self._state)
 
                 await self._notify_job_state(
                     tid, Letter.RESPONSE_STATE_FAILURE)
+
                 return
 
         # Transfer job result to Target destination
