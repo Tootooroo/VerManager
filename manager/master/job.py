@@ -123,3 +123,11 @@ class Job:
             return None
 
         return job
+
+
+class VerResult:
+
+    def __init__(self, uid: str, jobid: str, url: str) -> None:
+        self.uid = uid
+        self.jobid = jobid
+        self.url = url

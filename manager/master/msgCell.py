@@ -65,6 +65,12 @@ class MsgSource(abc.ABC):
     def setQ(self, q: asyncio.Queue) -> None:
         self._q = q
 
+    def real_time_broadcast(self, msg: Message, configs: T.Dict[str, str]) -> None:
+        if "is_broadcast" not in configs or \
+           configs["is_broadcast"] != "ON":
+            configs["is_broadcast"] = "ON"
+        self.real_time_msg(msg, configs)
+
     def real_time_msg(self, msg: Message, configs: T.Dict[str, str]) -> None:
         """
         Wrap a message into a MsgWrapper with control info then

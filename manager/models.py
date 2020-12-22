@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from typing import List
+from typing import List, Callable, Any
 
 from django.db import connections
 from django.db import models
@@ -98,6 +98,24 @@ class JobHistory(models.Model):
     job = models.CharField(max_length=100)
     filePath = models.CharField(max_length=128, default="")
     dateTime = models.DateTimeField(default=timezone.now)
+
+    @staticmethod
+    async def jobHistory_transformation(
+            trans: Callable[['JobHistory'], Any]) -> List[Any]:
+
+        news = []  # type: List[Any]
+
+        jobs = await database_sync_to_async(
+            JobHistory.objects.all
+        )()
+        job_list = await database_sync_to_async(
+            list
+        )(jobs)
+
+        for job in job_list:
+            news.append(trans(job))
+
+        return news
 
 
 class TaskHistory(models.Model):

@@ -23,6 +23,7 @@
 import json
 import abc
 from typing import Dict, Any, List, Tuple, Generator
+from manager.master.job import VerResult
 from manager.master.job import Job
 from manager.master.task import Task
 
@@ -93,7 +94,9 @@ class JobInfoMessage(Message):
 
 class JobStateChangeMessage(Message):
 
-    def __init__(self, unique_id: str, jobid: str, taskid: str, state: str) -> None:
+    def __init__(self, unique_id: str, jobid: str,
+                 taskid: str, state: str) -> None:
+
         Message.__init__(self, "job.msg", {
             "subtype": "change",
             "message": {
@@ -101,6 +104,35 @@ class JobStateChangeMessage(Message):
                 "jobid": jobid,
                 "taskid": taskid,
                 "state": state
+            }
+        })
+
+
+class JobAllResultsMessage(Message):
+
+    def __init__(self, results: List[VerResult]) -> None:
+        Message.__init__(self, "job.msg.file.exists", {
+            "subtype": "exists",
+            "message": {
+                str(r.uid): {
+                    "unique_id": str(r.uid),
+                    "ver_id": r.jobid,
+                    "url": r.url
+                }
+                for r in results
+            }
+        })
+
+
+class JobNewResultMessage(Message):
+
+    def __init__(self, result: VerResult) -> None:
+        Message.__init__(self, "job.msg.file.new", {
+            "subtype": "new",
+            "message": {
+                "unique_id": result.uid,
+                "ver_id": result.jobid,
+                "url": result.url
             }
         })
 

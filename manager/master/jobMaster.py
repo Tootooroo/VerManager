@@ -35,9 +35,13 @@ from manager.master.task import SingleTask, PostTask, Task
 from manager.basic.endpoint import Endpoint
 from channels.layers import get_channel_layer
 from channels.db import database_sync_to_async
+from manager.master.job import VerResult
 from manager.basic.mmanager import Module
+
 from client.messages import JobInfoMessage, JobStateChangeMessage, \
-    JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage
+    JobFinMessage, JobFailMessage, JobBatchMessage, JobHistoryMessage, \
+    JobAllResultsMessage, JobNewResultMessage
+
 from manager.master.msgCell import MsgSource
 from client.messages import Message
 
@@ -141,6 +145,18 @@ class JobMasterMsgSrc(MsgSource):
             jobs.append(job_)
 
         return JobHistoryMessage(jobs)
+
+    async def query_files(self, *args) -> Optional[Message]:
+
+        # Retrieve from database
+        ver_results = await JobHistory.jobHistory_transformation(
+            lambda job: VerResult(job.unique_id, job.job, job.filePath)
+        )
+        if len(ver_results) == 0:
+            return None
+
+        # Generate message
+        return JobAllResultsMessage(ver_results)
 
 
 class JobMaster(Endpoint, Module):
@@ -375,7 +391,7 @@ class JobMaster(Endpoint, Module):
         merge_command = bs.getMerge()
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
-            job.get_info('vsn'),
+            vsn,
             st_idents,
             merge_command
         )
@@ -386,9 +402,13 @@ class JobMaster(Endpoint, Module):
         # Job Command is a Build
         build = Build(job.cmd_id, cmd)
 
+        sn, vsn = job.get_info('sn'), job.get_info('vsn')
+        if sn is None or vsn is None:
+            raise Job_Bind_Failed()
+
         st = SingleTask(prepend_prefix(job.jobid, build.getIdent()),
-                        sn=job.get_info('vsn'),
-                        revision=job.get_info('sn'),
+                        sn=vsn,
+                        revision=sn,
                         build=build,
                         extra={})
         job.addTask(build.getIdent(), st)
@@ -429,10 +449,19 @@ class JobMaster(Endpoint, Module):
         """
         Maintain Fin Jobs and Fail Jobs.
         """
+        job = self._jobs[jobid]
+
         if state == Task.STATE_STR_MAPPING[Task.STATE_FINISHED]:
             # If Job is finished
-            if self._jobs[jobid].is_fin():
+            if job.is_fin():
                 await self._job_maintain_terminate(jobid, JobFinMessage(jobid))
+
+            # A Fin job's job_result field must not none
+            if job.job_result is None:
+                return
+
+            vr = VerResult(str(job.unique_id), job.jobid, job.job_result)
+            self.source.real_time_broadcast(JobNewResultMessage(vr), {})
 
         elif state == Task.STATE_STR_MAPPING[Task.STATE_FAILURE]:
             # Cancel Job, cause a task of the job is failure.
