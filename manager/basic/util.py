@@ -108,9 +108,10 @@ def excepHandle(excep, handler: Callable) -> Callable:
     return handle
 
 
-def execute_shell(command: str, stdout=None) -> Optional[subprocess.Popen]:
+def execute_shell(command: str, stdout=None,
+                  stderr=None) -> Optional[subprocess.Popen]:
     try:
-        return subprocess.Popen(command, shell=True, stdout=stdout)
+        return subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
     except FileNotFoundError:
         return None
 

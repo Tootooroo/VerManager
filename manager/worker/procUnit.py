@@ -84,7 +84,7 @@ class CommandExecutor:
 
         self._running = True
 
-        ref = execute_shell(command_str, stdout=output)
+        ref = execute_shell(command_str, stdout=output, stderr=output)
         if ref is None:
             self._ret = -1
             self._reset()
