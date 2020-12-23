@@ -30,6 +30,7 @@ import os
 import zipfile
 import shutil
 import manager.master.configs as cfg
+from VerManager.settings import STATIC_URL
 
 from typing import List, Dict, Optional, cast, Callable, Tuple, \
     Any
@@ -287,7 +288,12 @@ async def responseHandler_ResultStore(
     except Exception:
         traceback.print_exc()
 
-    task.job.job_result = "/data/" + taskId.split("_")[0] + "/" + fileName
+    task.job.job_result = job_result_url(taskId.split("_")[0], fileName)
+
+
+def job_result_url(unique_id: str, fileName: str) -> str:
+    may_slash = "" if STATIC_URL[-1] == '/' else "/"
+    return STATIC_URL + may_slash + unique_id + "/" + fileName
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
