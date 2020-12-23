@@ -81,6 +81,9 @@ class CommuConsumer(AsyncWebsocketConsumer):
     async def job_msg_history(self, event: typing.Dict) -> None:
         await self.send(event['text'])
 
+    async def job_msg_file_new(self, event: typing.Dict) -> None:
+        await self.send(event['text'])
+
 
 async def client_create(name: str) -> None:
     # Store Client's name into database
