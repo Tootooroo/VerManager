@@ -63,13 +63,14 @@ class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
         self.m.track(so1)
         self.m.track(so2)
 
-        # Exercise
         self.m.start()
-        await asyncio.sleep(1)
 
+        # To Pending state.
+        await asyncio.sleep(1)
         await so1.pending()
+        self.assertTrue(self.m.state() == Monitor.READY)
+
+        # To Ready state
         await so2.ready()
         await asyncio.sleep(1)
-
-        # Verify
         self.assertTrue(self.m.state() == Monitor.PENDING)

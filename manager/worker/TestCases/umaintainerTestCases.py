@@ -27,6 +27,7 @@ from manager.worker.processor_comps import UnitMaintainer
 from manager.worker.procUnit import ProcUnit
 from manager.worker.TestCases.misc.procunit import ProcUnitStub_Dirty
 from manager.worker.channel import ChannelEntry
+from manager.worker.monitor import StateObject
 
 
 class UnitMaintainerTestCase(unittest.IsolatedAsyncioTestCase):
@@ -37,6 +38,10 @@ class UnitMaintainerTestCase(unittest.IsolatedAsyncioTestCase):
         self.um._notifyQ = asyncio.Queue(10)
 
     async def test_UnitMaintainer_DirtyProcUnit_Dealwith(self) -> None:
+        """
+        UnitMaintainer with Dirty ProcUnit
+        """
+
         # Setup
         unit1 = self.uc["U1"] = ProcUnitStub_Dirty("U1", "JOB")
         unit1._channel = ChannelEntry("U1")
@@ -52,4 +57,4 @@ class UnitMaintainerTestCase(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(1)
 
         # Verify
-        self.assertTrue(unit1._state == ProcUnit.STATE_READY)
+        self.assertTrue(self.um.state() == StateObject.SO_ST_PENDING)

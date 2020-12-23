@@ -79,8 +79,7 @@ class Connector:
 class ProcUnitStub_Dirty(ProcUnit):
 
     async def cleanup(self) -> bool:
-        self._state = ProcUnit.STATE_READY
-        return True
+        return False
 
     async def run(self) -> None:
         self._state = ProcUnit.STATE_DIRTY

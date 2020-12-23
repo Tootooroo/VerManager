@@ -34,4 +34,3 @@ class ConnectorFake(Connector):
 
     async def sendLetter(self, letter: Letter, timeout=None) -> None:
         self.notifies.append(letter)
-        print(self.notifies)
