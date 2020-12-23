@@ -16,7 +16,7 @@ from manager.basic.observer import Observer
 
 class sInst:
     def getModule(self, name: Any) -> Any:
-        return Info("./config_test.yaml")
+        return Info("./manager/master/TestCases/misc/config.yaml")
 
 
 class VirtualWorker(VirtualMachine):
@@ -75,9 +75,9 @@ class VirtualWorker_Lost(VirtualWorker):
 class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.wr = WorkerRoom("127.0.0.1", 30001, sInst())
-        self.v_wr1 = VirtualWorker("w1", "127.0.0.1", 30001)
-        self.v_wr2 = VirtualWorker("w2", "127.0.0.1", 30001)
+        self.wr = WorkerRoom("127.0.0.1", 30002, sInst())
+        self.v_wr1 = VirtualWorker("w1", "127.0.0.1", 30002)
+        self.v_wr2 = VirtualWorker("w2", "127.0.0.1", 30002)
 
     async def test_WorkerRoom_Connect(self) -> None:
         # Exercise
@@ -110,8 +110,8 @@ class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def test_WorkerRoom_ReconnWithinWaitInterval(self) -> None:
         # Setup
-        self.v_wr1 = VirtualWorker_Reconnect("w1", "127.0.0.1", 30001)
-        self.v_wr2 = VirtualWorker_Reconnect("w2", "127.0.0.1", 30001)
+        self.v_wr1 = VirtualWorker_Reconnect("w1", "127.0.0.1", 30002)
+        self.v_wr2 = VirtualWorker_Reconnect("w2", "127.0.0.1", 30002)
 
         # Exercise
         self.wr.start()
@@ -133,9 +133,9 @@ class WorkerRoomTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def test_WorkerRoom_WorkerLost(self) -> None:
         # Setup
-        self.v_wr1 = VirtualWorker_Lost("w1", "127.0.0.1", 30001)
+        self.v_wr1 = VirtualWorker_Lost("w1", "127.0.0.1", 30002)
         self.v_wr1.setq(self.wr._eventQueue)
-        self.v_wr2 = VirtualWorker_Lost("w2", "127.0.0.1", 30001)
+        self.v_wr2 = VirtualWorker_Lost("w2", "127.0.0.1", 30002)
         self.v_wr2.setq(self.wr._eventQueue)
 
         comp = WaitMessgComp()

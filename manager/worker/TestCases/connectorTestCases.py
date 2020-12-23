@@ -79,10 +79,10 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Setup
         vir_worker = misc.VirtualWorker_Heartbeat_ACTIVE(
-            "Worker", "127.0.0.1", 8899)
+            "Worker", "127.0.0.1", 9000)
 
         # Exercise
-        await self.linker.new_listen("lis1", "127.0.0.1", 8899)
+        await self.linker.new_listen("lis1", "127.0.0.1", 9000)
         await asyncio.sleep(0.1)
 
         vir_worker.start()

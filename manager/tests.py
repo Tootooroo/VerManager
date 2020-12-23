@@ -26,7 +26,6 @@
 # iEntryTestCases, \
 # EventListenerTestCases
 
-"""
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
 
@@ -98,10 +97,9 @@ from manager.master.TestCases.jobTestCases import \
 
 from manager.master.TestCases.proxyConfigsTestCases import \
     ProxyConfigsTestCases
-"""
 
 from manager.master.TestCases.jobMasterTestCases import \
     JobMasterTestCases, JobMasterMiscTestCases
 
-from manager.master.TestCases.proxyTestCases import \
-    MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases
+# from manager.master.TestCases.proxyTestCases import \
+#    MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases

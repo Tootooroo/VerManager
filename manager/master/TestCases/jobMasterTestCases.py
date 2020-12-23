@@ -142,7 +142,7 @@ class JobMasterTestCases(unittest.IsolatedAsyncioTestCase):
 
         tasks_objs = await database_sync_to_async(list)(tasks_db)
         for t in tasks:
-            self.assertTrue(t in [obj.task_name.split("_")[1] for obj in tasks_objs])
+            self.assertTrue(t in [obj.task_name for obj in tasks_objs])
 
         # Teardown
         job_ = await sync_to_async(Jobs.objects.filter)(jobid="JobMasterTest")

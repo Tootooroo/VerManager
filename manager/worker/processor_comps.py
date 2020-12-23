@@ -96,7 +96,8 @@ class UnitMaintainer(Daemon, ChannelReceiver, StateObject):
                 if not self._event.is_set():
                     self._event.set()
             except Exception as e:
-                print(e)
+                # Need to log
+                pass
 
     async def run(self) -> None:
 

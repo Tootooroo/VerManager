@@ -46,7 +46,7 @@ from manager.master.eventHandlers import \
 
 class sInst:
     def getModule(self, name: Any) -> Any:
-        return Info("./config_test.yaml")
+        return Info("./manager/master/TestCases/misc/config.yaml")
 
 
 class LoggerMock(Module):

@@ -39,7 +39,7 @@ from manager.master.build import Build, BuildSet
 
 class sInst:
     def getModule(self, name: typing.Any) -> typing.Any:
-        return Info("./config_test.yaml")
+        return Info("./manager/master/TestCases/misc/config.yaml")
 
 
 class MsgPri0:
@@ -222,7 +222,7 @@ class DispatcherUnitTest(unittest.IsolatedAsyncioTestCase):
         """
 
         # Setup
-        cfg.config = Info("./config_test.yaml")
+        cfg.config = Info("./manager/master/TestCases/misc/config.yaml")
 
         # Exercise
         build = Build("B", {"cmd": ["sleep 5", "echo REDISPATCH > result"],
