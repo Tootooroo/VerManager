@@ -105,16 +105,17 @@ class UnitMaintainer(Daemon, ChannelReceiver, StateObject):
 
             ret = True
 
-            # Wait event
+        # Wait event
             # This event will be seted
             # if a unit is need help
             await self._event.wait()
 
             for unit in self._units.values():
                 if unit.state() == ProcUnit.STATE_DIRTY:
-                    ret &= await unit.cleanup()
-                    # Set ProcUnit to Ready
-                    unit.setState(ProcUnit.STATE_READY)
+                    if await unit.cleanup() is True:
+                        unit.setState(ProcUnit.STATE_READY)
+                    else:
+                        ret = False
 
             # All problems is resolved.
             if ret is True:
