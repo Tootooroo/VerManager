@@ -78,9 +78,6 @@ class Processor(ModuleDaemon):
         unit.setChannel(channel)
         unit.msg_gen()
 
-        # Register channel
-        self._channel.addReceiver(uid, self._maintainer)
-
         # UnitMaintainer need info of Unit
         # to make sure the ProcUnit is Health.
         self.register(uid, self._maintainer)

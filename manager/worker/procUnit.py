@@ -22,7 +22,6 @@
 
 import os
 import platform
-import tempfile
 import abc
 import asyncio
 import manager.worker.configs as configs
@@ -30,16 +29,15 @@ import manager.worker.configs as configs
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, cast, Dict, List, \
-    Callable, IO
+    Callable
 from manager.basic.letter import Letter
 from .proc_common import Output
 from .channel import ChannelEntry
+from manager.basic.commandExecutor import CommandExecutor
 
 # Need by JobProcUnit
-import subprocess
 import shutil
-from manager.basic.util import packShellCommands, execute_shell,\
-    pathSeperator, execute_shell_until_complete
+from manager.basic.util import pathSeperator, execute_shell_until_complete
 from manager.basic.letter import NewLetter, ResponseLetter,\
     BinaryLetter
 from manager.worker.connector import Link
@@ -51,104 +49,6 @@ from manager.basic.letter import PostTaskLetter
 
 UNIT_TYPE_JOB_PROC = 0
 UNIT_TYPE_POST_PROC = 1
-
-
-class CommandExecutor:
-
-    def __init__(self, cmds: List[str] = None) -> None:
-        self._cmds = cmds  # type: Optional[List[str]]
-        self._max_stucked_time = 3600
-        self._running = False
-        self._last_stucked = None  # type: Optional[datetime]
-        self._last_pos = 0
-        self._ret = 0
-        self._ref = None  # type: Optional[subprocess.Popen]
-
-    def _reset(self) -> None:
-        self._running = False
-        self._last_pos = 0
-        self._last_stucked = None
-
-    def stop(self) -> None:
-        if self._ref is not None:
-            self._ref.terminate()
-            self._reset()
-
-    async def run(self) -> int:
-
-        if self._cmds is None:
-            return -1
-
-        command_str = packShellCommands(self._cmds)
-        output = tempfile.TemporaryFile("w")
-
-        self._running = True
-
-        ref = execute_shell(command_str, stdout=output, stderr=output)
-        if ref is None:
-            self._ret = -1
-            self._reset()
-            return -1
-        else:
-            self._ref = ref
-
-        while True:
-            # Check whether the command done
-            ret = ref.poll()
-            if ret is not None:
-                self._ret = ret
-                break
-
-            # Check whether the command is stucked
-            if self.isStucked(output):
-                self._ret = -1
-                ref.terminate()
-                break
-
-            await asyncio.sleep(3)
-
-        self._ref = None
-        self._running = False
-
-        if ret is None:
-            return -1
-
-        self._reset()
-        return ret
-
-    def return_code(self) -> int:
-        return self._ret
-
-    def isRunning(self) -> bool:
-        return self._running
-
-    def isStucked(self, output: IO[str]) -> bool:
-        current_pos = output.tell()
-
-        # Stucked from last position
-        if current_pos == self._last_pos:
-            current = datetime.utcnow()
-            if self._last_stucked is None:
-                self._last_stucked = datetime.utcnow()
-            else:
-                # Stucked timeout
-                return (current - self._last_stucked).seconds > \
-                    self._max_stucked_time
-        else:
-            if self._last_stucked is not None:
-                self._last_stucked = None
-            self._last_pos = current_pos
-
-        return False
-
-    def getStuckedLimit(self) -> int:
-        return self._max_stucked_time
-
-    def setStuckedLimit(self, limit: int) -> None:
-        self._max_stucked_time = limit
-
-    def setCommand(self, cmds: List[str]) -> None:
-        self._cmds = cmds
 
 
 class ProcUnit(abc.ABC):
@@ -321,7 +221,8 @@ class PROC_UNIT_IS_IN_DENY_MODE(Exception):
 
 
 # Concrete ProcUnits
-async def job_result_transfer(target: str, job: NewLetter, output: Output) -> None:
+async def job_result_transfer(target: str, job: NewLetter,
+                              output: Output) -> None:
     extra = job.getExtra()
     tid = job.getTid()
     version = job.getContent('vsn')
@@ -353,8 +254,10 @@ async def do_job_result_transfer(path, tid: str, linkid: str,
     await send_rtn(end_bin)
 
 
-async def job_result_transfer_check_link(output: Output, linkid: str, job: NewLetter,
-                                         send_rtn: Callable, timeout=None) -> None:
+async def job_result_transfer_check_link(
+        output: Output, linkid: str, job: NewLetter,
+        send_rtn: Callable, timeout=None) -> None:
+
     if timeout is not None:
         # Wait until link rebuild or timeout
         while output.link_state(linkid) != Link.CONNECTED:
@@ -511,7 +414,9 @@ class JobProcUnit(JobProcUnitProto):
         if os.path.exists(build_dir+"/"+projName):
             if await self.cleanup() is False:
                 # Job unable to begin from dirty state.
-                await self._notify_job_state(tid, Letter.RESPONSE_STATE_FAILURE)
+                await self._notify_job_state(
+                    tid, Letter.RESPONSE_STATE_FAILURE
+                )
                 return
 
         commands = [
