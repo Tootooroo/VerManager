@@ -69,6 +69,9 @@ class Entry:
     def getIdent(self) -> str:
         return self._ident
 
+    def setHBTimeout(self, limit: int) -> None:
+        self._hbTimerLimit = limi
+
     def setWorker(self, worker: Worker) -> None:
         self._worker = worker
 
@@ -183,11 +186,16 @@ class EventListener(ModuleDaemon, Subject, Observer):
         self._entries = {}  # type: Dict[str, Entry]
         self._stop = False
 
+        self._hbLimit = 5
+
     async def begin(self) -> None:
         return None
 
     async def cleanup(self) -> None:
         return None
+
+    def setHBTimeout(self, limit: int) -> None:
+        self._hbLimit = limit
 
     async def _doStop(self) -> None:
         for ident in self._entries:
@@ -263,6 +271,7 @@ class EventListener(ModuleDaemon, Subject, Observer):
                 continue
 
             entry = Entry(w.getIdent(), w, entryEnv)
+            entry.setHBTimeout(self._hbLimit)
             self.addEntry(entry)
             entry.start()
 
