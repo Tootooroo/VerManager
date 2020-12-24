@@ -22,9 +22,9 @@
 
 # Create your tests here.
 
-# from manager.master.TestCases.eventListenerTestCases import \
-# iEntryTestCases, \
-# EventListenerTestCases
+from manager.master.TestCases.eventListenerTestCases import \
+    EntryTestCases, \
+    EventListenerTestCases
 
 from manager.master.TestCases.dispatcherTestCases import \
     WaitAreaTestCases, DispatcherUnitTest
@@ -100,6 +100,9 @@ from manager.master.TestCases.proxyConfigsTestCases import \
 
 from manager.master.TestCases.jobMasterTestCases import \
     JobMasterTestCases, JobMasterMiscTestCases
+
+from manager.basic.TestCases.commandExecutorTestCases import \
+    CommandExecutorTestCases
 
 # from manager.master.TestCases.proxyTestCases import \
 #    MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases
