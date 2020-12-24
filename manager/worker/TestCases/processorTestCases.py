@@ -93,9 +93,6 @@ class ProcessorTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(10, component1.msgLen())
         self.assertEqual(10, component2.msgLen())
 
-    async def test_Processor_Output(self) -> None:
-        pass
-
     async def test_Processor_ProcUnitExcept(self) -> None:
         # Setup
         unit1 = misc.ProcUnitStub_Except("Unit")

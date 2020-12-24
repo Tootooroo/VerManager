@@ -27,6 +27,8 @@ from manager.basic.info import Info
 from manager.basic.letter import Letter
 from manager.worker.monitor import StateObject, Monitor
 from manager.worker.connector import Connector
+from manager.worker.processor import Processor
+from manager.worker.TestCases.misc.procunit import ProcUnitStub_Dirty
 
 
 class ConnectorFake(Connector):
@@ -38,8 +40,9 @@ class ConnectorFake(Connector):
 class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.m = Monitor("Worker")
         cfg.config = Info("./manager/worker/config.yaml")
+        self.m = Monitor("Worker")
+        self.m.setupConnector(ConnectorFake())
 
     async def test_Monitor_track(self) -> None:
         # Setup
@@ -56,7 +59,6 @@ class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_Monitor_PENDING(self) -> None:
         # Setup
-        self.m.setupConnector(ConnectorFake())
         so1 = StateObject("SO1")
         so2 = StateObject("SO2")
 
@@ -74,3 +76,21 @@ class MonitorTestCase(unittest.IsolatedAsyncioTestCase):
         await so2.ready()
         await asyncio.sleep(1)
         self.assertTrue(self.m.state() == Monitor.PENDING)
+
+    async def test_Monitor_ProcUnitDirty(self) -> None:
+        # Setup
+        processor = Processor()
+        processor.install_unit(ProcUnitStub_Dirty("D1", "JOB"))
+
+        self.m.track(processor.getMaintainer())
+
+        # Exercise
+        self.m.start()
+        processor.start()
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(self.m.state() == Monitor.PENDING)
+
+        await asyncio.sleep(6)
+        self.assertTrue(self.m.state() == Monitor.READY)

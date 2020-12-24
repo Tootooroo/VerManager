@@ -10,6 +10,8 @@
 # furnished to do so, subject to the following conditions:
 #
 # The above copyright notice and this permission notice shall be included in
+
+
 # all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -79,7 +81,7 @@ class WorkerMockEntry(WorkerStubEntry):
 class EntryTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.env = Entry.EntryEnv(None, {}, None)  # type: Entry.EntryEnv
+        self.env = Entry.EntryEnv(EventListener(), {}, None)  # type: Entry.EntryEnv
         self.entry = Entry("Entry", WorkerStubEntry("w1"), self.env)
 
     async def test_Entry_EventHandle(self) -> None:
@@ -103,7 +105,7 @@ class EntryTestCases(unittest.IsolatedAsyncioTestCase):
         await worker.sendEvent(event)
 
         await asyncio.sleep(1)
-        self.entry.stop()
+        await self.entry.stop()
 
         # Verify
         self.assertTrue(eventProced)
@@ -116,7 +118,7 @@ class EntryTestCases(unittest.IsolatedAsyncioTestCase):
             for i in range(10):
                 await worker.sendHeartbeat(i)
 
-            self.entry.stop()
+            await self.entry.stop()
 
         # Exercise
         async def doTest() -> None:
@@ -189,11 +191,12 @@ class EventListenerTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Setup
         worker = WorkerMockEntry("w1")
+        self.eventL.setHBTimeout(2)
 
         # Exercise
         await self.eventL._regWorkerQ.put(worker)
         self.eventL.start()
-        await asyncio.sleep(4)
+        await asyncio.sleep(3)
 
         # Verify
         self.assertEqual(0, len(self.eventL._entries))
