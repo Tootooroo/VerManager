@@ -78,15 +78,25 @@ class Connector:
 
 class ProcUnitStub_Dirty(ProcUnit):
 
+    def __init__(self, ident: str, type: str) -> None:
+        ProcUnit.__init__(self, ident, type)
+        self.counter = 0
+
     async def cleanup(self) -> bool:
-        return False
+        self.counter += 1
+
+        if self.counter == 1:
+            return False
+        else:
+            return True
 
     async def run(self) -> None:
         self._state = ProcUnit.STATE_DIRTY
         self.msg_gen()
         await self._notify()
 
-        await asyncio.sleep(10)
+        while True:
+            await asyncio.sleep(10)
 
     async def reset(self) -> None:
         return None
