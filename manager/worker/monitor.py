@@ -28,6 +28,7 @@ from manager.master.worker import Worker as Worker_M
 from manager.basic.notify import WSCNotify
 from manager.worker.connector import Connector
 from manager.basic.mmanager import ModuleDaemon
+from manager.worker.exceptions import INVALID_MONITOR_STATE
 from collections import namedtuple
 
 
@@ -98,6 +99,11 @@ class Monitor(ModuleDaemon):
     READY = 0
     PENDING = 1
 
+    STATE_STR = {
+        READY: "READY",
+        PENDING: "PENDING"
+    }
+
     def __init__(self, workerName: str, q_size: int = 1024) -> None:
         self._workerName = workerName
         self._so = {}  # type: typing.Dict[str, StateObject]
@@ -134,9 +140,26 @@ class Monitor(ModuleDaemon):
     def may_need_update(self, state: int) -> bool:
         return self._state != state
 
+    async def toState(self, state: int) -> None:
+
+        if state != self.READY and state != self.PENDING:
+            raise INVALID_MONITOR_STATE(state)
+
+        conn = typing.cast(Connector, self._connector)
+        if self._state == 1 - state:
+            self._state = state
+
+            if state == self.READY:
+                state_str = str(Worker_M.STATE_ONLINE)
+            else:
+                state_str = str(Worker_M.STATE_PENDING)
+
+            await conn.sendLetter(
+                WSCNotify("W", state_str).toLetter()
+            )
+
     async def run(self) -> None:
         assert(self._connector is not None)
-        conn = typing.cast(Connector, self._connector)
 
         while True:
             # Wait for state change message
@@ -146,16 +169,8 @@ class Monitor(ModuleDaemon):
                 # Iterate over all SOs to check that
                 # is worker is ready to work.
                 if self.is_all_so_ready():
-                    if self._state == Monitor.PENDING:
-                        self._state = Monitor.READY
-                        await conn.sendLetter(
-                            WSCNotify("W", str(Worker_M.STATE_ONLINE))
-                            .toLetter())
+                    await self.toState(self.READY)
                 else:
-                    if self._state == Monitor.READY:
-                        self._state = Monitor.PENDING
-                        await conn.sendLetter(
-                            WSCNotify("W", str(Worker_M.STATE_PENDING))
-                            .toLetter())
+                    await self.toState(self.PENDING)
             else:
                 continue
