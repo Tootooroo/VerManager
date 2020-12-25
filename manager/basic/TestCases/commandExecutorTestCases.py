@@ -23,14 +23,33 @@
 import asyncio
 import unittest
 import os
+import psutil
 from datetime import datetime
 from manager.basic.commandExecutor import CommandExecutor
 
 
 async def stopCE(ce: CommandExecutor) -> None:
     await asyncio.sleep(2)
-    ce.stop()
+    await ce.stop()
 
+
+async def check_cmd_terminated(ce: CommandExecutor) -> None:
+    while True:
+        if ce.isRunning():
+            pid = ce.pid()
+            ps = psutil.Process(pid)
+
+            children = ps.children(recursive=True)
+
+            break
+        else:
+            await asyncio.sleep(0.1)
+            continue
+
+    await asyncio.sleep(3)
+
+    for c in children:
+        assert(c.is_running() is False)
 
 
 class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
@@ -72,6 +91,11 @@ class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
         self.sut.setCommand(["sleep 10"])
 
         await asyncio.gather(
+            # Execute the command
             self.sut.run(),
-            stopCE(self.sut)
+            # Stop command after 2 seconds
+            stopCE(self.sut),
+            # To check that whether the command
+            # is terminated
+            check_cmd_terminated(self.sut)
         )

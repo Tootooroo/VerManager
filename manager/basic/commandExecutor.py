@@ -24,7 +24,8 @@ import asyncio
 import tempfile
 from datetime import datetime
 import subprocess
-from manager.basic.util import packShellCommands, execute_shell
+from manager.basic.util import packShellCommands, execute_shell, \
+    stop_ps_recursive_async
 from typing import List, Optional, IO
 
 
@@ -38,15 +39,22 @@ class CommandExecutor:
         self._last_pos = 0
         self._ret = 0
         self._ref = None  # type: Optional[subprocess.Popen]
+        self._pid = 0
 
     def _reset(self) -> None:
         self._running = False
         self._last_pos = 0
         self._last_stucked = None
 
-    def stop(self) -> None:
+    def pid(self) -> int:
+        return self._pid
+
+    async def stop(self) -> None:
         if self._ref is not None:
-            self._ref.terminate()
+            # subproces.terminate() unable
+            # to stop children of the directly
+            # process
+            await stop_ps_recursive_async(self._ref.pid)
             self._reset()
 
     async def run(self) -> int:
@@ -66,6 +74,7 @@ class CommandExecutor:
             return -1
         else:
             self._ref = ref
+            self._pid = ref.pid
 
         while True:
             # Check whether the command done

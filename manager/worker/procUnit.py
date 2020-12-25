@@ -352,7 +352,7 @@ class JobProcUnit(JobProcUnitProto):
 
     async def stopCurrentJob(self) -> None:
         if self._cmd_executor.isRunning():
-            self._cmd_executor.stop()
+            await self._cmd_executor.stop()
             self._isInWork = False
 
             if self._channel is not None:
@@ -555,9 +555,8 @@ class JobProcUnit(JobProcUnitProto):
             await self._channel.update_and_notify('isProcessing', 'true')
 
             self._inProcTid = job.getTid()
-
-            # Do job
             await self._do_job(job)
+            self._inProcTid = ""
 
             # Update channel data
             await self._channel.update_and_notify('isProcessing', 'false')
@@ -616,12 +615,12 @@ class Post:
     def isInWork(self) -> bool:
         return self._cmd_executor.isRunning()
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """
         Stop execution
         """
         if self._cmd_executor.isRunning():
-            self._cmd_executor.stop()
+            await self._cmd_executor.stop()
 
     def set_frag_fileName(self, frag_id: str, fileName: str) -> None:
         self._frags[frag_id].filename = fileName
@@ -677,7 +676,7 @@ class PostProcUnit(PostProcUnitProto):
         if tid in self._posts:
             post = self._posts[tid]
             if post.isInWork():
-                post.stop()
+                await post.stop()
             post.cleanup()
             del self._posts[tid]
 

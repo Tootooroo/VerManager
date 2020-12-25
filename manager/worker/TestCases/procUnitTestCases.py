@@ -328,7 +328,7 @@ class PostProcUnitTestCases(unittest.IsolatedAsyncioTestCase):
         # Exercise
         asyncio.get_running_loop().create_task(post.do())
         await asyncio.sleep(1)
-        post.stop()
+        await post.stop()
 
         # Verify
         self.assertFalse(post.isInWork())

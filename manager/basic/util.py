@@ -27,7 +27,9 @@ import platform
 import subprocess
 import socket
 import asyncio
+import psutil
 
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 from functools import reduce
 from typing import Callable, Any, Tuple, List, \
@@ -108,10 +110,19 @@ def excepHandle(excep, handler: Callable) -> Callable:
     return handle
 
 
-def execute_shell(command: str, stdout=None,
-                  stderr=None) -> Optional[subprocess.Popen]:
+def execute_shell(
+        command: str, stdout=None,
+        stderr=None, shell=False) -> Optional[subprocess.Popen]:
+
     try:
-        return subprocess.Popen(command, shell=True, stdout=stdout, stderr=stderr)
+        machine = os.path.dirname(os.path.abspath(__file__)) + \
+            "/scripts/machine.sh"
+        return subprocess.Popen(
+            [machine, command],
+            shell=shell,
+            stdout=stdout,
+            stderr=stderr
+        )
     except FileNotFoundError:
         return None
 
@@ -176,3 +187,30 @@ async def loop_forever_async(f: Callable) -> None:
 def loop_forever(f: Callable) -> None:
     while True:
         f()
+
+
+def stop_ps_recursive(
+        pid: int, timeout: int = 0) -> Tuple[psutil.Process, psutil.Process]:
+    """
+    Recursive terminate
+    """
+    ps = psutil.Process(pid)
+    children = ps.children(recursive=True)
+
+    children.append(ps)
+
+    for c in children:
+        try:
+            c.terminate()
+        except psutil.NoSuchProcess:
+            pass
+
+    return psutil.wait_procs(children, timeout=timeout, callback=None)
+
+
+async def stop_ps_recursive_async(
+        pid: int, timeout: int = 0) -> Tuple[psutil.Process, psutil.Process]:
+
+    with ThreadPoolExecutor() as e:
+        return await asyncio.get_running_loop()\
+            .run_in_executor(e, stop_ps_recursive, pid, timeout)
