@@ -22,23 +22,22 @@
 
 import unittest
 import asyncio
-import os
-
+import multiprocessing
 from typing import cast
-from manager.master.build import Build, BuildSet
-from manager.master.task import Task
 from manager.master.job import Job
 from manager.master.jobMaster import JobMaster
 from manager.master.master import ServerInst
 from manager.worker.worker import Worker
-from manager.master.dispatcher import M_NAME as DISPATCH_M_NAME, \
-    Dispatcher
+
+
+async def WorkerStart(config: str) -> None:
+    pass
 
 
 class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
-        self.master = ServerInst("127.0.0.1", 30001, "./config_test.yaml")
+        self.master = ServerInst("127.0.0.1", 30001, "./WorkSpace/config.yaml")
         self.worker = Worker("./manager/worker/config.yaml")
         self.worker1 = Worker("./manager/worker/config1.yaml")
         self.worker2 = Worker("./manager/worker/config2.yaml")
@@ -63,5 +62,3 @@ class FunctionalTestCases(unittest.IsolatedAsyncioTestCase):
         job_master = cast(JobMaster, self.master.getModule("JobMaster"))
 
         await job_master.do_job(job)
-
-        await asyncio.sleep(3600)

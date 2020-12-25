@@ -130,7 +130,7 @@ class MsgSourceTestCases(unittest.IsolatedAsyncioTestCase):
         src.jobs = {"job1": job1}
 
         # Exercise
-        msg = await src.gen_msg()
+        msg = await src.gen_msg(['processing'])
         assert(msg is not None)
 
         # Verify

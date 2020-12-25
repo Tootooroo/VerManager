@@ -104,5 +104,8 @@ from manager.master.TestCases.jobMasterTestCases import \
 from manager.basic.TestCases.commandExecutorTestCases import \
     CommandExecutorTestCases
 
-# from manager.master.TestCases.proxyTestCases import \
-#    MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases
+from manager.master.TestCases.proxyTestCases import \
+    MsgWrapperTestCases, ProxyTestCases, MsgSourceTestCases
+
+
+from manager.functionalTest import FunctionalTestCases
