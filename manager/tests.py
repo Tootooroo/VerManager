@@ -109,3 +109,7 @@ from manager.master.TestCases.proxyTestCases import \
 
 
 from manager.functionalTest import FunctionalTestCases
+
+
+from manager.worker.TestCases.linkTestCases import \
+    HBLinkTestCases

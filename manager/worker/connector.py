@@ -72,45 +72,11 @@ class Link:
         return (datetime.utcnow() - self.last).seconds
 
 
-class LinkTunnel(abc.ABC):
-
-    def __init__(self, size: int) -> None:
-        self._q = asyncio.Queue(size)  # type: asyncio.Queue[Letter]
-
-    def ableToTransfer(self) -> bool:
-        return not self._q.full()
-
-    def transfer_nowait(self, letter: Letter) -> None:
-        try:
-            self._q.put_nowait(letter)
-        except asyncio.QueueFull:
-            raise LINK_TUNNEL_FULL()
-
-    async def transfer(self, letter: Letter, timeout=None) -> None:
-        try:
-            await asyncio.wait_for(
-                self._q.put(letter), timeout=timeout)
-        except asyncio.TimeoutError:
-            raise LINK_TUNNEL_FULL()
-
-    async def retrive(self) -> typing.Optional[Letter]:
-        try:
-            return await self._q.get()
-        except asyncio.QueueEmpty:
-            return None
-
-
-class LINK_TUNNEL_FULL(Exception):
-    pass
-
-
 class Linker:
 
     def __init__(self) -> None:
         self._links = {}  # type: typing.Dict[str, Link]
         self._links_passive = {}  # type: typing.Dict[str, Link]
-        self._datalinks = {}  # type: typing.Dict[str, Link]
-        self._linktunnels = {}  # type: typing.Dict[str, LinkTunnel]
         self._lis = {}  # type: typing.Dict[str, typing.Any]
         self.msg_callback = None  # type: typing.Optional[typing.Callable]
         self._loop = asyncio.get_running_loop()

@@ -28,7 +28,7 @@ import manager.worker.configs as cfg
 
 from manager.basic.letter import Letter
 from manager.basic.info import Info
-from manager.worker.connector import Linker, LinkTunnel, LINK_TUNNEL_FULL
+from manager.worker.connector import Linker
 
 
 class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
@@ -146,31 +146,3 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         self.assertGreater(vir_worker._reconn_count, 0)
-
-
-class LinkTunnelTestCases(unittest.IsolatedAsyncioTestCase):
-
-    async def asyncSetUp(self) -> None:
-        self.tunnel = LinkTunnel(1024)
-
-    async def test_LinkTunnel_busy(self) -> None:
-        """
-        Is LinkTunnel work correctly while its busy.
-        """
-        # Exercise
-        n = 0
-
-        # Transfer enough letter to LinkTunnel
-        # to let it busy.
-        while n < 1024:
-            await self.tunnel.transfer(Letter("L", {}, {}))
-            n += 1
-
-        # Verify
-        self.assertFalse(self.tunnel.ableToTransfer())
-
-        try:
-            await self.tunnel.transfer(Letter("L", {}, {}), timeout=0)
-            self.fail("Transfer should be failed")
-        except LINK_TUNNEL_FULL:
-            pass
