@@ -70,7 +70,7 @@ class Entry:
         return self._ident
 
     def setHBTimeout(self, limit: int) -> None:
-        self._hbTimerLimit = limi
+        self._hbTimerLimit = limit
 
     def setWorker(self, worker: Worker) -> None:
         self._worker = worker
