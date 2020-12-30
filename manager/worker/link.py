@@ -23,13 +23,14 @@
 import asyncio
 import traceback
 import typing as T
+import abc
 from datetime import datetime
 from manager.basic.observer import Subject
 from manager.basic.letter import Letter, sending, \
     HeartbeatLetter, receving
 
 
-class Link:
+class Link(abc.ABC):
 
     # state
     CONNECTED = 0
@@ -46,6 +47,25 @@ class Link:
         self.state = Link.CONNECTED
         self.host = host
         self.port = port
+
+    @abc.abstractmethod
+    def start(self) -> None:
+        """
+        Start link
+        """
+
+    @abc.abstractmethod
+    def stop(self) -> None:
+        """
+        Stop link
+        """
+
+    @abc.abstractmethod
+    async def sendletter(self, letter: Letter) -> None:
+        """
+        Send letter to remote machine
+        """
+
 
 
 class HBLink(Link, Subject):
@@ -90,6 +110,9 @@ class HBLink(Link, Subject):
 
     def _heartbeat_check(self) -> bool:
         return self._hb_timer_diff() < 5
+
+    def setDispatchProc(self, proc: T.Callable) -> None:
+        self._dispatch_proc = proc
 
     async def _next_heartbeat(self, delay: int) -> None:
         await asyncio.sleep(delay)
