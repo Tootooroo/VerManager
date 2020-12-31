@@ -933,7 +933,8 @@ parseMethods = {
 
 
 # Function to receive a letter from a socket
-async def receving(reader: asyncio.StreamReader, timeout=None) -> Optional[Letter]:
+async def receving(reader: asyncio.StreamReader,
+                   timeout=None) -> Optional[Letter]:
     content, remain = b'', 2
 
     while remain > 0:
