@@ -113,3 +113,6 @@ from manager.functionalTest import FunctionalTestCases
 
 from manager.worker.TestCases.linkTestCases import \
     HBLinkTestCases
+
+from manager.worker.TestCases.linkerTestCases import \
+    LinkerTestCases

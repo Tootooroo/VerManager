@@ -23,21 +23,43 @@
 
 import asyncio
 import unittest
+import typing as T
 from manager.worker.linker import Linker
-from manager.worker.link import HBLink
-from manager.basic.letter import Letter
+from manager.worker.link import HBLink, Link
+from manager.basic.letter import Letter, PropLetter, HeartbeatLetter, \
+    BinaryLetter
 from manager.basic.info import Info
 import manager.worker.configs as share
 
 
+letters = []
+
+
 async def trivial_dispatch_proc(letter: Letter) -> None:
-    return None
+    if isinstance(letter, PropLetter) or \
+       isinstance(letter, HeartbeatLetter):
+
+        return None
+    else:
+        letters.append(letter)
 
 
 async def trivial_cb(r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
     link = HBLink("A", "127.0.0.1", 7777, r, w, {"hostname": "hostB"})
     link.start()
     link.setDispatchProc(trivial_dispatch_proc)
+
+    await asyncio.sleep(10)
+
+
+async def interrupted_cb(
+        r: asyncio.StreamReader,
+        w: asyncio.StreamWriter) -> None:
+    link = HBLink("A", "127.0.0.1", 7766, r, w, {"hostname": "B"})
+    link.setDispatchProc(trivial_dispatch_proc)
+    link.start()
+    await asyncio.sleep(1)
+    link.stop()
 
     await asyncio.sleep(10)
 
@@ -50,7 +72,17 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         self.loop = asyncio.get_running_loop()
 
     async def test_Linker_CreateListener(self) -> None:
-        pass
+        """
+        Create a listener and send a request to it.
+        """
+        await self.sut.createListener("127.0.0.1", 7788)
+        await asyncio.sleep(1)
+        await self.sut.createLink("local", "127.0.0.1", 7788)
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(self.sut.exists("local"))
+        self.assertTrue(self.sut.exists("WORKER_EXAMPLE"))
 
     async def test_Linker_CreateLink(self) -> None:
         """
@@ -89,4 +121,41 @@ class LinkerTestCases(unittest.IsolatedAsyncioTestCase):
         """
         Create a link then send data on it
         """
-        pass
+        await self.sut.createListener("127.0.0.1", 7799)
+        await asyncio.sleep(1)
+        await self.sut.createLink("hostB", "127.0.0.1", 7799)
+        await asyncio.sleep(1)
+
+        # Send Packet from WORKER_EXAMPLE to hostB
+        await self.sut.sendOnLink("hostB", BinaryLetter("TT", b'123456'))
+        await asyncio.sleep(1)
+
+        # Verify packet from WORKER_EXAMPLE to hostB
+        self.assertTrue(len(letters) == 1)
+        letter = T.cast(BinaryLetter, letters[0])
+        self.assertTrue(letter.getTid() == "TT")
+
+        # Send Packet from hostB to WORKER_EXAMPLE
+        await self.sut.sendOnLink(
+            "WORKER_EXAMPLE",
+            BinaryLetter("BB", b'123456')
+        )
+        await asyncio.sleep(1)
+
+        # Verify
+        self.assertTrue(len(letters) == 2)
+        letter_ = T.cast(BinaryLetter, letters[1])
+        self.assertTrue(letter_.getTid() == 'BB')
+
+    async def test_Linker_LinkInterrupted(self) -> None:
+        # Setup
+        server = await asyncio.start_server(
+            interrupted_cb, host="127.0.0.1", port=7766)
+        self.loop.create_task(server.serve_forever())
+        await asyncio.sleep(1)
+
+        await self.sut.createLink("INTERUPT", "127.0.0.1", 7766)
+        await asyncio.sleep(10)
+
+        # Verify
+        self.assertEqual(Link.CONNECTED, self.sut.linkState("INTERUPT"))
