@@ -31,3 +31,15 @@ class INVALID_MONITOR_STATE(Exception):
 
     def __str__(self) -> str:
         return "Monitor has no state " + str(self.state)
+
+
+###############################################################################
+#                              Linker Exceptions                              #
+###############################################################################
+class LINK_NOT_EXISTS(Exception):
+
+    def __init__(self, linkid) -> None:
+        self.linkid = linkid
+
+    def __str__(self) -> str:
+        return "Link " + str(self.linkid) + " is not exists"

@@ -27,7 +27,7 @@ import abc
 from datetime import datetime
 from manager.basic.observer import Subject
 from manager.basic.letter import Letter, sending, \
-    HeartbeatLetter, receving
+    HeartbeatLetter, receving, PropLetter
 
 
 class Link(abc.ABC):
@@ -65,7 +65,6 @@ class Link(abc.ABC):
         """
         Send letter to remote machine
         """
-
 
 
 class HBLink(Link, Subject):
@@ -157,6 +156,11 @@ class HBLink(Link, Subject):
 
     async def _hb_begin(self) -> None:
         try:
+            # Send a PropLetter to tell to oppsite who request a link.
+            await sending(
+                self.writer,
+                PropLetter(self._infos['hostname'], "0", "0", "")
+            )
             # First heartbeat is begin from the side open the connection.
             await sending(
                 self.writer,
@@ -165,7 +169,7 @@ class HBLink(Link, Subject):
         except (ConnectionError, BrokenPipeError):
             # Failed to send heartbeat link should not to run
             # in this situation.
-            await self.notify("LinkLost", self.ident)
+            await self._lost()
             return
 
         # Hb is transfer success link is ready to process letters.
@@ -175,7 +179,7 @@ class HBLink(Link, Subject):
         try:
             await self.run_internal()
         except (ConnectionError, ConnectionResetError, BrokenPipeError):
-            await self.notify("LinkLost", self.ident)
+            await self._lost()
 
     async def run_internal(self) -> None:
 
@@ -184,15 +188,18 @@ class HBLink(Link, Subject):
         while True:
 
             if self.state == Link.REMOVED or self._heartbeat_check() is False:
-                await self.notify("LinkLost", self.ident)
+                await self._lost()
                 return
 
             try:
-                letter = await receving(self.reader, timeout=3)
+                letter = await receving(self.reader, timeout=1)
                 if letter is None:
                     continue
             except asyncio.exceptions.TimeoutError:
                 continue
+            except (ConnectionError, BrokenPipeError):
+                await self._lost()
+                return
 
             if isinstance(letter, HeartbeatLetter):
                 self._hb_timeer_udpate()
@@ -202,3 +209,7 @@ class HBLink(Link, Subject):
 
     async def sendletter(self, letter: Letter) -> None:
         await sending(self.writer, letter, lock=self._lock)
+
+    async def _lost(self) -> None:
+        await self.notify("LinkLost", self.ident)
+        self.stop()

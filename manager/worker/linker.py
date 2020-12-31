@@ -25,25 +25,39 @@ import typing as T
 import manager.worker.configs as share
 from manager.basic.observer import Observer
 from manager.worker.link import Link, HBLink
-from manager.basic.letter import Letter
+from manager.basic.letter import Letter, receving, PropLetter
+from manager.worker.exceptions import LINK_NOT_EXISTS
+from manager.basic.info import Info
+
+
+DispatchProc = T.Callable[[Letter], T.Coroutine]
+
 
 class Linker(Observer):
 
-    def __init__(self, dispatch_proc: T.Callable[[Letter], T.Coroutine]) -> None:
+    def __init__(self, dispatch_proc: DispatchProc) -> None:
         assert(share.config is not None)
 
         Observer.__init__(self)
         self._links = {}  # type: T.Dict[str, Link]
         self._dispatch_proc = dispatch_proc
 
+        # Format of keys of _listener is host:port, which type is str
+        self._listener = {}  # type: T.Dict[str, T.Any]
+        self._config = T.cast(Info, share.config)
+
     async def createLink(self, linkid: str, host: str, port: int) -> None:
+        """
+        Create a link which id is linkid, if already exists just return
+        """
         if linkid in self._links:
             return
 
         r, w = await asyncio.open_connection(host=host, port=port)
         link = HBLink(
             linkid, host, port, r, w,
-            {'hostname': share.config.getConfig('WORKER_NAME')}
+            {'hostname': self._config.getConfig('WORKER_NAME')},
+            isActiveSide=True
         )
         link.setDispatchProc(self._dispatch_proc)
         link.start()
@@ -60,14 +74,70 @@ class Linker(Observer):
         del self._links[linkid]
 
     def linkState(self, linkid: str) -> T.Optional[int]:
-        if linkid not in self._links:
+        if linkid in self._links:
             return self._links[linkid].state
+        else:
+            return None
 
     async def sendOnLink(self, linkid: str, letter: Letter) -> None:
-        pass
+        if linkid not in self._links:
+            raise LINK_NOT_EXISTS(linkid)
+        link = self._links[linkid]
+        await link.sendletter(letter)
 
-    def createListener(self, host: str, port: str) -> None:
-        pass
+    async def createListener(self, host: str, port: int) -> None:
+        """
+        Create a listener listen on given address. If already exists
+        just return.
+        """
+        key = host + ":" + str(port)
+        if key in self._listener:
+            return None
+
+        # Create server
+        server = await asyncio.start_server(
+            self._link_create_cb,
+            host=host,
+            port=port
+        )
+        asyncio.get_running_loop()\
+            .create_task(server.serve_forever())
+
+        self._listener[key] = server
+
+    async def deleteListener(self, host: str, port: int) -> None:
+        """
+        Stop and delete a listener
+        """
+        key = host + ":" + str(port)
+        if key not in self._listener:
+            return
+
+        self._listener[key].close()
+        del self._listener[key]
 
     def exists(self, linkid: str) -> bool:
         return linkid in self._links
+
+    def dispatch_proc(self) -> T.Callable:
+        return self._dispatch_proc
+
+    async def _link_create_cb(
+            self,
+            r: asyncio.StreamReader,
+            w: asyncio.StreamWriter,) -> None:
+
+        prop = T.cast(PropLetter, await receving(r))
+        if prop is None:
+            return
+
+        ident = prop.getIdent()
+        link = HBLink(
+            ident, "", 0, r, w,
+            {'hostname': self._config.getConfig('WORKER_NAME')}
+        )
+        link.setDispatchProc(self._dispatch_proc)
+        link.start()
+        self._links[ident] = link
+
+    async def _maintain(self) -> None:
