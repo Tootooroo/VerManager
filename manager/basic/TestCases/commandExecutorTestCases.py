@@ -65,7 +65,7 @@ class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
         await self.sut.run()
 
         # Verify
-        os.path.exists("./CET_TEST")
+        self.assertTrue(os.path.exists("./CET_TEST"))
 
         # Teardown
         os.remove("./CET_TEST")
