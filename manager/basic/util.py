@@ -116,8 +116,8 @@ def execute_shell(
         stderr=None, shell=False) -> Optional[subprocess.Popen]:
 
     script_path = os.path.dirname(os.path.abspath(__file__)) + \
-        "/scripts/machine.ps1" if platform.system() == 'Windows' \
-        else "/scripts/machine.sh"
+        ("\scripts\machine.ps1" if platform.system() == 'Windows'
+         else "/scripts/machine.sh")
     machine = 'powershell' if platform.system() == 'Windows' else 'bash'
 
     try:
