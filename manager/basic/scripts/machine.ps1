@@ -1,1 +1,1 @@
-Invoke-Expression $args
+Invoke-Expression $args[0]
