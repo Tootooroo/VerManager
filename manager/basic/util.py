@@ -89,7 +89,8 @@ def pathSeperator() -> str:
 
 def packShellCommands(commands: List[str]) -> str:
     if platform.system() == 'Windows':
-        return "&&".join(commands)
+        # Powershell seperator
+        return ";".join(commands)
     else:
         return ";".join(commands)
 
@@ -114,9 +115,12 @@ def execute_shell(
         command: str, stdout=None,
         stderr=None, shell=False) -> Optional[subprocess.Popen]:
 
+    script_path = "/scripts/machine.ps1" if platform.system() == 'Windows' \
+        else "/scripts/machine.sh"
+
     try:
         machine = os.path.dirname(os.path.abspath(__file__)) + \
-            "/scripts/machine.sh"
+            script_path
         return subprocess.Popen(
             [machine, command],
             shell=shell,
