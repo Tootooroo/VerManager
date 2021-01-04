@@ -61,14 +61,14 @@ class CommandExecutorTestCases(unittest.IsolatedAsyncioTestCase):
         """
         CommandExecutor Run command
         """
-        self.sut.setCommand(["echo ll > /tmp/CET_TEST"])
+        self.sut.setCommand(["echo ll > ./CET_TEST"])
         await self.sut.run()
 
         # Verify
-        os.path.exists("/tmp/CET_TEST")
+        os.path.exists("./CET_TEST")
 
         # Teardown
-        os.remove("/tmp/CET_TEST")
+        os.remove("./CET_TEST")
 
     async def test_CE_StuckedCommand(self) -> None:
         """
