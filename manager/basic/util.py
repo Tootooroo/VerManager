@@ -120,10 +120,7 @@ def execute_shell(
         else "/scripts/machine.sh"
     machine = 'powershell' if platform.system() == 'Windows' else 'bash'
 
-
     try:
-        machine = os.path.dirname(os.path.abspath(__file__)) + \
-            script_path
         return subprocess.Popen(
             [machine, script_path, command],
             shell=shell,
