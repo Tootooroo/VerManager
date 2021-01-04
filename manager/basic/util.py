@@ -115,14 +115,17 @@ def execute_shell(
         command: str, stdout=None,
         stderr=None, shell=False) -> Optional[subprocess.Popen]:
 
-    script_path = "/scripts/machine.ps1" if platform.system() == 'Windows' \
+    script_path = os.path.dirname(os.path.abspath(__file__)) + \
+        "/scripts/machine.ps1" if platform.system() == 'Windows' \
         else "/scripts/machine.sh"
+    machine = 'powershell' if platform.system() == 'Windows' else 'bash'
+
 
     try:
         machine = os.path.dirname(os.path.abspath(__file__)) + \
             script_path
         return subprocess.Popen(
-            [machine, command],
+            [machine, script_path, command],
             shell=shell,
             stdout=stdout,
             stderr=stderr
