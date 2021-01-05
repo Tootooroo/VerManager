@@ -108,7 +108,7 @@ class BuildSet:
         return list(self._builds.values())
 
     def getBuild(self, bId: str) -> Optional[Build]:
-        if not bId in self._builds:
+        if bId not in self._builds:
             return None
         return self._builds[bId]
 
