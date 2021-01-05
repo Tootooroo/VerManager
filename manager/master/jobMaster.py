@@ -373,6 +373,9 @@ class JobMaster(Endpoint, Module):
             raise Job_Bind_Failed()
 
         for build in bs.getBuilds():
+            # Replace variable in config.
+            build.varAssign([("<version>", vsn)])
+
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
                 sn=sn,
@@ -389,6 +392,9 @@ class JobMaster(Endpoint, Module):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
+        merge_command.varAssign([("<version>", vsn)])
+        print(merge_command.getCmds())
+        print(merge_command.getOutput())
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
             vsn,
