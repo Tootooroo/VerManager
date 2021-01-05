@@ -154,7 +154,7 @@ class Monitor(ModuleDaemon):
             else:
                 state_str = str(Worker_M.STATE_PENDING)
 
-            notify = WSCNotify("W", state_str).toLetter()
+            notify = WSCNotify(self._workerName, state_str).toLetter()
             notify.setHeader('linkid', 'Master')
             await conn.sendLetter(notify)
 
