@@ -154,9 +154,9 @@ class Monitor(ModuleDaemon):
             else:
                 state_str = str(Worker_M.STATE_PENDING)
 
-            await conn.sendLetter(
-                WSCNotify("W", state_str).toLetter()
-            )
+            notify = WSCNotify("W", state_str).toLetter()
+            notify.setHeader('linkid', 'Master')
+            await conn.sendLetter(notify)
 
     async def run(self) -> None:
         assert(self._connector is not None)
