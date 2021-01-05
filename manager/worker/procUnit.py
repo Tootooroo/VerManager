@@ -484,7 +484,7 @@ class JobProcUnit(JobProcUnitProto):
         path = build_dir+"/"+projName
 
         if not os.path.exists(path):
-            return None
+            return True
 
         if platform.system() == "Windows":
             return await self._cleanup_windows(path)
