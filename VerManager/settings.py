@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'VerManager.urls'
@@ -155,6 +156,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = '/home/ayden/Codebase/VerManager/static/'
 STATICFILES_DIRS = (
     '/home/ayden/Codebase/VerManager/manager/static/dist/',
     '/home/ayden/Codebase/VerManager/WorkSpace/data/'
