@@ -22,13 +22,14 @@
 
 import os
 
+from .wsgi import *
 from client.consumers import CommuConsumer
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.conf.urls import url
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'VerManager.settings')
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
