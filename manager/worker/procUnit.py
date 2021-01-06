@@ -234,6 +234,7 @@ async def job_result_transfer(target: str, job: NewLetter,
 
     await output.sendfile(target, result_path, tid, version, fileName)
 
+
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
                                  send_rtn: Callable) -> None:
@@ -607,9 +608,9 @@ class Post:
 
         self._cmd.insert(0, "cd Post/" + self._version)
         self._cmd_executor.setCommand(self._cmd)
-        await self._cmd_executor.run()
+        ret = await self._cmd_executor.run()
 
-        if os.path.exists(self._result_path):
+        if ret == 0 and os.path.exists(self._result_path):
             return self._result_path
         else:
             return ""
