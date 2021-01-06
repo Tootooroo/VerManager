@@ -96,11 +96,18 @@ def mysql_param_from_env(varName, defVal):
         return val
 
 
+def from_env_or_default(varName, defVal):
+    return mysql_param_from_env(varName, defVal)
+
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [(
+                from_env_or_default("VERMNG_REDIS_ADDR", "127.0.0.1"),
+                6379
+            )],
         },
     },
 }
