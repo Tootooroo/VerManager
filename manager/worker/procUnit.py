@@ -230,10 +230,9 @@ async def job_result_transfer(target: str, job: NewLetter,
 
     projName = cast(Info, configs.config).getConfig("PROJECT_NAME")
     result_path = build_dir + "/" + projName + '/' + extra['resultPath']
-    fileName = result_path.split(pathSeperator())[-1]
+    fileName = result_path.split("/")[-1]
 
     await output.sendfile(target, result_path, tid, version, fileName)
-
 
 async def do_job_result_transfer(path, tid: str, linkid: str,
                                  version: str, fileName: str,
