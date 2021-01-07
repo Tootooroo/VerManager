@@ -434,7 +434,7 @@ class MessageQueue {
 class MessageService {
     constructor(channelService) {
         this.channelService = channelService;
-        this.sock_url = "ws://localhost:8000/commu/";
+        this.sock_url = "/commu/";
         /**
          * With Help of msg_queues MessageService able to
          * provide messages that from server, to another
@@ -443,7 +443,7 @@ class MessageService {
          *  ---- message ---> MessageService ---> queue ---> component
          */
         this.msg_queues = {};
-        this.channel = this.channelService.create(this.sock_url);
+        this.channel = this.channelService.create("ws://" + location.host + this.sock_url);
         this.channel.subscribe({
             next: msg => {
                 if (Object(_message__WEBPACK_IMPORTED_MODULE_2__["message_check"])(msg) === false) {
