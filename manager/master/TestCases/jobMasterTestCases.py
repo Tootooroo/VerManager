@@ -32,6 +32,9 @@ from manager.basic.endpoint import Endpoint
 from manager.models import Jobs, JobHistory, TaskHistory
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
+from manager.master.jobMaster import command_var_replace, \
+    command_preprocessing, build_preprocessing
+from manager.master.build import Build
 
 
 class DispatcherFake(Endpoint):
@@ -197,3 +200,53 @@ class JobMasterMiscTestCases(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(None, task_prefix_trim(""))
         self.assertEqual(None, task_prefix_trim("1_"))
         self.assertEqual(None, task_prefix_trim("_"))
+
+    async def test_JobMasterMisc_VarReplace(self) -> None:
+        # Setup
+        cmd = [
+            "echo <version>",
+            "echo <datetime>"
+        ]
+
+        cmd_trans = command_var_replace(
+            cmd, [("<version>", "vsn"), ("<datetime>", "2020-01-01")])
+
+        self.assertEqual("echo vsn", cmd_trans[0])
+        self.assertEqual("echo 2020-01-01", cmd_trans[1])
+
+    async def test_JobMasterMisc_CmdPreprocessing(self) -> None:
+        # Setup
+        cmd = [
+            "echo <version>",
+            "echo <datetime>",
+            "echo .\\path\\to\\result"
+        ]
+
+        cmd_trans = command_preprocessing(
+            cmd, [("<version>", "vsn"), ("<datetime>", "2020-01-01")])
+
+        self.assertEqual("echo vsn", cmd_trans[0])
+        self.assertEqual("echo 2020-01-01", cmd_trans[1])
+        self.assertEqual("echo ./path/to/result", cmd_trans[2])
+
+    async def test_JobMasterMisc_BuildPrepreocessing(self) -> None:
+        # Setup
+        b = Build("B", {
+            'cmd': [
+                "echo <version>",
+                "echo <datetime>"
+            ],
+            'output': [
+                ".\\path\\to\\result"
+            ]
+        })
+
+        # Exercise
+        build_preprocessing(b, [("<version>", "vsn"), ("<datetime>", "2020-01-01")])
+
+        # Verify
+        cmds = b.getCmd()
+        self.assertEqual("echo vsn", cmds[0])
+        self.assertEqual("echo 2020-01-01", cmds[1])
+        output = b.getOutput()
+        self.assertEqual("./path/to/result", output)

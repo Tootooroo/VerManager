@@ -58,6 +58,9 @@ class Build:
     def getOutput(self) -> str:
         return self._output[0]
 
+    def setOutput(self, output: List[str]) -> None:
+        self._output = output
+
     def length(self) -> int:
         return len(self._cmds)
 
@@ -87,6 +90,10 @@ class Merge:
 
     def getOutput(self) -> str:
         return self._build.getOutput()
+
+    def getBuild(self) -> Build:
+        return self._build
+
 
 
 class BuildSet:

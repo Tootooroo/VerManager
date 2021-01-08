@@ -24,6 +24,7 @@ import asyncio
 import traceback
 import manager.master.configs as config
 
+from functools import reduce
 from manager.models import Jobs, JobInfos, Informations, \
     JobHistory, TaskHistory
 from typing import Dict, Any, Tuple, Optional, cast, List
@@ -72,6 +73,36 @@ def task_gen_helper(id: str, state: str) -> Task:
     t.state = int(state)
 
     return t
+
+
+def command_var_replace(cmds: List[str], vars: List[Tuple[str, str]]) -> List[str]:
+    trans = []  # type: List[str]
+    for cmd in cmds:
+        trans.append(
+            reduce(lambda cmd_, var: cmd_.replace(var[0], var[1]), vars, cmd)
+        )
+
+    return trans
+
+
+def command_path_format_transform(cmds: List[str]) -> List[str]:
+    return [cmd.replace("\\", "/") for cmd in cmds]
+
+
+def command_preprocessing(cmds: List[str], vars: List[Tuple[str, str]]) -> List[str]:
+    # Replace variables
+    cmds = command_var_replace(cmds, vars)
+    # Make sure all command use "/" as path seperator.
+    cmds = command_path_format_transform(cmds)
+
+    return cmds
+
+
+def build_preprocessing(build: Build, vars: List[Tuple[str, str]]) -> None:
+    cmds = build.getCmd()
+    build.setCmd(command_preprocessing(cmds, vars))
+    output = build.getOutput()
+    build.setOutput(command_preprocessing([output], vars))
 
 
 def job_to_jobInfoMsg(job: Job) -> JobInfoMessage:
@@ -373,8 +404,8 @@ class JobMaster(Endpoint, Module):
             raise Job_Bind_Failed()
 
         for build in bs.getBuilds():
-            # Replace variable in config.
-            build.varAssign([("<version>", vsn)])
+            # Command Preprocessing
+            build_preprocessing(build, [("<version>", "vsn")])
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -392,9 +423,8 @@ class JobMaster(Endpoint, Module):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        merge_command.varAssign([("<version>", vsn)])
-        print(merge_command.getCmds())
-        print(merge_command.getOutput())
+        build_preprocessing(merge_command.getBuild(), [("<version>", "vsn")])
+
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),
             vsn,
