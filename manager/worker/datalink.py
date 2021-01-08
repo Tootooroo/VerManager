@@ -85,6 +85,9 @@ async def binaryStore(dl: DataLink, bl: BinaryLetter,
         else:
             fd.write(bStr)
     except Exception:
+        # Notify to PostProcUnit that a file is fail to
+        # transfer
+        dl.notify(DataLinkNotify("BINARY", (version, tid, "")))
         traceback.print_exc()
 
 

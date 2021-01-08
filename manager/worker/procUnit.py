@@ -704,6 +704,13 @@ class PostProcUnit(PostProcUnitProto):
             post = self._posts[post_ident]
 
         fileName = letter.getFileName()
+
+        if fileName == "":
+            # Invalid filename
+            self.cancel(post_ident)
+            await self._notify_job_state(
+                post_ident, Letter.RESPONSE_STATE_FAILURE)
+
         post.set_frag_fileName(tid, fileName)
         post.set_frag_ready(tid)
 
@@ -738,6 +745,8 @@ class PostProcUnit(PostProcUnitProto):
             # Failed
             await self._notify_job_state(
                 post.ident(), Letter.RESPONSE_STATE_FAILURE)
+
+        del self._posts[post.ident()]
 
     async def _notify_job_state(self, tid: str, state: str) -> None:
         output = cast(Output, self._output_space)
