@@ -141,3 +141,4 @@ class Linker(Observer):
         self._links[ident] = link
 
     async def _maintain(self) -> None:
+        pass
