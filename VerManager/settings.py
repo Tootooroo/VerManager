@@ -161,6 +161,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
+DATA_URL = '/data/'
 STATIC_URL = '/static/'
 STATIC_ROOT = '/home/ayden/Codebase/VerManager/static/'
 STATICFILES_DIRS = (

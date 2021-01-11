@@ -30,7 +30,7 @@ import os
 import zipfile
 import shutil
 import manager.master.configs as cfg
-from VerManager.settings import STATIC_URL
+from VerManager.settings import DATA_URL
 
 from typing import List, Dict, Optional, cast, Callable, Tuple, \
     Any
@@ -275,9 +275,6 @@ async def responseHandler_ResultStore(
                 extra['logFrom'],
                 extra['logTo']
             )
-        else:
-            dest = resultDir + seperator + fileName
-            shutil.copy(path, dest)
 
     except FileNotFoundError as e:
         traceback.print_exc()
@@ -292,8 +289,8 @@ async def responseHandler_ResultStore(
 
 
 def job_result_url(unique_id: str, fileName: str) -> str:
-    may_slash = "" if STATIC_URL[-1] == '/' else "/"
-    return STATIC_URL + may_slash + unique_id + "/" + fileName
+    may_slash = "" if DATA_URL[-1] == '/' else "/"
+    return DATA_URL + may_slash + unique_id + "/" + fileName
 
 
 async def binaryHandler(dl: DataLink, letter: BinaryLetter,
