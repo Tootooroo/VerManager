@@ -307,7 +307,7 @@ async def binaryHandler(dl: DataLink, letter: BinaryLetter,
     unique_id = tid.split("_")[0]
 
     # A new file is transfered.
-    if tid not in chooserSet:
+    if unique_id not in chooserSet:
         fileName = letter.getFileName()
 
         sto = env.modules.getModule(STORAGE_M_NAME)
