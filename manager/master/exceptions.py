@@ -20,6 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
+###############################################################################
+#                                     Misc                                    #
+###############################################################################
 class COMPONENTS_LOG_NOT_INIT(Exception):
     pass
 
@@ -45,7 +49,9 @@ class Job_Bind_Failed(Exception):
     pass
 
 
-# Proxy and MessageUnit
+###############################################################################
+#                            Proxy and MessageUnit                            #
+###############################################################################
 class UNABLE_SEND_MSG_TO_PROXY(Exception):
 
     def __init__(self, reason: str) -> None:
@@ -72,3 +78,15 @@ class BASIC_CONFIG_IS_COVERED(Exception):
 
     def __str__(self) -> str:
         return "Basic config \"" + self.name + "\" is covered."
+
+
+###############################################################################
+#                                    DocGen                                   #
+###############################################################################
+class CUSTOM_FILE_NOT_FOUND:
+
+    def __init__(self, path: str):
+        self.path = path
+
+    def __str__(self) -> str:
+        return "custom.py is not found on path: " + self.path

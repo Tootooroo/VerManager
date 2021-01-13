@@ -46,6 +46,7 @@ class JobHistorySerializer(serializers.ModelSerializer):
 class VersionInfoSerializer(serializers.Serializer):
     vsn = serializers.CharField(max_length=512)
     sn = serializers.CharField(max_length=512)
+    is_temp = serializers.CharField(max_length=10)
 
 
 class BuildInfoSerializer(serializers.Serializer):
