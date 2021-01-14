@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 import manager.master.configs as cfg
-from manager.master.build import BuildSet
 from typing import cast
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseNotModified
@@ -61,8 +60,11 @@ class VersionViewSet(viewsets.ModelViewSet):
 
             vers = Versions.objects.filter(vsn=serializer.data['vsn'])
             if list(vers) == []:
-                newVer = Versions(vsn=serializer.data['vsn'],
-                                  sn=serializer.data['sn'])
+                newVer = Versions(
+                    vsn=serializer.data['vsn'],
+                    sn=serializer.data['sn'],
+                    is_temporary=serializer.data['is_temp']
+                )
                 newVer.save()
             else:
                 return HttpResponseBadRequest("exists")
@@ -119,7 +121,10 @@ class VersionViewSet(viewsets.ModelViewSet):
         except ObjectDoesNotExist:
             return HttpResponseBadRequest("Version does not exists.")
 
-        job = Job(pk, "GL8900", {'vsn': pk, 'sn': version.sn})
+        job = Job(pk, "GL8900", {
+            'vsn': pk,
+            'sn': version.sn
+        })
 
         assert(S.ServerInstance is not None)
         jobMaster = cast(JobMaster, S.ServerInstance.getModule('JobMaster'))

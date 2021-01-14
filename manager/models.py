@@ -65,6 +65,7 @@ class Revisions(models.Model):
 class Versions(models.Model):
     vsn = models.CharField(max_length=50, primary_key=True)
     sn = models.CharField(max_length=50)
+    is_temporary = models.BooleanField(initial=False)
     dateTime = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
@@ -139,12 +140,12 @@ def infoBetweenRev(rev1: str, rev2: str) -> List[str]:
         begin = end
         end = tmp
 
-    vers = Revisions.objects.filter(
+    revs = Revisions.objects.filter(
         dateTime__gt=begin.dateTime,
         dateTime__lte=end.dateTime)
 
     # Mapping vers into vers's comment informations
-    comments = list(map(lambda ver: ver.comment, vers))
+    comments = list(map(lambda rev: rev.comment, revs))
 
     return comments
 
