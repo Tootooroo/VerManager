@@ -65,7 +65,7 @@ class Revisions(models.Model):
 class Versions(models.Model):
     vsn = models.CharField(max_length=50, primary_key=True)
     sn = models.CharField(max_length=50)
-    is_temporary = models.BooleanField(initial=False)
+    is_temporary = models.BooleanField(default=False)
     dateTime = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
