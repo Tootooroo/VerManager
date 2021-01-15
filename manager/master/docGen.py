@@ -23,15 +23,21 @@
 
 import os
 import typing as T
+import manager.master.configs as share
 from manager.models import Versions, Revisions
 from channels.db import database_sync_to_async as db_s_2_as
-from texttable import Texttable
+from manager.master.exceptions import DOC_GEN_FAILED_TO_GENERATE
 
 
 __all__ = ["log_gen"]
 
 
 async def log_gen(version: str, path: str = "./log.txt") -> T.Optional[str]:
+    """
+    Genearte log file for a version, could also use funcitons in custom.py
+    to help to custom log's content and style.
+    """
+
     target_version = await db_s_2_as(Versions.objects.get)(vsn=version)
 
     vers = await db_s_2_as(Versions.objects.filter)(
@@ -40,25 +46,34 @@ async def log_gen(version: str, path: str = "./log.txt") -> T.Optional[str]:
 
     vers = vers.order_by('-dateTime')
 
-    ver_contents = []  # type: T.List[T.List[str]]
+    ver_contents = []  # type: T.List[T.Tuple[str, T.List[str]]]
     vers_list = await db_s_2_as(list)(vers)
 
     for ver in vers_list:
-        ver_contents.append(
-            await log_content_gen(ver.vsn)
-        )
+        content = (ver.vsn, await log_content_gen(ver.vsn))
+        ver_contents.append(content)
 
     if os.path.exists("custom.py"):
         from custom import doc_gen
         try:
             await doc_gen(ver_contents, path)
-        except Exception:
-            return None
+        except Exception as e:
+            share.logger.log_put(
+                "Misc", "doc_gen from custom.py failed: " + str(e))
+            raise DOC_GEN_FAILED_TO_GENERATE()
     else:
-        changelogfile = open(path, "w")
-        # Default Action
-        for content in ver_contents:
-            [changelogfile.write(line+"\n") for line in content]
+        try:
+            with open(path, "w") as changelogfile:
+                # Default Action
+                for content in ver_contents:
+                    ver, logs = content
+                    # Write Version Header
+                    [changelogfile.write(ver+'\n')]
+                    # Write change info
+                    [changelogfile.write(line+"\n") for line in logs]
+        except Exception as e:
+            os.remove(path)
+            share.logger.log_put("Misc", "log_gen failed: " + str(e))
 
     return path
 
@@ -66,7 +81,7 @@ async def log_gen(version: str, path: str = "./log.txt") -> T.Optional[str]:
 async def log_content_gen(version: str) -> T.List[str]:
 
     revs = await changes(version)
-    content = [version]  # type: T.List[str]
+    content = []  # type: T.List[str]
     for rev in revs:
         content.append(rev.comment)
 

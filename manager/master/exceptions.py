@@ -83,10 +83,25 @@ class BASIC_CONFIG_IS_COVERED(Exception):
 ###############################################################################
 #                                    DocGen                                   #
 ###############################################################################
-class CUSTOM_FILE_NOT_FOUND:
+class DOC_GEN_FAILED_TO_GENERATE(Exception):
+
+    def __str(self) -> str:
+        return "Failed to generate log file."
+
+
+class CUSTOM_FILE_NOT_FOUND(Exception):
 
     def __init__(self, path: str):
         self.path = path
 
     def __str__(self) -> str:
         return "custom.py is not found on path: " + self.path
+
+
+class CUSTOM_FUNC_DOC_GEN_FAIL(Exception):
+
+    def __init__(self, excep: Exception) -> None:
+        self.excep = excep
+
+    def __str__(self) -> str:
+        return "doc_gen raise an exception: " + str(self.excep)

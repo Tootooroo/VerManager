@@ -148,6 +148,8 @@ class ServerInst(Thread):
 
         logDir = info.getConfig('LogDir')
         logger = Logger(logDir)
+        logger.log_register("misc")
+        cfg.logger = logger
         self.addModule(logger)
 
         storage = Storage(info.getConfig('Storage'), self)

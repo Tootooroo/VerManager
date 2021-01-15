@@ -31,6 +31,8 @@ import zipfile
 import shutil
 import manager.master.configs as cfg
 from VerManager.settings import DATA_URL
+from manager.master.docGen import log_gen
+from manager.master.exceptions import DOC_GEN_FAILED_TO_GENERATE
 
 from typing import List, Dict, Optional, cast, Callable, Tuple, \
     Any
@@ -124,13 +126,17 @@ class EVENT_HANDLER_TOOLS:
         self.ACTION_TBL[state].append(action)
 
     @classmethod
-    async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str,
-                                    log_start: str = "",
-                                    log_end: str = "") -> str:
+    async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str) -> str:
 
         zipFileName = vsn + ".rar"
         zipPath = dest + "/" + zipFileName
-        self.changeLogGen(log_start, log_end, "./log.txt")
+
+        try:
+            logPath = log_gen(vsn, "./log.txt")
+        except DOC_GEN_FAILED_TO_GENERATE:
+            # Fail to generate log file
+            # log into log file.
+            return filePath
 
         # Pack into a zipfile may take a while
         # do it in another process.
@@ -269,12 +275,8 @@ async def responseHandler_ResultStore(
     resultDir = cfg.config.getConfig("ResultDir")
 
     try:
-        if extra is not None and "logFrom" in extra and "logTo" in extra:
-            fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
-                fileName, path, resultDir,
-                extra['logFrom'],
-                extra['logTo']
-            )
+        fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
+            fileName, path, resultDir)
 
     except FileNotFoundError as e:
         traceback.print_exc()

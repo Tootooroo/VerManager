@@ -20,9 +20,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from typing import Optional
+from typing import Optional, Any
 from manager.basic.info import Info
 from manager.basic.mmanager import MManager
+from manager.master.logger import Logger
 
 config = None  # type: Optional[Info]
 mmanager = None  # type: Optional[MManager]
+logger = None  # type: Any
