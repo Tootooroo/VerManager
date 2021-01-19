@@ -96,7 +96,8 @@ async def changes(version: str) -> T.List[Revisions]:
     target_version = await db_s_2_as(Versions.objects.get)(vsn=version)
 
     vers = await db_s_2_as(Versions.objects.filter)(
-        dateTime__lte=target_version.dateTime
+        dateTime__lte=target_version.dateTime,
+        is_temporary=False
     )
     # In descending order
     vers = vers.order_by('-dateTime')
