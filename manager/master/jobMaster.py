@@ -405,7 +405,7 @@ class JobMaster(Endpoint, Module):
 
         for build in bs.getBuilds():
             # Command Preprocessing
-            build_preprocessing(build, [("<version>", "vsn")])
+            build_preprocessing(build, [("<version>", vsn)])
 
             st = SingleTask(
                 prepend_prefix(str(job.unique_id), build.getIdent()),
@@ -423,7 +423,7 @@ class JobMaster(Endpoint, Module):
                      for build in bs.getBuilds()]
 
         merge_command = bs.getMerge()
-        build_preprocessing(merge_command.getBuild(), [("<version>", "vsn")])
+        build_preprocessing(merge_command.getBuild(), [("<version>", vsn)])
 
         pt = PostTask(
             prepend_prefix(str(job.unique_id), job.jobid),

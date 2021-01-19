@@ -127,10 +127,10 @@ class EVENT_HANDLER_TOOLS:
 
     @classmethod
     async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str) -> str:
-        zipFileName = vsn + ".rar"
         pathSplit = filePath.split("/")
         pathSplit[-1] = pathSplit[-1] + ".log.rar"
         zipPath = "/".join(pathSplit)
+        zipFileName = zipPath.split("/")[-1]
 
         try:
             await log_gen(vsn, "./log.txt")
