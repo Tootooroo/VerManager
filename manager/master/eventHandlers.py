@@ -127,12 +127,13 @@ class EVENT_HANDLER_TOOLS:
 
     @classmethod
     async def packDataWithChangeLog(self, vsn: str, filePath: str, dest: str) -> str:
-
         zipFileName = vsn + ".rar"
-        zipPath = dest + "/" + zipFileName
+        pathSplit = filePath.split("/")
+        pathSplit[-1] = pathSplit[-1] + ".log.rar"
+        zipPath = "/".join(pathSplit)
 
         try:
-            logPath = log_gen(vsn, "./log.txt")
+            await log_gen(vsn, "./log.txt")
         except DOC_GEN_FAILED_TO_GENERATE:
             # Fail to generate log file
             # log into log file.
@@ -163,7 +164,7 @@ class EVENT_HANDLER_TOOLS:
 
     @staticmethod
     def zipPackHelper(files: List[str], zipPath: str) -> None:
-        zipFd = zipfile.ZipFile(zipPath)
+        zipFd = zipfile.ZipFile(zipPath, "w")
         for f in files:
             zipFd.write(f)
         zipFd.close()
@@ -276,7 +277,7 @@ async def responseHandler_ResultStore(
 
     try:
         fileName = await EVENT_HANDLER_TOOLS.packDataWithChangeLog(
-            fileName, path, resultDir)
+            task.getVSN(), path, resultDir)
 
     except FileNotFoundError as e:
         traceback.print_exc()
